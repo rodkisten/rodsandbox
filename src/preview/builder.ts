@@ -5,6 +5,14 @@ export interface PreviewBuildInput {
   files: Record<string, VirtualFile>;
   /** Compiled JS output from BrowserTypeScriptCompiler: path → JS content */
   compiledFiles: Record<string, string>;
+  /** Additional scripts injected by plugins */
+  injectedScripts?: string[];
+}
+
+function sanitizeInlineScriptContent(scriptContent: string): string {
+  return scriptContent
+    .replace(/<script/gi, '\\x3Cscript')
+    .replace(/<\/script/gi, '<\\/script');
 }
 
 const CONSOLE_INTERCEPTOR = `
@@ -81,6 +89,30 @@ const CONSOLE_INTERCEPTOR = `
       timestamp: Date.now()
     });
   });
+
+  window.addEventListener('message', function(event) {
+    if (!event || !event.data || event.data.type !== 'REPL_EVAL') return;
+    var code = typeof event.data.code === 'string' ? event.data.code : '';
+    if (!code) return;
+    try {
+      var result = (0, eval)(code);
+      _postMessage({
+        type: 'REPL_RESULT',
+        success: true,
+        args: [safeSerialize(result)],
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      var err = error instanceof Error ? error : new Error(String(error));
+      _postMessage({
+        type: 'REPL_RESULT',
+        success: false,
+        message: err.message,
+        stack: err.stack,
+        timestamp: Date.now()
+      });
+    }
+  });
 })();
 `;
 
@@ -119,9 +151,7 @@ export function buildPreviewHtml(input: PreviewBuildInput): string {
   const headContent = (headMatch ? headMatch[1] : '')
     .replace(/<link\b[^>]*\brel\s*=\s*["']stylesheet["'][^>]*>/gi, '');
 
-  // Strip external <script src> tags from body (replaced by inlined scripts)
-  const bodyContent = (bodyMatch ? bodyMatch[1] : '<h1>Hello, Playground!</h1>')
-    .replace(/<script\b[^>]*\bsrc\s*=[^>]*><\/script>/gi, '');
+  const bodyContent = bodyMatch ? bodyMatch[1] : '<h1>Hello, Playground!</h1>';
 
   // Build inline CSS block
   const cssBlocks = cssFiles.map((f) => `/* ${f.name} */\n${f.content}`).join('\n');
@@ -134,8 +164,23 @@ export function buildPreviewHtml(input: PreviewBuildInput): string {
     return `/* ${f.name} */\n${js}`;
   }).join('\n');
 
-  const interceptorScript = `<script>\n${CONSOLE_INTERCEPTOR}\n</script>`;
-  const userScript = jsBlocks ? `<script type="module">\n${jsBlocks}\n</script>` : '';
+  const interceptorScript = `<script>\n${sanitizeInlineScriptContent(CONSOLE_INTERCEPTOR)}\n</script>`;
+  const userScript = jsBlocks ? `<script type="module">\n${sanitizeInlineScriptContent(jsBlocks)}\n</script>` : '';
+  const encodedPluginScripts = (input.injectedScripts ?? []).map((script) =>
+    encodeURIComponent(script),
+  );
+  const pluginScripts = encodedPluginScripts.length > 0
+    ? `<script>
+      (function() {
+        var scripts = ${JSON.stringify(encodedPluginScripts)};
+        scripts.forEach(function(encoded) {
+          var element = document.createElement('script');
+          element.textContent = decodeURIComponent(encoded);
+          document.body.appendChild(element);
+        });
+      })();
+    </script>`
+    : '';
 
   return [
     doctype,
@@ -147,6 +192,7 @@ export function buildPreviewHtml(input: PreviewBuildInput): string {
     '<body>',
     bodyContent,
     interceptorScript,
+    pluginScripts,
     userScript,
     '</body>',
     '</html>',

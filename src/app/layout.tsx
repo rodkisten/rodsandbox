@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import SwRegister from './sw-register';
 
 export const metadata: Metadata = {
   title: 'rodsandbox – Code Playground',
   description: 'Offline-first PWA code playground. Edit TypeScript, HTML, and CSS in your browser.',
   manifest: '/manifest.json',
+  applicationName: 'RodSandbox',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -17,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body className="bg-gray-950 text-gray-100 antialiased overflow-hidden">
+        <SwRegister />
         {children}
       </body>
     </html>

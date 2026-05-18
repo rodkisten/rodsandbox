@@ -14,6 +14,8 @@ import { foldGutter, syntaxHighlighting, defaultHighlightStyle } from '@codemirr
 import { lintGutter, linter } from '@codemirror/lint';
 import type { Diagnostic as CMDiagnostic } from '@codemirror/lint';
 import { VirtualFile, Diagnostic, FileLanguage } from '@/types';
+import type { Extension } from '@codemirror/state';
+import type { CompletionSource } from '@codemirror/autocomplete';
 
 function getLanguageExtension(language: FileLanguage) {
   switch (language) {
@@ -32,9 +34,18 @@ interface EditorProps {
   onChange: (content: string) => void;
   onSave?: () => void;
   diagnostics?: Diagnostic[];
+  extraExtensions?: Extension[];
+  extraAutocompleteProviders?: CompletionSource[];
 }
 
-export default function Editor({ file, onChange, onSave, diagnostics = [] }: EditorProps) {
+export default function Editor({
+  file,
+  onChange,
+  onSave,
+  diagnostics = [],
+  extraExtensions = [],
+  extraAutocompleteProviders = [],
+}: EditorProps) {
   const handleChange = useCallback((value: string) => {
     onChange(value);
   }, [onChange]);
@@ -66,11 +77,12 @@ export default function Editor({ file, onChange, onSave, diagnostics = [] }: Edi
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...completionKeymap]),
     saveKeymap,
     highlightSelectionMatches(),
-    autocompletion(),
+    autocompletion(extraAutocompleteProviders.length > 0 ? { override: extraAutocompleteProviders } : undefined),
     foldGutter(),
     lintGutter(),
-    linter((_view) => linterSource()),
+    linter(() => linterSource()),
     syntaxHighlighting(defaultHighlightStyle),
+    ...extraExtensions,
   ];
 
   return (

@@ -10,12 +10,13 @@ interface PreviewPanelProps {
 
 export interface PreviewPanelHandle {
   reload(): void;
+  evaluate(code: string): void;
 }
 
 function isPreviewMessage(data: unknown): data is PreviewMessage {
   if (typeof data !== 'object' || data === null) return false;
   const d = data as Record<string, unknown>;
-  return (d.type === 'CONSOLE_LOG' || d.type === 'RUNTIME_ERROR') && typeof d.timestamp === 'number';
+  return (d.type === 'CONSOLE_LOG' || d.type === 'RUNTIME_ERROR' || d.type === 'REPL_RESULT') && typeof d.timestamp === 'number';
 }
 
 const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function PreviewPanel(
@@ -30,10 +31,14 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
         iframeRef.current.srcdoc = previewHtml ?? '';
       }
     },
+    evaluate(code: string) {
+      iframeRef.current?.contentWindow?.postMessage({ type: 'REPL_EVAL', code }, '*');
+    },
   }));
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
       if (!isPreviewMessage(event.data)) return;
       onMessage(event.data);
     };

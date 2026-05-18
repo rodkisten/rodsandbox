@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RodSandbox
 
-## Getting Started
+Offline-first, browser-only code playground inspired by JSFiddle and CodeSandbox.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Next.js App Router + TypeScript
+- CodeMirror 6 (no Monaco)
+- IndexedDB (`idb`) for workspace persistence
+- In-browser TypeScript compiler API
+- Prettier standalone formatter
+- iframe sandbox preview + postMessage bridge
+- Vitest for core logic tests
+
+## Architecture
+
+```text
+src/
+  editor/        CodeMirror setup and extensions
+  compiler/      Browser TypeScript compilation service
+  preview/       iframe HTML builder and sandbox bridge
+  repl/          REPL command manager
+  logs/          Serialization and log presentation
+  filesystem/    Virtual filesystem + tree shaping
+  plugins/       Plugin registry and context APIs
+  diagnostics/   Diagnostic normalization
+  persistence/   IndexedDB helpers
+  components/    UI (layout, panels, command palette)
+  hooks/         App hooks (workspace + resizing)
+  lib/           Utilities (download, i18n, service worker register)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Plugin API (Phase 3)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Plugins register via `PluginRegistry` and receive a strongly-typed context:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `context.editor.registerAutocompleteProvider(...)`
+- `context.editor.registerCommand(...)`
+- `context.editor.registerExtension(...)`
+- `context.compiler.addVirtualTypeFile(...)`
+- `context.preview.injectScript(...)`
+- `context.repl.registerCommand(...)`
+- `context.logs.registerFormatter(...)`
 
-## Learn More
+Errors are isolated per plugin (`RegisteredPlugin.error`) so one plugin failure does not break initialization.
 
-To learn more about Next.js, take a look at the following resources:
+## REPL
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Bottom panel REPL tab
+- Command history (↑/↓)
+- Built-ins: `.help`, `.commands`, `.clear`
+- Non-dot input is evaluated in the sandboxed iframe only (`REPL_EVAL` postMessage)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## PWA
 
-## Deploy on Vercel
+- `public/manifest.json`
+- `public/sw.js` cache-first for static assets, network-first for navigation
+- Service worker registration in `src/lib/registerSw.ts` and `src/app/sw-register.tsx`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Local development
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm install
+npm run dev
+```
+
+## Validation
+
+```bash
+npm run lint
+npm run build
+npx vitest run
+```
+
+## Deploy to Vercel
+
+Deploy directly as a standard Next.js App Router project.
+No custom server is required.
+
+## Current limits
+
+- Phase 3 started: plugin APIs + REPL + command palette + PWA wiring are in place.
+- Advanced plugin marketplace, shareable compressed URLs, and snapshot features are pending future phases.
+

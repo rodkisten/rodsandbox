@@ -91,10 +91,11 @@ export interface TreeNode {
 }
 
 export interface PreviewMessage {
-  type: 'CONSOLE_LOG' | 'RUNTIME_ERROR';
+  type: 'CONSOLE_LOG' | 'RUNTIME_ERROR' | 'REPL_RESULT';
   level?: LogLevel;
-  args?: unknown[];
+  args?: SerializedValue[];
   timestamp: number;
   message?: string;
   stack?: string;
+  success?: boolean;
 }

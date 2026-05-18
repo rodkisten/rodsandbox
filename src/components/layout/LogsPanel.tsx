@@ -7,6 +7,10 @@ import { MAX_LOG_ENTRIES } from '@/constants';
 interface LogsPanelProps {
   logs: LogEntry[];
   onClear: () => void;
+  customFormatters?: Array<{
+    predicate: (value: SerializedValue) => boolean;
+    format: (value: SerializedValue) => string;
+  }>;
 }
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
@@ -25,8 +29,20 @@ const LEVEL_COLORS: Record<LogLevel, string> = {
 
 const ALL_LEVELS: LogLevel[] = ['log', 'info', 'warn', 'error', 'debug'];
 
-function formatArgs(args: SerializedValue[]): string {
-  return args.map(deserializeForDisplay).join(' ');
+function formatArgs(
+  args: SerializedValue[],
+  customFormatters: Array<{
+    predicate: (value: SerializedValue) => boolean;
+    format: (value: SerializedValue) => string;
+  }>,
+): string {
+  return args
+    .map((arg) => {
+      const formatter = customFormatters.find((item) => item.predicate(arg));
+      if (formatter) return formatter.format(arg);
+      return deserializeForDisplay(arg);
+    })
+    .join(' ');
 }
 
 function formatTime(ts: number): string {
@@ -34,7 +50,7 @@ function formatTime(ts: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}.${String(d.getMilliseconds()).padStart(3, '0')}`;
 }
 
-export default function LogsPanel({ logs, onClear }: LogsPanelProps) {
+export default function LogsPanel({ logs, onClear, customFormatters = [] }: LogsPanelProps) {
   const [enabledLevels, setEnabledLevels] = useState<Set<LogLevel>>(new Set(ALL_LEVELS));
   const [search, setSearch] = useState('');
 
@@ -53,12 +69,12 @@ export default function LogsPanel({ logs, onClear }: LogsPanelProps) {
       .filter((entry) => {
         if (!enabledLevels.has(entry.level as LogLevel) && ALL_LEVELS.includes(entry.level as LogLevel)) return false;
         if (search) {
-          const text = formatArgs(entry.args).toLowerCase();
+          const text = formatArgs(entry.args, customFormatters).toLowerCase();
           if (!text.includes(search.toLowerCase())) return false;
         }
         return true;
       });
-  }, [logs, enabledLevels, search]);
+  }, [logs, enabledLevels, search, customFormatters]);
 
   return (
     <div className="flex flex-col h-full bg-gray-950 text-xs font-mono">
@@ -101,7 +117,7 @@ export default function LogsPanel({ logs, onClear }: LogsPanelProps) {
             >
               <span className="text-gray-600 flex-shrink-0 select-none">{formatTime(entry.timestamp)}</span>
               <span className="text-gray-600 flex-shrink-0 uppercase w-12 select-none">{entry.level}</span>
-              <span className="flex-1 break-all whitespace-pre-wrap">{formatArgs(entry.args)}</span>
+               <span className="flex-1 break-all whitespace-pre-wrap">{formatArgs(entry.args, customFormatters)}</span>
             </div>
           ))
         )}
