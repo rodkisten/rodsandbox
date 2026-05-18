@@ -16,6 +16,7 @@ import type { Diagnostic as CMDiagnostic } from '@codemirror/lint';
 import { VirtualFile, Diagnostic, FileLanguage } from '@/types';
 import type { Extension } from '@codemirror/state';
 import type { CompletionSource } from '@codemirror/autocomplete';
+import { getDiagnosticRange } from './diagnosticRanges';
 
 function getLanguageExtension(language: FileLanguage) {
   switch (language) {
@@ -50,15 +51,18 @@ export default function Editor({
     onChange(value);
   }, [onChange]);
 
-  const linterSource = useCallback((): CMDiagnostic[] => {
+  const linterSource = useCallback((doc: { length: number; lines: number; line(number: number): { from: number; to: number } }): CMDiagnostic[] => {
     return diagnostics
       .filter((d) => d.fileId === file.id)
-      .map((d) => ({
-        from: 0,
-        to: 0,
-        severity: (d.severity === 'hint' ? 'info' : d.severity) as CMDiagnostic['severity'],
-        message: d.message,
-      }));
+      .map((d) => {
+        const { from, to } = getDiagnosticRange(d, doc);
+        return {
+          from,
+          to,
+          severity: (d.severity === 'hint' ? 'info' : d.severity) as CMDiagnostic['severity'],
+          message: d.message,
+        };
+      });
   }, [diagnostics, file.id]);
 
   const saveKeymap = keymap.of([
@@ -80,7 +84,7 @@ export default function Editor({
     autocompletion(extraAutocompleteProviders.length > 0 ? { override: extraAutocompleteProviders } : undefined),
     foldGutter(),
     lintGutter(),
-    linter(() => linterSource()),
+    linter((view) => linterSource(view.state.doc)),
     syntaxHighlighting(defaultHighlightStyle),
     ...extraExtensions,
   ];

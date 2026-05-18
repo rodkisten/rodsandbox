@@ -80,4 +80,13 @@ describe('BrowserTypeScriptCompiler', () => {
     const unique = new Set(messages);
     expect(unique.size).toBe(messages.length);
   });
+
+  it('types MouseEvent.metaKey as boolean', () => {
+    compiler.updateFile(
+      'main.ts',
+      'const expectsBoolean = (value: boolean) => value; document.addEventListener("click", (event) => expectsBoolean(event.metaKey));',
+    );
+    const diagnostics = compiler.getSemanticDiagnostics('main.ts');
+    expect(diagnostics).toHaveLength(0);
+  });
 });

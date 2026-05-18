@@ -53,28 +53,42 @@ export interface RegisteredPlugin {
 
 export class PluginRegistry {
   private plugins = new Map<string, RegisteredPlugin>();
+  private context: PluginContext | null = null;
+  private initialized = new Set<string>();
 
   register(plugin: PlaygroundPlugin): void {
-    this.plugins.set(plugin.id, {
+    const registered = {
       plugin,
       enabled: this.plugins.get(plugin.id)?.enabled ?? true,
-    });
+    };
+    this.plugins.set(plugin.id, registered);
+    this.initialized.delete(plugin.id);
+
+    if (this.context && registered.enabled) {
+      void this.initializePlugin(plugin.id, registered, this.context);
+    }
   }
 
   unregister(id: string): void {
     this.plugins.delete(id);
+    this.initialized.delete(id);
   }
 
   enable(id: string): void {
     const existing = this.plugins.get(id);
     if (!existing) return;
     this.plugins.set(id, { ...existing, enabled: true, error: undefined });
+
+    if (this.context) {
+      void this.initializePlugin(id, { ...existing, enabled: true }, this.context);
+    }
   }
 
   disable(id: string): void {
     const existing = this.plugins.get(id);
     if (!existing) return;
     this.plugins.set(id, { ...existing, enabled: false });
+    this.initialized.delete(id);
   }
 
   getPlugin(id: string): RegisteredPlugin | undefined {
@@ -86,15 +100,30 @@ export class PluginRegistry {
   }
 
   async initializeAll(context: PluginContext): Promise<void> {
+    this.context = context;
     for (const [id, registered] of this.plugins.entries()) {
-      if (!registered.enabled) continue;
-      try {
-        await registered.plugin.setup(context);
-        this.plugins.set(id, { ...registered, error: undefined });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.plugins.set(id, { ...registered, error: message });
-      }
+      await this.initializePlugin(id, registered, context);
+    }
+  }
+
+  private async initializePlugin(
+    id: string,
+    registered: RegisteredPlugin,
+    context: PluginContext,
+  ): Promise<void> {
+    if (!registered.enabled || this.initialized.has(id)) return;
+
+    try {
+      await registered.plugin.setup(context);
+      const current = this.plugins.get(id);
+      if (!current) return;
+      this.plugins.set(id, { ...current, error: undefined });
+      this.initialized.add(id);
+    } catch (error) {
+      const current = this.plugins.get(id);
+      if (!current) return;
+      const message = error instanceof Error ? error.message : String(error);
+      this.plugins.set(id, { ...current, error: message });
     }
   }
 }

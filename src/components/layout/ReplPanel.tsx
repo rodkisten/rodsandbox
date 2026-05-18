@@ -35,6 +35,12 @@ export default function ReplPanel({
         handler: command.handler,
       });
     }
+
+    return () => {
+      for (const command of extraCommandRegistrations) {
+        manager.unregisterCommand(command.name);
+      }
+    };
   }, [extraCommandRegistrations, manager]);
 
   const runInput = (rawInput: string) => {

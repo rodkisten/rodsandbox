@@ -144,31 +144,44 @@ export default function Playground() {
   }, []);
 
   const handleRun = useCallback(() => {
-    const files = listFiles(workspace);
-    let compiledFiles: Record<string, string> = {};
-    const compiler = compilerRef.current;
+    void (async () => {
+      const files = listFiles(workspace);
+      let compiledFiles: Record<string, string> = {};
+      let compiler = compilerRef.current;
+      const hasRunnableSource = files.some(
+        (file) => file.language === 'typescript' || file.language === 'javascript',
+      );
 
-    if (compiler && FEATURE_FLAGS.ENABLE_TYPESCRIPT_COMPILER) {
-      for (const file of files) {
-        if (file.language === 'typescript' || file.language === 'javascript') {
-          compiler.updateFile(file.path, file.content);
+      if (hasRunnableSource && FEATURE_FLAGS.ENABLE_TYPESCRIPT_COMPILER) {
+        if (!compiler) {
+          const { BrowserTypeScriptCompiler } = await import('@/compiler');
+          compiler = compilerRef.current ?? new BrowserTypeScriptCompiler();
+          compilerRef.current = compiler;
         }
-      }
-      for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
-        compiler.updateFile(path, content);
-      }
-      const result = compiler.compile();
-      compiledFiles = result.files;
-      setDiagnostics(result.diagnostics);
-      if (result.diagnostics.length > 0) setBottomTab('diagnostics');
-    }
 
-    const html = buildPreviewHtml({
-      files: workspace.files,
-      compiledFiles,
-      injectedScripts: pluginPreviewScriptsRef.current,
-    });
-    setPreviewHtml(html);
+        for (const file of files) {
+          if (file.language === 'typescript' || file.language === 'javascript') {
+            compiler.updateFile(file.path, file.content);
+          }
+        }
+        for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
+          compiler.updateFile(path, content);
+        }
+        const result = compiler.compile();
+        compiledFiles = result.files;
+        setDiagnostics(result.diagnostics);
+        if (result.diagnostics.length > 0) setBottomTab('diagnostics');
+      } else {
+        setDiagnostics([]);
+      }
+
+      const html = buildPreviewHtml({
+        files: workspace.files,
+        compiledFiles,
+        injectedScripts: pluginPreviewScriptsRef.current,
+      });
+      setPreviewHtml(html);
+    })();
   }, [workspace]);
 
   const handleMessage = useCallback((msg: PreviewMessage) => {

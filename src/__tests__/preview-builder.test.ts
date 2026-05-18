@@ -38,12 +38,22 @@ describe('buildPreviewHtml', () => {
     expect(html).not.toContain(': number');
   });
 
-  it('falls back to stripping TS types when no compiled output', () => {
+  it('does not emit raw TypeScript when compiled output is unavailable', () => {
     const files = {
       'f1': makeFile('f1', 'main.ts', 'main.ts', 'typescript', 'const x: number = 1;'),
     };
     const html = buildPreviewHtml({ files, compiledFiles: {} });
-    expect(html).not.toContain('interface');
+    expect(html).not.toContain('const x: number = 1;');
+    expect(html).toContain('main.ts was not executed because the TypeScript compiler is still loading');
+  });
+
+  it('emits user scripts in the global scope for REPL access', () => {
+    const files = {
+      'f1': makeFile('f1', 'main.js', 'main.js', 'javascript', 'window.answer = 42;'),
+    };
+    const html = buildPreviewHtml({ files, compiledFiles: {} });
+    expect(html).toContain('<script>\n/* main.js */');
+    expect(html).not.toContain('<script type="module">');
   });
 
   it('injects console interceptor script', () => {

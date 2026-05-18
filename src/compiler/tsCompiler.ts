@@ -154,7 +154,7 @@ interface EventListenerObject { handleEvent(object: Event): void; }
 interface AddEventListenerOptions { capture?: boolean; once?: boolean; passive?: boolean; }
 interface EventListenerOptions { capture?: boolean; }
 interface UIEvent extends Event {}
-interface MouseEvent extends UIEvent { clientX: number; clientY: number; button: number; shiftKey: boolean; ctrlKey: boolean; altKey: boolean; metaKey: number; }
+interface MouseEvent extends UIEvent { clientX: number; clientY: number; button: number; shiftKey: boolean; ctrlKey: boolean; altKey: boolean; metaKey: boolean; }
 interface KeyboardEvent extends UIEvent { key: string; code: string; shiftKey: boolean; ctrlKey: boolean; altKey: boolean; metaKey: boolean; }
 interface Node extends EventTarget { nodeType: number; nodeName: string; textContent: string | null; parentNode: Node | null; childNodes: NodeListOf<Node>; }
 interface Element extends Node { tagName: string; id: string; className: string; innerHTML: string; outerHTML: string; getAttribute(name: string): string | null; setAttribute(name: string, value: string): void; removeAttribute(name: string): void; querySelector<E extends Element = Element>(selectors: string): E | null; querySelectorAll<E extends Element = Element>(selectors: string): NodeListOf<E>; closest(selector: string): Element | null; matches(selectors: string): boolean; appendChild<T extends Node>(node: T): T; removeChild<T extends Node>(child: T): T; insertBefore<T extends Node>(node: T, child: Node | null): T; remove(): void; }

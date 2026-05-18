@@ -116,15 +116,19 @@ const CONSOLE_INTERCEPTOR = `
 })();
 `;
 
-function stripTypeScriptTypes(ts: string): string {
-  return ts
-    .replace(/^\s*interface\s+\w+[^}]*}\s*$/gm, '')
-    .replace(/^\s*type\s+\w+\s*=.*$/gm, '')
-    .replace(/:\s*(string|number|boolean|void|any|unknown|never|null|undefined|[A-Z]\w*(\[\])?(\s*\|\s*[A-Z]\w*(\[\])?)*)\s*(?=[,)={])/g, '')
-    .replace(/<[A-Z]\w*(\s*,\s*[A-Z]\w*)*>/g, '')
-    .replace(/^\s*export\s+type\s+.*$/gm, '')
-    .replace(/^\s*import\s+type\s+.*$/gm, '')
-    .replace(/\bas\s+\w+/g, '');
+function getRunnableScriptContent(file: VirtualFile, compiledFiles: Record<string, string>): string {
+  const compiledPath = file.path.replace(/\.tsx?$/, '.js');
+  const compiled = compiledFiles[compiledPath] ?? compiledFiles[file.path];
+
+  if (compiled) {
+    return compiled;
+  }
+
+  if (file.language === 'javascript') {
+    return file.content;
+  }
+
+  return `/* ${file.name} was not executed because the TypeScript compiler is still loading. */`;
 }
 
 export function buildPreviewHtml(input: PreviewBuildInput): string {
@@ -157,15 +161,14 @@ export function buildPreviewHtml(input: PreviewBuildInput): string {
   const cssBlocks = cssFiles.map((f) => `/* ${f.name} */\n${f.content}`).join('\n');
   const styleTag = cssBlocks ? `<style>\n${cssBlocks}\n</style>` : '';
 
-  // Build JS blocks — prefer compiled output, fall back to stripping TS types
+  // Build JS blocks — prefer compiled output, fall back to raw JavaScript only.
   const jsBlocks = tsFiles.map((f) => {
-    const compiledPath = f.path.replace(/\.tsx?$/, '.js');
-    const js = compiledFiles[compiledPath] ?? compiledFiles[f.path] ?? stripTypeScriptTypes(f.content);
+    const js = getRunnableScriptContent(f, compiledFiles);
     return `/* ${f.name} */\n${js}`;
   }).join('\n');
 
   const interceptorScript = `<script>\n${sanitizeInlineScriptContent(CONSOLE_INTERCEPTOR)}\n</script>`;
-  const userScript = jsBlocks ? `<script type="module">\n${sanitizeInlineScriptContent(jsBlocks)}\n</script>` : '';
+  const userScript = jsBlocks ? `<script>\n${sanitizeInlineScriptContent(jsBlocks)}\n</script>` : '';
   const encodedPluginScripts = (input.injectedScripts ?? []).map((script) =>
     encodeURIComponent(script),
   );

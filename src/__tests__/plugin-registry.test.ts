@@ -71,5 +71,35 @@ describe('PluginRegistry', () => {
     registry.unregister('x');
     expect(registry.getPlugin('x')).toBeUndefined();
   });
-});
 
+  it('initializes plugins registered after setup has already run', async () => {
+    const registry = new PluginRegistry();
+    const setup = vi.fn();
+    const context = {
+      editor: {
+        registerAutocompleteProvider: vi.fn(),
+        registerCommand: vi.fn(),
+        registerExtension: vi.fn(),
+        registerSnippet: vi.fn(),
+      },
+      compiler: {
+        addVirtualTypeFile: vi.fn(),
+        addVirtualFile: vi.fn(),
+      },
+      preview: { injectScript: vi.fn() },
+      repl: { registerCommand: vi.fn() },
+      logs: { registerFormatter: vi.fn() },
+    };
+
+    await registry.initializeAll(context);
+    registry.register({
+      id: 'late-plugin',
+      name: 'Late plugin',
+      setup,
+    });
+
+    await vi.waitFor(() => {
+      expect(setup).toHaveBeenCalledWith(context);
+    });
+  });
+});

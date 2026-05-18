@@ -13,7 +13,7 @@ interface TsDiagnosticLike {
   category: number;
 }
 
-function tsCategotyToSeverity(category: number): DiagnosticSeverity {
+function tsCategoryToSeverity(category: number): DiagnosticSeverity {
   switch (category) {
     case 0: return 'warning';
     case 1: return 'error';
@@ -31,7 +31,7 @@ export function normalizeTsDiagnostic(tsDiag: TsDiagnosticLike, fileId: FileId):
   return {
     id: generateDiagnosticId(),
     fileId,
-    severity: tsCategotyToSeverity(tsDiag.category),
+    severity: tsCategoryToSeverity(tsDiag.category),
     message: `TS${tsDiag.code}: ${message}`,
     line: 1,
     column: 1,
@@ -76,7 +76,7 @@ export function normalizeTsDiagnosticToModel(
   return {
     id: generateDiagnosticId(),
     fileId,
-    severity: tsCategotyToSeverity(tsDiag.category),
+    severity: tsCategoryToSeverity(tsDiag.category),
     message: `TS${tsDiag.code}: ${message}`,
     line,
     column,
