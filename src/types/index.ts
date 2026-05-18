@@ -78,6 +78,7 @@ export interface LayoutSizes {
 export type LayoutMode = 'desktop' | 'mobile';
 export type BottomTab = 'console' | 'diagnostics' | 'repl';
 export type ReplRuntimeTarget = 'iframe' | 'detached' | 'auto';
+export type EditorTheme = 'midnight' | 'oled' | 'tokyo' | 'light' | 'high-contrast';
 
 export interface AppSettings {
   theme: 'dark' | 'light' | 'oled' | 'tokyo' | 'midnight' | 'high-contrast';
@@ -92,6 +93,18 @@ export interface AppSettings {
   replRuntime: ReplRuntimeTarget;
   replAutocomplete: boolean;
   replHistory: string[];
+  editorTheme: EditorTheme;
+  editorFontSize: number;
+  editorFontFamily: string;
+  editorLineNumbers: boolean;
+  editorWordWrap: boolean;
+  editorAutocomplete: boolean;
+  editorLinterEnabled: boolean;
+  editorFormatterEnabled: boolean;
+  editorMinimapEnabled: boolean;
+  editorTabSize: number;
+  liveTypecheck: boolean;
+  collapsedPanels: string[];
   enabledPlugins: string[];
 }
 

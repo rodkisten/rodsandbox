@@ -6,10 +6,12 @@ import type { Workspace } from '@/types';
  */
 export function downloadFile(
   filename: string,
-  content: string,
+  content: string | Blob | ArrayBuffer,
   mimeType: string
 ): void {
-  const blob = new Blob([content], { type: mimeType });
+  const blob = content instanceof Blob
+    ? content
+    : new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

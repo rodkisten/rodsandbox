@@ -61,9 +61,49 @@ export function useWorkspace() {
     updateWorkspace(VirtualFs.deleteFile(workspace, fileId));
   }, [workspace, updateWorkspace]);
 
+  const duplicateFile = useCallback((fileId: FileId) => {
+    updateWorkspace(VirtualFs.duplicateFile(workspace, fileId));
+  }, [workspace, updateWorkspace]);
+
+  const moveFile = useCallback((fileId: FileId, newPath: string) => {
+    updateWorkspace(VirtualFs.moveFile(workspace, fileId, newPath));
+  }, [workspace, updateWorkspace]);
+
+  const createFolder = useCallback((folderPath: string) => {
+    updateWorkspace(VirtualFs.createFolder(workspace, folderPath));
+  }, [workspace, updateWorkspace]);
+
+  const deleteFolder = useCallback((folderPath: string) => {
+    updateWorkspace(VirtualFs.deleteFolder(workspace, folderPath));
+  }, [workspace, updateWorkspace]);
+
+  const renameFolder = useCallback((oldPath: string, newPath: string) => {
+    updateWorkspace(VirtualFs.renameFolder(workspace, oldPath, newPath));
+  }, [workspace, updateWorkspace]);
+
+  const upsertFiles = useCallback((entries: Array<{ path: string; content: string; language?: FileLanguage }>) => {
+    updateWorkspace(VirtualFs.upsertFiles(workspace, entries));
+  }, [workspace, updateWorkspace]);
+
   const saveWorkspace = useCallback(() => {
     Db.saveWorkspace(workspace).catch(console.error);
   }, [workspace]);
 
-  return { workspace, activeFile, loading, setActiveFile, updateFile, createFile, renameFile, deleteFile, saveWorkspace };
+  return {
+    workspace,
+    activeFile,
+    loading,
+    setActiveFile,
+    updateFile,
+    createFile,
+    renameFile,
+    deleteFile,
+    duplicateFile,
+    moveFile,
+    createFolder,
+    deleteFolder,
+    renameFolder,
+    upsertFiles,
+    saveWorkspace,
+  };
 }

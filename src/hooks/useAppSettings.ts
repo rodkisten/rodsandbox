@@ -32,6 +32,18 @@ export function createDefaultSettings(): AppSettings {
     replRuntime: 'auto',
     replAutocomplete: true,
     replHistory: [],
+    editorTheme: 'midnight',
+    editorFontSize: 14,
+    editorFontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+    editorLineNumbers: true,
+    editorWordWrap: false,
+    editorAutocomplete: true,
+    editorLinterEnabled: true,
+    editorFormatterEnabled: true,
+    editorMinimapEnabled: false,
+    editorTabSize: 2,
+    liveTypecheck: true,
+    collapsedPanels: [],
     enabledPlugins: [],
   };
 }
