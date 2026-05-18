@@ -10,10 +10,11 @@ interface ToolbarProps {
   autoRun: boolean;
   onToggleAutoRun: () => void;
   isRunning?: boolean;
+  isFormatting?: boolean;
 }
 
 export default function Toolbar({
-  onRun, onFormat, onSave, onDownload, onExport, autoRun, onToggleAutoRun, isRunning = false,
+  onRun, onFormat, onSave, onDownload, onExport, autoRun, onToggleAutoRun, isRunning = false, isFormatting = false,
 }: ToolbarProps) {
   return (
     <div className="flex items-center gap-1 px-3 py-2 bg-gray-900 border-b border-gray-800 flex-shrink-0">
@@ -37,10 +38,11 @@ export default function Toolbar({
       <div className="w-px h-5 bg-gray-700 mx-1" />
       <button
         onClick={onFormat}
-        className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded transition-colors"
+        disabled={isFormatting}
+        className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-300 text-xs rounded transition-colors"
         title="Format code"
       >
-        ✦ Format
+        {isFormatting ? '…' : '✦'} Format
       </button>
       <button
         onClick={onSave}

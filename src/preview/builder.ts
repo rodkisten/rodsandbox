@@ -1,5 +1,12 @@
 import { VirtualFile } from '@/types';
 
+export interface PreviewBuildInput {
+  /** All virtual files by their ID */
+  files: Record<string, VirtualFile>;
+  /** Compiled JS output from BrowserTypeScriptCompiler: path → JS content */
+  compiledFiles: Record<string, string>;
+}
+
 const CONSOLE_INTERCEPTOR = `
 (function() {
   var _postMessage = function(data) {
@@ -88,10 +95,17 @@ function stripTypeScriptTypes(ts: string): string {
     .replace(/\bas\s+\w+/g, '');
 }
 
-export function buildPreviewHtml(files: VirtualFile[]): string {
-  const htmlFile = files.find((f) => f.language === 'html' && (f.name === 'index.html' || f.path === 'index.html'));
-  const cssFiles = files.filter((f) => f.language === 'css');
-  const tsFiles = files.filter((f) => f.language === 'typescript' || f.language === 'javascript');
+export function buildPreviewHtml(input: PreviewBuildInput): string {
+  const allFiles = Object.values(input.files);
+  const compiledFiles = input.compiledFiles;
+
+  const htmlFile = allFiles.find(
+    (f) => f.language === 'html' && (f.name === 'index.html' || f.path === 'index.html')
+  );
+  const cssFiles = allFiles.filter((f) => f.language === 'css');
+  const tsFiles = allFiles.filter(
+    (f) => f.language === 'typescript' || f.language === 'javascript'
+  );
 
   const rawHtml = htmlFile?.content ?? '<!DOCTYPE html><html><head></head><body></body></html>';
 
@@ -101,20 +115,22 @@ export function buildPreviewHtml(files: VirtualFile[]): string {
 
   const doctype = doctypeMatch ? doctypeMatch[1] + '\n' : '';
 
-  // Strip external stylesheet links from head content (replaced by inline <style>)
+  // Strip external stylesheet links from head (replaced by inline <style>)
   const headContent = (headMatch ? headMatch[1] : '')
     .replace(/<link\b[^>]*\brel\s*=\s*["']stylesheet["'][^>]*>/gi, '');
 
-  // Body content is kept as-is; external <script src> will fail silently in srcdoc context
-  const bodyContent = bodyMatch ? bodyMatch[1] : '<h1>Hello, Playground!</h1>';
+  // Strip external <script src> tags from body (replaced by inlined scripts)
+  const bodyContent = (bodyMatch ? bodyMatch[1] : '<h1>Hello, Playground!</h1>')
+    .replace(/<script\b[^>]*\bsrc\s*=[^>]*><\/script>/gi, '');
 
   // Build inline CSS block
   const cssBlocks = cssFiles.map((f) => `/* ${f.name} */\n${f.content}`).join('\n');
   const styleTag = cssBlocks ? `<style>\n${cssBlocks}\n</style>` : '';
 
-  // Build user JS block from virtual TS/JS files
+  // Build JS blocks — prefer compiled output, fall back to stripping TS types
   const jsBlocks = tsFiles.map((f) => {
-    const js = f.language === 'typescript' ? stripTypeScriptTypes(f.content) : f.content;
+    const compiledPath = f.path.replace(/\.tsx?$/, '.js');
+    const js = compiledFiles[compiledPath] ?? compiledFiles[f.path] ?? stripTypeScriptTypes(f.content);
     return `/* ${f.name} */\n${js}`;
   }).join('\n');
 
