@@ -31,4 +31,11 @@ describe('persistence', () => {
     expect(loaded?.id).toBe('test-persist');
     expect(loaded?.name).toBe(ws.name);
   });
+
+  it('saveReplHistory and loadReplHistory round-trip', async () => {
+    const { saveReplHistory, loadReplHistory } = await import('@/persistence/db');
+    await saveReplHistory(['one', 'two']);
+    const history = await loadReplHistory();
+    expect(history).toEqual(['one', 'two']);
+  });
 });

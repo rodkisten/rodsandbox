@@ -34,5 +34,11 @@ describe('ReplManager', () => {
     const result = repl.execute('.echo hello world');
     expect(result.content).toBe('hello world');
   });
-});
 
+  it('replaces and returns persisted history', () => {
+    const repl = new ReplManager();
+    repl.replaceHistory(['alpha', 'beta']);
+    expect(repl.getHistory()).toEqual(['alpha', 'beta']);
+    expect(repl.historyUp()).toBe('beta');
+  });
+});

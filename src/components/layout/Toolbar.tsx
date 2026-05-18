@@ -12,14 +12,16 @@ interface ToolbarProps {
   onToggleAutoRun: () => void;
   isRunning?: boolean;
   isFormatting?: boolean;
+  theme: 'dark' | 'light' | 'oled' | 'tokyo' | 'midnight' | 'high-contrast';
+  onThemeChange: (theme: 'dark' | 'light' | 'oled' | 'tokyo' | 'midnight' | 'high-contrast') => void;
 }
 
 export default function Toolbar({
-  onRun, onFormat, onSave, onDownload, onExport, onOpenCommands, autoRun, onToggleAutoRun, isRunning = false, isFormatting = false,
+  onRun, onFormat, onSave, onDownload, onExport, onOpenCommands, autoRun, onToggleAutoRun, isRunning = false, isFormatting = false, theme, onThemeChange,
 }: ToolbarProps) {
   return (
-    <div className="flex items-center gap-1 px-3 py-2 bg-gray-900 border-b border-gray-800 flex-shrink-0">
-      <div className="flex items-center gap-1 mr-1">
+    <div className="flex flex-wrap items-center gap-1 border-b border-gray-800 bg-gray-900 px-2 py-2 sm:px-3">
+      <div className="mr-1 flex items-center gap-1">
         <span className="text-green-400 font-bold text-sm mr-2">⬡ rodsandbox</span>
       </div>
       <button
@@ -75,6 +77,18 @@ export default function Toolbar({
       >
         ⌘ Commands
       </button>
+      <select
+        value={theme}
+        onChange={(event) => onThemeChange(event.target.value as ToolbarProps['theme'])}
+        className="ml-auto rounded border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-200"
+      >
+        <option value="midnight">Midnight</option>
+        <option value="oled">OLED</option>
+        <option value="tokyo">Tokyo</option>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="high-contrast">High Contrast</option>
+      </select>
     </div>
   );
 }

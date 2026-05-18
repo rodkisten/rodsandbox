@@ -4,24 +4,34 @@ import ReplPanel from '@/components/layout/ReplPanel';
 
 describe('ReplPanel', () => {
   it('unregisters stale external commands when registrations change', () => {
-    const onEvaluate = vi.fn();
+    const onEvaluate = vi.fn<(code: string, runtime: 'iframe' | 'detached' | 'auto') => void>();
+    const evaluateSelection = vi.fn(() => '.hello');
     const { container, rerender } = render(
       <ReplPanel
         onEvaluate={onEvaluate}
+        evaluateSelection={evaluateSelection}
         extraCommandRegistrations={[{ name: '.hello', handler: () => 'hello world' }]}
+        runtime="auto"
+        onRuntimeChange={() => undefined}
+        autocompleteEnabled
       />,
     );
 
-    const input = screen.getByPlaceholderText('Type JavaScript or .help');
-    fireEvent.change(input, { target: { value: '.hello' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.click(screen.getByText('Evaluate Selection'));
     expect(container.textContent).toContain('hello world');
 
-    rerender(<ReplPanel onEvaluate={onEvaluate} extraCommandRegistrations={[]} />);
+    rerender(
+      <ReplPanel
+        onEvaluate={onEvaluate}
+        evaluateSelection={evaluateSelection}
+        extraCommandRegistrations={[]}
+        runtime="auto"
+        onRuntimeChange={() => undefined}
+        autocompleteEnabled
+      />,
+    );
 
-    const nextInput = screen.getByPlaceholderText('Type JavaScript or .help');
-    fireEvent.change(nextInput, { target: { value: '.hello' } });
-    fireEvent.keyDown(nextInput, { key: 'Enter' });
+    fireEvent.click(screen.getByText('Evaluate Selection'));
     expect(container.textContent).toContain('Unknown command: .hello');
   });
 });
