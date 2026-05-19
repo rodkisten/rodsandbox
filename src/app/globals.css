@@ -62,3 +62,13 @@ html, body {
 ::-webkit-scrollbar-thumb:hover {
   background: #4b5563;
 }
+
+
+textarea {
+  font-size: 16px !important; /* Engana o Safari */
+  transform: scale(0.75);     /* Reduz visualmente para ~12px */
+  transform-origin: left center; /* Mantém o alinhamento correto */
+}
+
+
+
