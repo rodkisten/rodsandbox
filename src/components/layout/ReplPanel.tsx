@@ -209,13 +209,13 @@ export default function ReplPanel({
   }, [autocompleteEnabled, completionOptions, input, manager, runInput]);
 
   return (
-    <div className="flex h-full flex-col bg-gray-950 text-xs font-mono pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-800 bg-gray-900 px-3 py-2">
-        <span className="font-sans text-xs font-semibold uppercase tracking-wide text-gray-400">REPL</span>
+    <div className="flex h-full flex-col bg-neutral-950 text-xs font-mono pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-800 bg-neutral-900 px-3 py-2">
+        <span className="font-sans text-xs font-semibold uppercase tracking-wide text-neutral-400">REPL</span>
         <select
           value={runtime}
           onChange={(event) => onRuntimeChange(event.target.value as ReplRuntimeTarget)}
-          className="rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] text-gray-200"
+          className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-[11px] text-neutral-200"
         >
           <option value="auto">Runtime: Auto</option>
           <option value="iframe">Runtime: Iframe</option>
@@ -225,11 +225,11 @@ export default function ReplPanel({
           value={historySearch}
           onChange={(event) => setHistorySearch(event.target.value)}
           placeholder="Search history"
-          className="min-w-28 flex-1 rounded border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] text-gray-100"
+          className="min-w-28 flex-1 rounded border border-neutral-700 bg-neutral-800 px-2 py-1 text-[11px] text-neutral-100"
         />
         <button
           onClick={() => setEntries([])}
-          className="rounded bg-gray-800 px-2 py-1 text-[11px] text-gray-300 hover:bg-gray-700"
+          className="rounded bg-neutral-800 px-2 py-1 text-[11px] text-neutral-300 hover:bg-neutral-700"
           type="button"
         >
           Clear
@@ -244,20 +244,20 @@ export default function ReplPanel({
       </div>
       <div className="flex-1 overflow-auto px-3 py-2">
         {filteredEntries.length === 0 ? (
-          <div className="text-gray-600">No REPL activity</div>
+          <div className="text-neutral-600">No REPL activity</div>
         ) : (
           filteredEntries.map((entry) => (
             <div key={entry.id} className="mb-1.5 flex gap-2">
-              <span className="w-12 shrink-0 text-gray-600">{formatTime(entry.timestamp)}</span>
-              <span className={`w-10 shrink-0 ${entry.type === 'error' ? 'text-red-400' : entry.type === 'input' ? 'text-blue-400' : 'text-gray-500'}`}>
+              <span className="w-12 shrink-0 text-neutral-600">{formatTime(entry.timestamp)}</span>
+              <span className={`w-10 shrink-0 ${entry.type === 'error' ? 'text-red-400' : entry.type === 'input' ? 'text-blue-400' : 'text-neutral-500'}`}>
                 {entry.type === 'input' ? '>' : entry.type}
               </span>
-              <span className={`flex-1 whitespace-pre-wrap break-words ${entry.type === 'error' ? 'text-red-300' : 'text-gray-200'}`}>
+              <span className={`flex-1 whitespace-pre-wrap break-words ${entry.type === 'error' ? 'text-red-300' : 'text-neutral-200'}`}>
                 {entry.content}
               </span>
               <button
                 onClick={() => navigator.clipboard.writeText(entry.content).catch(() => undefined)}
-                className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-400 hover:bg-gray-700"
+                className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 hover:bg-neutral-700"
                 type="button"
               >
                 Copy
@@ -266,19 +266,19 @@ export default function ReplPanel({
           ))
         )}
       </div>
-      <div className="border-t border-gray-800 p-2">
+      <div className="border-t border-neutral-800 p-2">
         <div className="mb-1 flex items-center justify-between">
           <button
             onClick={() => {
               const selection = evaluateSelection?.();
               if (selection) runInput(selection);
             }}
-            className="rounded bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300 hover:bg-gray-700"
+            className="rounded bg-neutral-800 px-2 py-0.5 text-[11px] text-neutral-300 hover:bg-neutral-700"
             type="button"
           >
             Evaluate Selection
           </button>
-          <span className="text-[10px] text-gray-500">Enter run · Shift+Enter newline</span>
+          <span className="text-[10px] text-neutral-500">Enter run · Shift+Enter newline</span>
         </div>
         <CodeMirror
           value={input}
