@@ -15,7 +15,7 @@ interface LogsPanelProps {
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
   log: 'text-neutral-300',
-  info: 'text-blue-400',
+  info: 'text-neutral-400',
   warn: 'text-yellow-400',
   error: 'text-red-400',
   debug: 'text-purple-400',

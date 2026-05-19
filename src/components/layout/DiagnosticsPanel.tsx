@@ -11,14 +11,14 @@ interface DiagnosticsPanelProps {
 const SEVERITY_COLORS: Record<DiagnosticSeverity, string> = {
   error:   'text-red-400',
   warning: 'text-yellow-400',
-  info:    'text-blue-400',
+  info:    'text-neutral-400',
   hint:    'text-neutral-400',
 };
 
 const SEVERITY_BG: Record<DiagnosticSeverity, string> = {
   error:   'border-l-2 border-red-500',
   warning: 'border-l-2 border-yellow-500',
-  info:    'border-l-2 border-blue-500',
+  info:    'border-l-2 border-neutral-500',
   hint:    'border-l-2 border-neutral-600',
 };
 

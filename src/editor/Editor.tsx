@@ -158,7 +158,7 @@ export default function Editor({
             const dom = document.createElement('div');
             dom.className = 'rounded border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-gray-100 shadow-lg';
             const title = document.createElement('div');
-            title.className = 'font-semibold text-blue-200';
+            title.className = 'font-semibold text-neutral-200';
             title.textContent = info.display;
             dom.appendChild(title);
             if (info.documentation) {

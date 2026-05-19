@@ -269,7 +269,7 @@ export default function FileTree({
 
   return (
     <div
-      className={`flex h-full select-none flex-col bg-neutral-950 ${isDragOver ? 'ring-1 ring-blue-500/70 ring-inset' : ''}`}
+      className={`flex h-full select-none flex-col bg-neutral-950 ${isDragOver ? 'ring-1 ring-neutral-500/70 ring-inset' : ''}`}
       onDragOver={(event) => {
         event.preventDefault();
         setIsDragOver(true);
@@ -386,7 +386,7 @@ export default function FileTree({
       )}
       <div className="flex-1 overflow-auto py-1">
         {isDragOver ? (
-          <div className="mx-2 mb-2 rounded border border-dashed border-blue-500/60 bg-blue-500/10 px-2 py-1 text-[11px] text-blue-300">
+          <div className="mx-2 mb-2 rounded border border-dashed border-neutral-500/60 bg-neutral-500/10 px-2 py-1 text-[11px] text-neutral-300">
             Solte ZIP/arquivos aqui para importar
           </div>
         ) : null}

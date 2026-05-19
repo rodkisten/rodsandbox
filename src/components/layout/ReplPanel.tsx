@@ -264,7 +264,7 @@ export default function ReplPanel({
         </button>
         <button
           onClick={() => runInput(input)}
-          className="rounded bg-blue-700 px-2 py-1 text-[11px] text-blue-100 hover:bg-blue-600"
+          className="rounded bg-neutral-700 px-2 py-1 text-[11px] text-neutral-100 hover:bg-neutral-600"
           type="button"
         >
           Run
@@ -277,7 +277,7 @@ export default function ReplPanel({
           filteredEntries.map((entry) => (
             <div key={entry.id} className="mb-1.5 flex gap-2">
               <span className="w-12 shrink-0 text-neutral-600">{formatTime(entry.timestamp)}</span>
-              <span className={`w-10 shrink-0 ${entry.type === 'error' ? 'text-red-400' : entry.type === 'input' ? 'text-blue-400' : 'text-neutral-500'}`}>
+              <span className={`w-10 shrink-0 ${entry.type === 'error' ? 'text-red-400' : entry.type === 'input' ? 'text-neutral-400' : 'text-neutral-500'}`}>
                 {entry.type === 'input' ? '>' : entry.type}
               </span>
               <span className={`flex-1 whitespace-pre-wrap break-words ${entry.type === 'error' ? 'text-red-300' : 'text-neutral-200'}`}>

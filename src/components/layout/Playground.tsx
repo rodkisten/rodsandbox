@@ -58,7 +58,7 @@ function useMobilePortrait() {
 }
 
 function ResizeGrip() {
-  return <Separator className="relative flex h-3 items-center justify-center bg-neutral-900/70 transition-colors hover:bg-blue-500/25 data-[resize-handle-active]:bg-blue-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
+  return <Separator className="relative flex h-3 items-center justify-center bg-neutral-900/70 transition-colors hover:bg-neutral-500/25 data-[resize-handle-active]:bg-neutral-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
 }
 
 export default function Playground() {
@@ -1076,7 +1076,7 @@ export default function Playground() {
                   />
                 </div>
               </Panel>
-              <Separator className="w-2 bg-neutral-900/70 hover:bg-blue-500/30 data-[resize-handle-active]:bg-blue-500/40" />
+              <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
               <Panel id="d-editor" defaultSize={Math.max(20, 100 - settings.layoutSizes.sidebarWidth - settings.layoutSizes.previewWidth)} minSize={30} collapsible collapsedSize={6} panelRef={editorPanelRef}>
                 <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
                   <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
@@ -1112,7 +1112,7 @@ export default function Playground() {
                   )}
                 </div>
               </Panel>
-              <Separator className="w-2 bg-neutral-900/70 hover:bg-blue-500/30 data-[resize-handle-active]:bg-blue-500/40" />
+              <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
               <Panel id="d-preview" defaultSize={settings.layoutSizes.previewWidth} minSize={20} collapsible collapsedSize={6} panelRef={previewPanelRef}>
                 <div className="flex h-full flex-col overflow-hidden">
                   <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">

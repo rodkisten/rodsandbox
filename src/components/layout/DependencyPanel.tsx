@@ -20,7 +20,7 @@ export default function DependencyPanel({ dependencies }: DependencyPanelProps) 
       <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Dependencies</div>
       <div className="flex flex-wrap gap-1.5">
         {dependencies.map((dependency) => (
-          <span key={dependency} className="rounded bg-gray-800 px-2 py-0.5 text-xs text-blue-200">
+          <span key={dependency} className="rounded bg-gray-800 px-2 py-0.5 text-xs text-neutral-200">
             {dependency}
           </span>
         ))}
