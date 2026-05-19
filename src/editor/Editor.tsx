@@ -130,12 +130,11 @@ export default function Editor({
       ? autocompletion(extraAutocompleteProviders.length > 0 ? { override: extraAutocompleteProviders } : undefined)
       : [];
     return [
-      material,
       getLanguageExtension(file.language),
       //createEditorTheme(theme),
-      EditorView.theme({
+      /**EditorView.theme({
         '&': { fontSize: `${fontSize}px`, fontFamily },
-      }),
+      }),**/
       EditorState.tabSize.of(Math.max(1, Math.min(8, tabSize))),
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...completionKeymap]),
@@ -168,7 +167,8 @@ export default function Editor({
     <div className="h-full w-full overflow-auto">
       <CodeMirror
         value={file.content}
-        height="100%"
+        viewportMargin={Infinity}
+        height="auto"
         extensions={extensions}
         onChange={handleChange}
         theme={materialInit({
