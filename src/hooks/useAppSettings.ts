@@ -13,7 +13,7 @@ import { AppSettings } from '@/types';
 export function createDefaultSettings(): AppSettings {
   return {
     theme: 'midnight',
-    autoRun: false,
+    autoRun: true,
     formatOnSave: false,
     activeFileId: null,
     layoutSizes: {
@@ -32,11 +32,11 @@ export function createDefaultSettings(): AppSettings {
     replRuntime: 'auto',
     replAutocomplete: true,
     replHistory: [],
-    editorTheme: 'midnight',
-    editorFontSize: 14,
+    editorTheme: 'light',
+    editorFontSize: 13,
     editorFontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
     editorLineNumbers: true,
-    editorWordWrap: false,
+    editorWordWrap: true,
     editorAutocomplete: true,
     editorLinterEnabled: true,
     editorFormatterEnabled: true,
