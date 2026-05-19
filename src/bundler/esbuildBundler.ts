@@ -19,4 +19,9 @@ export class EsbuildBundlerService {
       worker.postMessage({ type: 'BUNDLE_BUILD', requestId: id, files, entryFile });
     });
   }
+
+  terminate(): void {
+    this.worker?.terminate();
+    this.worker = null;
+  }
 }

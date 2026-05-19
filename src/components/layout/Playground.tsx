@@ -111,6 +111,7 @@ export default function Playground() {
     return () => {
       tsWorkerRef.current?.terminate();
       formatterWorkerRef.current?.terminate();
+      bundlerRef.current?.terminate();
     };
   }, []);
 

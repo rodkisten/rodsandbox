@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import type { Diagnostic } from '@/types';
 import type { BundlerBuildRequest, BundlerMessage, WorkerFileInput } from './messages';
+import { inferVirtualLoader, normalizeVirtualPath, resolveVirtualImportPath, resolveWithKnownExtensions } from '@/bundler/pathResolver';
 
 interface EsbuildOutputFile { path: string; text: string }
 interface EsbuildBuildResult { outputFiles?: EsbuildOutputFile[] }
@@ -23,33 +24,9 @@ interface EsbuildApi {
 let esbuild: EsbuildApi | null = null;
 let latestRequestId = 0;
 
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\/+/, '');
-}
-
-function resolveImportPath(importer: string, specifier: string): string {
-  if (!specifier.startsWith('.')) return specifier;
-  const importerSegments = normalizePath(importer).split('/');
-  importerSegments.pop();
-  for (const segment of specifier.split('/')) {
-    if (!segment || segment === '.') continue;
-    if (segment === '..') importerSegments.pop();
-    else importerSegments.push(segment);
-  }
-  return importerSegments.join('/');
-}
-
-function inferLoader(path: string): 'ts' | 'js' | 'css' | 'text' | 'json' {
-  if (path.endsWith('.css')) return 'css';
-  if (path.endsWith('.json')) return 'json';
-  if (path.endsWith('.txt') || path.endsWith('.md') || path.endsWith('.html')) return 'text';
-  if (path.endsWith('.js') || path.endsWith('.mjs') || path.endsWith('.jsx')) return 'js';
-  return 'ts';
-}
-
 function buildFileLookup(files: WorkerFileInput[]): Map<string, WorkerFileInput> {
   const map = new Map<string, WorkerFileInput>();
-  for (const file of files) map.set(normalizePath(file.path), file);
+  for (const file of files) map.set(normalizeVirtualPath(file.path), file);
   return map;
 }
 
@@ -81,7 +58,7 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
   latestRequestId = message.requestId;
   const req = message as BundlerBuildRequest;
   const fileLookup = buildFileLookup(req.files);
-  const entryFile = normalizePath(req.entryFile);
+  const entryFile = normalizeVirtualPath(req.entryFile);
 
   try {
     const buildApi = await ensureEsbuild();
@@ -92,7 +69,7 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
         contents: entryContent,
         sourcefile: entryFile,
         resolveDir: '/',
-        loader: inferLoader(entryFile) === 'js' ? 'js' : 'ts',
+        loader: inferVirtualLoader(entryFile) === 'js' ? 'js' : 'ts',
       },
       bundle: true,
       write: false,
@@ -103,19 +80,18 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
         setup(build) {
           build.onResolve({ filter: /.*/ }, (args) => {
             const candidate = args.importer
-              ? resolveImportPath(args.importer, args.path)
-              : normalizePath(args.path);
-            const withExt = [candidate, `${candidate}.ts`, `${candidate}.js`, `${candidate}.css`, `${candidate}.json`]
-              .find((path) => fileLookup.has(path));
+              ? resolveVirtualImportPath(args.importer, args.path)
+              : normalizeVirtualPath(args.path);
+            const withExt = resolveWithKnownExtensions(candidate, (path) => fileLookup.has(path));
 
             if (withExt) return { path: withExt, namespace: 'virtual' };
             return null;
           });
 
           build.onLoad({ filter: /.*/, namespace: 'virtual' }, (args) => {
-            const file = fileLookup.get(normalizePath(args.path));
+            const file = fileLookup.get(normalizeVirtualPath(args.path));
             if (!file) return null;
-            return { contents: file.content, loader: inferLoader(file.path) };
+            return { contents: file.content, loader: inferVirtualLoader(file.path) };
           });
         },
       }],
