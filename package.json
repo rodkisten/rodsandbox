@@ -49,6 +49,8 @@
     "eslint-config-next": "16.2.6",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "@lezer/highlight": "latest",
+    "@uiw/codemirror-themes": "latest"
   }
 }
