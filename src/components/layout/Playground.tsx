@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import type { CompletionSource } from '@codemirror/autocomplete';
+import type { Completion, CompletionContext, CompletionSource } from '@codemirror/autocomplete';
 import type { Extension } from '@codemirror/state';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
 import { useWorkspace } from '@/hooks/useWorkspace';
@@ -622,6 +622,45 @@ export default function Playground() {
     });
   }, [isMobilePortrait, settings.collapsedPanels]);
 
+
+  const tsLanguageCompletionSource = useMemo<CompletionSource>(() => {
+    return async (context: CompletionContext) => {
+      if (!settings.editorAutocomplete || !activeFile) return null;
+      if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return null;
+
+      const word = context.matchBefore(/\w*/);
+      if (!word) return null;
+      if (word.from === word.to && !context.explicit) return null;
+
+      const docText = context.state.doc.toString();
+      const files = listFiles(workspace)
+        .filter((file) => file.language === 'typescript' || file.language === 'javascript')
+        .map((file) => ({
+          path: file.path,
+          content: file.id === activeFile.id ? docText : file.content,
+        }));
+
+      for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
+        files.push({ path, content });
+      }
+
+      const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+      tsWorkerRef.current = worker;
+      const items = await worker.getCompletions(files, activeFile.path, context.pos);
+      const options: Completion[] = items.map((item) => ({
+        label: item.name,
+        type: item.kind,
+        detail: item.detail,
+      }));
+
+      return {
+        from: word.from,
+        options,
+        validFor: /^\w*$/,
+      };
+    };
+  }, [activeFile, settings.editorAutocomplete, workspace]);
+
   const renderBottomPanelContent = () => {
     if (settings.bottomTab === 'console') {
       return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
@@ -748,7 +787,7 @@ export default function Playground() {
                   onSave={handleSave}
                   diagnostics={diagnostics}
                   extraExtensions={pluginEditorExtensions}
-                  extraAutocompleteProviders={pluginAutocompleteProviders}
+                  extraAutocompleteProviders={[tsLanguageCompletionSource, ...pluginAutocompleteProviders]}
                   theme={settings.editorTheme}
                   fontSize={settings.editorFontSize}
                   fontFamily={settings.editorFontFamily}
@@ -869,7 +908,7 @@ export default function Playground() {
                       onSave={handleSave}
                       diagnostics={diagnostics}
                       extraExtensions={pluginEditorExtensions}
-                      extraAutocompleteProviders={pluginAutocompleteProviders}
+                      extraAutocompleteProviders={[tsLanguageCompletionSource, ...pluginAutocompleteProviders]}
                       theme={settings.editorTheme}
                       fontSize={settings.editorFontSize}
                       fontFamily={settings.editorFontFamily}
