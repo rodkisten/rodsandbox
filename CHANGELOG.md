@@ -43,3 +43,18 @@
 
 ### Notes
 - esbuild wasm is loaded remotely inside the bundler worker to keep the app backend-free and avoid server dependencies.
+
+
+## [0.5.0] - 2026-05-19
+
+### Added
+- Phase 2 completion block:
+  - TS worker completions and quick-info APIs with idle lifecycle cleanup
+  - CodeMirror integration for worker-backed autocomplete and hover quick-info
+  - Diagnostics-to-editor line/column jump navigation
+  - Unified workspace import flow for JSON and ZIP
+  - Full-workspace replacement semantics for templates/import/snapshot restore
+  - Dependency panel fed by bundler dependency extraction
+
+### Changed
+- Documentation updated to clarify implemented Phase 2 scope and remaining later-phase work.

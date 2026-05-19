@@ -98,3 +98,20 @@ No custom server is required.
 - **V1:** shell UI, file tree, editor, preview, logs, IndexedDB, formatting, export, PWA shell.
 - **V2:** richer TS language-service APIs, diagnostics orchestration, palette/REPL expansion, import/export templates.
 - **V3:** CDN module resolution/cache, dependency panel, plugin manager UI, snapshots/share URLs, mobile Safari polish.
+
+
+## Phase 2 status
+
+Implemented in this repository:
+
+- TS language worker diagnostics plus editor completions and quick-info hover integration.
+- Diagnostics navigation from panel to exact editor line/column.
+- Workspace import/export with JSON and ZIP workflows (command palette + file inputs).
+- Template application as full workspace replacement.
+- Snapshot save/restore/delete workflows with overwrite confirmation.
+- Dependency extraction from bundler output and diagnostics-tab dependency visibility.
+
+Remaining for later phases:
+
+- Full go-to-definition UX wiring (keyboard/gesture-driven jump target discovery).
+- Advanced plugin manager UI and dependency CDN/module cache flows.
