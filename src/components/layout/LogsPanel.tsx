@@ -14,14 +14,14 @@ interface LogsPanelProps {
 }
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
-  log: 'text-gray-300',
+  log: 'text-neutral-300',
   info: 'text-blue-400',
   warn: 'text-yellow-400',
   error: 'text-red-400',
   debug: 'text-purple-400',
   table: 'text-cyan-400',
-  group: 'text-gray-400',
-  groupEnd: 'text-gray-400',
+  group: 'text-neutral-400',
+  groupEnd: 'text-neutral-400',
   time: 'text-green-400',
   timeEnd: 'text-green-400',
   assert: 'text-red-500',
@@ -77,15 +77,15 @@ export default function LogsPanel({ logs, onClear, customFormatters = [] }: Logs
   }, [logs, enabledLevels, search, customFormatters]);
 
   return (
-    <div className="flex flex-col h-full bg-gray-950 text-xs font-mono">
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-900 border-b border-gray-800 flex-shrink-0">
-        <span className="text-gray-400 font-sans text-xs font-semibold uppercase tracking-wide">Console</span>
+    <div className="flex flex-col h-full bg-neutral-950 text-xs font-mono">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border-b border-neutral-800 flex-shrink-0">
+        <span className="text-neutral-400 font-sans text-xs font-semibold uppercase tracking-wide">Console</span>
         <div className="flex gap-2 ml-2">
           {ALL_LEVELS.map((level) => (
             <button
               key={level}
               onClick={() => toggleLevel(level)}
-              className={`px-1.5 py-0.5 rounded text-xs capitalize ${enabledLevels.has(level) ? LEVEL_COLORS[level] + ' bg-gray-800' : 'text-gray-600'}`}
+              className={`px-1.5 py-0.5 rounded text-xs capitalize ${enabledLevels.has(level) ? LEVEL_COLORS[level] + ' bg-neutral-800' : 'text-neutral-600'}`}
             >
               {level}
             </button>
@@ -96,27 +96,27 @@ export default function LogsPanel({ logs, onClear, customFormatters = [] }: Logs
           placeholder="Filter..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="ml-2 flex-1 bg-gray-800 text-gray-300 px-2 py-0.5 rounded text-xs outline-none border border-gray-700 focus:border-gray-500"
+          className="ml-2 flex-1 bg-neutral-800 text-neutral-300 px-2 py-0.5 rounded text-xs outline-none border border-neutral-700 focus:border-neutral-500"
         />
         <button
           onClick={onClear}
-          className="ml-2 text-gray-500 hover:text-gray-300 text-xs px-2 py-0.5 rounded hover:bg-gray-800"
+          className="ml-2 text-neutral-500 hover:text-neutral-300 text-xs px-2 py-0.5 rounded hover:bg-neutral-800"
         >
           Clear
         </button>
       </div>
       <div className="flex-1 overflow-auto">
         {filtered.length === 0 ? (
-          <div className="text-gray-600 p-4 text-center">No console output</div>
+          <div className="text-neutral-600 p-4 text-center">No console output</div>
         ) : (
           filtered.map((entry) => (
             <div
               key={entry.id}
-              className={`flex gap-2 px-3 py-0.5 border-b border-gray-900 hover:bg-gray-900 ${LEVEL_COLORS[entry.level] ?? 'text-gray-300'}`}
+              className={`flex gap-2 px-3 py-0.5 border-b border-neutral-900 hover:bg-neutral-900 ${LEVEL_COLORS[entry.level] ?? 'text-neutral-300'}`}
               style={{ paddingLeft: `${(entry.groupDepth + 1) * 12}px` }}
             >
-              <span className="text-gray-600 flex-shrink-0 select-none">{formatTime(entry.timestamp)}</span>
-              <span className="text-gray-600 flex-shrink-0 uppercase w-12 select-none">{entry.level}</span>
+              <span className="text-neutral-600 flex-shrink-0 select-none">{formatTime(entry.timestamp)}</span>
+              <span className="text-neutral-600 flex-shrink-0 uppercase w-12 select-none">{entry.level}</span>
                <span className="flex-1 break-all whitespace-pre-wrap">{formatArgs(entry.args, customFormatters)}</span>
             </div>
           ))
