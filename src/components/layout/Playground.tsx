@@ -17,7 +17,7 @@ import ReplPanel from './ReplPanel';
 import CommandPalette, { CommandPaletteCommand } from '@/components/ui/CommandPalette';
 import { buildPreviewHtml } from '@/preview/builder';
 import { downloadFile } from '@/lib/download';
-import { exportWorkspaceAsZip } from '@/lib/archive';
+import { exportWorkspaceAsZip, importZipFile } from '@/lib/archive';
 import { exportWorkspaceJson, importWorkspaceJson } from '@/lib/workspaceTransfer';
 import { createWorkspaceSnapshot, deleteWorkspaceSnapshot, diffSnapshotAgainstWorkspace, getWorkspaceSnapshot, listWorkspaceSnapshots } from '@/lib/snapshots';
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
@@ -112,6 +112,7 @@ export default function Playground() {
   const detachedEditorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detachedEditorOnReadyRef = useRef<((event: MessageEvent) => void) | null>(null);
   const workspaceImportInputRef = useRef<HTMLInputElement | null>(null);
+  const workspaceBundleImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const isMobilePortrait = useMobilePortrait();
 
@@ -359,6 +360,15 @@ export default function Playground() {
     replaceWorkspaceFiles(entries);
   }, [replaceWorkspaceFiles]);
 
+  const handleImportWorkspaceBundle = useCallback(async (file: File) => {
+    if (file.name.toLowerCase().endsWith('.zip')) {
+      const entries = await importZipFile(file);
+      replaceWorkspaceFiles(entries);
+      return;
+    }
+    await handleImportWorkspaceJson(file);
+  }, [handleImportWorkspaceJson, replaceWorkspaceFiles]);
+
   const handleSelectDiagnostic = useCallback((diag: Diagnostic) => {
     if (workspace.files[diag.fileId]) setActiveFile(diag.fileId);
   }, [setActiveFile, workspace.files]);
@@ -558,6 +568,7 @@ export default function Playground() {
       { id: 'export', label: t('toolbar.export'), action: handleExportZip },
       { id: 'export-json', label: 'Export workspace JSON', action: handleExportWorkspaceJson },
       { id: 'import-json', label: 'Import workspace JSON', action: () => workspaceImportInputRef.current?.click() },
+      { id: 'import-workspace-bundle', label: 'Import workspace (JSON or ZIP)', action: () => workspaceBundleImportInputRef.current?.click() },
       { id: 'editor-detached', label: 'Open editor detached', action: handleOpenEditorDetached },
       { id: 'preview-detached', label: 'Open preview in new window', action: () => previewRef.current?.openDetached() },
     ];
@@ -998,6 +1009,18 @@ export default function Playground() {
           const file = event.currentTarget.files?.[0];
           if (!file) return;
           void handleImportWorkspaceJson(file).catch((error) => console.error('Workspace import failed', error));
+          event.currentTarget.value = '';
+        }}
+      />
+      <input
+        ref={workspaceBundleImportInputRef}
+        type="file"
+        accept="application/json,.json,application/zip,.zip"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          if (!file) return;
+          void handleImportWorkspaceBundle(file).catch((error) => console.error('Workspace bundle import failed', error));
           event.currentTarget.value = '';
         }}
       />
