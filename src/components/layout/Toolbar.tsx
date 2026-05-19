@@ -90,7 +90,7 @@ export default function Toolbar({
   diagnosticsCount,
 }: ToolbarProps) {
   return (
-    <div className="flex items-center gap-1.5 border-b border-gray-800 bg-neutral-950 px-2 py-1.5 sm:px-3">
+    <div className="flex items-center gap-1.5 border-b border-neutral-800 bg-neutral-950 px-2 py-1.5 sm:px-3">
       <span className="mr-1 hidden text-xs font-semibold text-neutral-500 sm:inline">⬡</span>
       <Button
         onClick={onRun}
@@ -105,12 +105,12 @@ export default function Toolbar({
         onClick={onToggleAutoRun}
         size="icon"
         variant={autoRun ? 'default' : 'secondary'}
-        className={autoRun ? 'bg-purple-700 hover:bg-purple-600' : ''}
+        className={autoRun ? 'bg-purple-700/30 hover:bg-purple-600' : ''}
         title="AutoPlay"
       >
         <PlayCircle className="h-4 w-4" />
       </Button>
-      <div className="ml-1 rounded bg-neutral-900 px-1.5 py-0.5 text-[10px] text-slate-500">
+      <div className="ml-1 rounded bg-neutral-900 px-1.5 py-0.5 text-[10px] text-neutral-500">
         {diagnosticsCount > 0 ? `${diagnosticsCount} erros` : 'ok'}
       </div>
 
