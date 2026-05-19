@@ -12,6 +12,7 @@ import FileTree from './FileTree';
 import PreviewPanel, { PreviewPanelHandle } from './PreviewPanel';
 import LogsPanel from './LogsPanel';
 import DiagnosticsPanel from './DiagnosticsPanel';
+import DependencyPanel from './DependencyPanel';
 import ReplPanel from './ReplPanel';
 import CommandPalette, { CommandPaletteCommand } from '@/components/ui/CommandPalette';
 import { buildPreviewHtml } from '@/preview/builder';
@@ -80,6 +81,7 @@ export default function Playground() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [dependencies, setDependencies] = useState<string[]>([]);
   const [isFormatting, setIsFormatting] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [pluginEditorExtensions, setPluginEditorExtensions] = useState<Extension[]>([]);
@@ -172,14 +174,15 @@ export default function Playground() {
     }));
   }, [activeFile?.id, updateSettings]);
 
-  const compileWorkspace = useCallback(async (): Promise<{ files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string }> => {
+  const compileWorkspace = useCallback(async (): Promise<{ files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string; dependencies: string[] }> => {
     const files = listFiles(workspace);
     const fileIdByPath = new Map(files.map((file) => [file.path, file.id]));
     const hasRunnableSource = files.some((file) => file.language === 'typescript' || file.language === 'javascript');
 
     if (!hasRunnableSource || !FEATURE_FLAGS.ENABLE_TYPESCRIPT_COMPILER) {
       setDiagnostics([]);
-      return { files: {}, diagnosticsCount: 0, bundledCode: '', bundledCssText: '' };
+      setDependencies([]);
+      return { files: {}, diagnosticsCount: 0, bundledCode: '', bundledCssText: '', dependencies: [] };
     }
 
     const tsFiles = files
@@ -199,6 +202,7 @@ export default function Playground() {
     const bundler = bundlerRef.current ?? new EsbuildBundlerService();
     bundlerRef.current = bundler;
     const bundleResult = await bundler.build(runtimeFiles, entryFile);
+    setDependencies(bundleResult.dependencies);
 
     const normalizedTsDiagnostics = tsDiagnostics.map((diag) => ({
       ...diag,
@@ -215,7 +219,7 @@ export default function Playground() {
       [`${entryFile.replace(/\.tsx?$/, '').replace(/\.jsx?$/, '')}.js`]: bundleResult.code,
     };
 
-    return { files: compiledFiles, diagnosticsCount: allDiagnostics.length, bundledCode: bundleResult.code, bundledCssText: bundleResult.cssText };
+    return { files: compiledFiles, diagnosticsCount: allDiagnostics.length, bundledCode: bundleResult.code, bundledCssText: bundleResult.cssText, dependencies: bundleResult.dependencies };
   }, [workspace]);
 
   const handleTypecheck = useCallback(() => {
@@ -576,7 +580,7 @@ export default function Playground() {
       return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
     }
     if (settings.bottomTab === 'diagnostics') {
-      return <DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} />;
+      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>; 
     }
     if (FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM) {
       return (

@@ -1,6 +1,6 @@
 import type { Diagnostic } from '@/types';
 import type { WorkerFileInput, BundlerMessage } from '@/workers/messages';
-export interface BundleResult { code: string; cssText: string; diagnostics: Diagnostic[]; }
+export interface BundleResult { code: string; cssText: string; dependencies: string[]; diagnostics: Diagnostic[]; }
 export class EsbuildBundlerService {
   private worker: Worker | null = null;
   private requestId = 0;
@@ -13,7 +13,7 @@ export class EsbuildBundlerService {
         const msg = event.data;
         if (msg.type !== 'BUNDLE_RESULT' || msg.requestId !== id) return;
         worker.removeEventListener('message', onMessage);
-        resolve(msg.success ? { code: msg.code, cssText: msg.cssText, diagnostics: [] } : { code: '', cssText: '', diagnostics: msg.errors });
+        resolve(msg.success ? { code: msg.code, cssText: msg.cssText, dependencies: msg.dependencies, diagnostics: [] } : { code: '', cssText: '', dependencies: [], diagnostics: msg.errors });
       };
       worker.addEventListener('message', onMessage);
       worker.postMessage({ type: 'BUNDLE_BUILD', requestId: id, files, entryFile });

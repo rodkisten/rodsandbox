@@ -24,6 +24,21 @@ interface EsbuildApi {
 let esbuild: EsbuildApi | null = null;
 let latestRequestId = 0;
 
+function extractDependencies(files: WorkerFileInput[]): string[] {
+  const deps = new Set<string>();
+  const importRegex = /(?:import\s+(?:[^'";]+?\s+from\s+)?|export\s+[^'";]*?from\s+|import\()\s*['"]([^'"]+)['"]/g;
+  for (const file of files) {
+    let match: RegExpExecArray | null;
+    while ((match = importRegex.exec(file.content)) !== null) {
+      const specifier = match[1];
+      if (!specifier || specifier.startsWith('.') || specifier.startsWith('/')) continue;
+      deps.add(specifier);
+    }
+  }
+  return Array.from(deps).sort();
+}
+
+
 function buildFileLookup(files: WorkerFileInput[]): Map<string, WorkerFileInput> {
   const map = new Map<string, WorkerFileInput>();
   for (const file of files) map.set(normalizeVirtualPath(file.path), file);
@@ -59,6 +74,7 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
   const req = message as BundlerBuildRequest;
   const fileLookup = buildFileLookup(req.files);
   const entryFile = normalizeVirtualPath(req.entryFile);
+  const dependencies = extractDependencies(req.files);
 
   try {
     const buildApi = await ensureEsbuild();
@@ -100,7 +116,7 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
     if (req.requestId !== latestRequestId) return;
     const code = result.outputFiles?.find((file) => file.path.endsWith('.js'))?.text ?? '';
     const cssText = result.outputFiles?.find((file) => file.path.endsWith('.css'))?.text ?? '';
-    self.postMessage({ type: 'BUNDLE_RESULT', requestId: req.requestId, success: true, code, cssText });
+    self.postMessage({ type: 'BUNDLE_RESULT', requestId: req.requestId, success: true, code, cssText, dependencies });
   } catch (error) {
     if (req.requestId !== latestRequestId) return;
     self.postMessage({
