@@ -17,6 +17,7 @@ import CommandPalette, { CommandPaletteCommand } from '@/components/ui/CommandPa
 import { buildPreviewHtml } from '@/preview/builder';
 import { downloadFile } from '@/lib/download';
 import { exportWorkspaceAsZip } from '@/lib/archive';
+import { exportWorkspaceJson, importWorkspaceJson } from '@/lib/workspaceTransfer';
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
 import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constants';
 import { listFiles } from '@/filesystem/virtualFs';
@@ -101,6 +102,7 @@ export default function Playground() {
   const detachedEditorWindowRef = useRef<Window | null>(null);
   const detachedEditorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detachedEditorOnReadyRef = useRef<((event: MessageEvent) => void) | null>(null);
+  const workspaceImportInputRef = useRef<HTMLInputElement | null>(null);
 
   const isMobilePortrait = useMobilePortrait();
 
@@ -309,6 +311,22 @@ export default function Playground() {
     void exportWorkspaceAsZip(workspace);
   }, [workspace]);
 
+  const handleExportWorkspaceJson = useCallback(() => {
+    const content = exportWorkspaceJson(workspace);
+    downloadFile(`${workspace.name.replace(/\s+/g, '-').toLowerCase() || 'workspace'}.json`, content, 'application/json');
+  }, [workspace]);
+
+  const handleImportWorkspaceJson = useCallback(async (file: File) => {
+    const raw = await file.text();
+    const parsed = importWorkspaceJson(raw);
+    const entries = parsed.files.map((entry) => ({
+      path: entry.path,
+      language: entry.language,
+      content: entry.content,
+    }));
+    upsertFiles(entries);
+  }, [upsertFiles]);
+
   const handleSelectDiagnostic = useCallback((diag: Diagnostic) => {
     if (workspace.files[diag.fileId]) setActiveFile(diag.fileId);
   }, [setActiveFile, workspace.files]);
@@ -467,6 +485,8 @@ export default function Playground() {
       { id: 'typecheck', label: 'Typecheck', action: handleTypecheck },
       { id: 'download', label: t('toolbar.download'), action: handleDownload },
       { id: 'export', label: t('toolbar.export'), action: handleExportZip },
+      { id: 'export-json', label: 'Export workspace JSON', action: handleExportWorkspaceJson },
+      { id: 'import-json', label: 'Import workspace JSON', action: () => workspaceImportInputRef.current?.click() },
       { id: 'editor-detached', label: 'Open editor detached', action: handleOpenEditorDetached },
       { id: 'preview-detached', label: 'Open preview in new window', action: () => previewRef.current?.openDetached() },
     ];
@@ -476,7 +496,7 @@ export default function Playground() {
       action: command.action,
     }));
     return [...baseCommands, ...pluginCommands];
-  }, [handleDownload, handleExportZip, handleFormat, handleOpenEditorDetached, handleRun, handleSave, handleTypecheck, pluginEditorCommands, updateSettings]);
+  }, [handleDownload, handleExportWorkspaceJson, handleExportZip, handleFormat, handleOpenEditorDetached, handleRun, handleSave, handleTypecheck, pluginEditorCommands, updateSettings]);
 
   const isPanelCollapsed = useCallback((panelId: string) => settings.collapsedPanels.includes(panelId), [settings.collapsedPanels]);
 
@@ -815,6 +835,18 @@ export default function Playground() {
         </Group>
       )}
 
+      <input
+        ref={workspaceImportInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          if (!file) return;
+          void handleImportWorkspaceJson(file).catch((error) => console.error('Workspace import failed', error));
+          event.currentTarget.value = '';
+        }}
+      />
       <CommandPalette open={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} commands={commandPaletteCommands} />
     </div>
   );
