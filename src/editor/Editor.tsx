@@ -132,7 +132,7 @@ export default function Editor({
     return [
       material,
       getLanguageExtension(file.language),
-      createEditorTheme(theme),
+      //createEditorTheme(theme),
       EditorView.theme({
         '&': { fontSize: `${fontSize}px`, fontFamily },
       }),
