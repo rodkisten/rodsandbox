@@ -121,8 +121,8 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
   }, [onDetachedChange]);
 
   return (
-    <div className="h-full w-full bg-white dark:bg-gray-950 flex flex-col">
-      <div className="flex items-center px-3 py-1 bg-gray-800 border-b border-gray-700 text-xs text-gray-400">
+    <div className="h-full w-full bg-white dark:bg-neutral-950 flex flex-col">
+      <div className="flex items-center px-3 py-1 bg-neutral-800 border-b border-neutral-700 text-xs text-neutral-400">
         <span>Preview</span>
         <Button
           onClick={openDetachedWindow}
