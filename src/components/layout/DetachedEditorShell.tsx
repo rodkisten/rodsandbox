@@ -45,6 +45,8 @@ export default function DetachedEditorShell() {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      if (event.source !== window.opener) return;
+      if (event.origin !== location.origin) return;
       if (!event.data || event.data.type !== 'RODSANDBOX_EDITOR_SYNC') return;
       const payload = event.data.payload as SyncPayload;
       setSyncPayload((prev) => {
@@ -63,7 +65,7 @@ export default function DetachedEditorShell() {
 
     window.addEventListener('message', handleMessage);
     // signal to opener that we're ready
-    window.opener?.postMessage({ type: 'RODSANDBOX_DETACHED_READY' }, '*');
+    window.opener?.postMessage({ type: 'RODSANDBOX_DETACHED_READY' }, location.origin);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
@@ -76,13 +78,13 @@ export default function DetachedEditorShell() {
         type: 'RODSANDBOX_DETACHED_EDITOR_CHANGE',
         payload: { fileId: syncPayload.fileId, content: newContent },
       },
-      '*',
+      location.origin,
     );
     pendingSave.current = false;
   }, [syncPayload]);
 
   const handleSave = useCallback(() => {
-    window.opener?.postMessage({ type: 'RODSANDBOX_DETACHED_EDITOR_SAVE' }, '*');
+    window.opener?.postMessage({ type: 'RODSANDBOX_DETACHED_EDITOR_SAVE' }, location.origin);
   }, []);
 
   const theme = syncPayload?.theme ?? DEFAULT_THEME;

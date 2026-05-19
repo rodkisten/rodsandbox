@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { PREVIEW_SANDBOX_ATTRS } from '@/constants';
 import { PreviewMessage } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,8 @@ function isPreviewMessage(data: unknown): data is PreviewMessage {
   return (d.type === 'CONSOLE_LOG' || d.type === 'RUNTIME_ERROR' || d.type === 'REPL_RESULT') && typeof d.timestamp === 'number';
 }
 
+const DETACHED_PREVIEW_PLACEHOLDER = '<html><body style="background:#111;color:#666;font-family:sans-serif;padding:2rem"><p>Run to see preview</p></body></html>';
+
 const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function PreviewPanel(
   { previewHtml, onMessage, onDetachedChange },
   ref
@@ -31,13 +33,27 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const detachedWindowRef = useRef<Window | null>(null);
 
-  const syncDetachedContent = () => {
+  const syncDetachedContent = useCallback(() => {
     const detachedWindow = detachedWindowRef.current;
     if (!detachedWindow || detachedWindow.closed) return;
-    detachedWindow.document.open();
-    detachedWindow.document.write(previewHtml ?? '<!doctype html><html><body style="font-family:sans-serif;padding:2rem;color:#999;background:#111">Run to see preview</body></html>');
-    detachedWindow.document.close();
-  };
+    detachedWindow.postMessage(
+      { type: 'RODSANDBOX_PREVIEW_SYNC', html: previewHtml ?? DETACHED_PREVIEW_PLACEHOLDER },
+      window.location.origin,
+    );
+  }, [previewHtml]);
+
+  const openDetachedWindow = useCallback(() => {
+    if (detachedWindowRef.current && !detachedWindowRef.current.closed) {
+      detachedWindowRef.current.focus();
+      onDetachedChange?.(true);
+      return;
+    }
+    const detachedWindow = window.open('/detached-preview', '_blank', 'popup=yes,width=960,height=720');
+    if (!detachedWindow) return;
+    detachedWindowRef.current = detachedWindow;
+    // Content is sent when we receive RODSANDBOX_DETACHED_PREVIEW_READY
+    onDetachedChange?.(true);
+  }, [onDetachedChange]);
 
   useImperativeHandle(ref, () => ({
     reload() {
@@ -50,23 +66,12 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
       const detachedWindow = detachedWindowRef.current;
       const detachedAvailable = Boolean(detachedWindow && !detachedWindow.closed);
       if (runtime === 'detached' || (runtime === 'auto' && detachedAvailable)) {
-        detachedWindow?.postMessage({ type: 'REPL_EVAL', code }, '*');
+        detachedWindow?.postMessage({ type: 'RODSANDBOX_PREVIEW_EVAL', code }, window.location.origin);
         return;
       }
       iframeRef.current?.contentWindow?.postMessage({ type: 'REPL_EVAL', code }, '*');
     },
-    openDetached() {
-      if (detachedWindowRef.current && !detachedWindowRef.current.closed) {
-        detachedWindowRef.current.focus();
-        onDetachedChange?.(true);
-        return;
-      }
-      const detachedWindow = window.open('', '_blank', 'popup=yes,width=960,height=720');
-      if (!detachedWindow) return;
-      detachedWindowRef.current = detachedWindow;
-      syncDetachedContent();
-      onDetachedChange?.(true);
-    },
+    openDetached: openDetachedWindow,
     closeDetached() {
       if (detachedWindowRef.current && !detachedWindowRef.current.closed) {
         detachedWindowRef.current.close();
@@ -77,17 +82,23 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
     hasDetachedWindow() {
       return Boolean(detachedWindowRef.current && !detachedWindowRef.current.closed);
     },
-  }));
+  }), [previewHtml, syncDetachedContent, openDetachedWindow, onDetachedChange]);
 
   useEffect(() => {
     syncDetachedContent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewHtml]);
+  }, [syncDetachedContent]);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const iframeWindow = iframeRef.current?.contentWindow;
       const detachedWindow = detachedWindowRef.current;
+
+      // Handle ready signal from detached preview page — send initial HTML
+      if (event.source === detachedWindow && event.data?.type === 'RODSANDBOX_DETACHED_PREVIEW_READY') {
+        syncDetachedContent();
+        return;
+      }
+
       const isIframeSource = event.source === iframeWindow;
       const isDetachedSource = Boolean(detachedWindow && event.source === detachedWindow);
       if (!isIframeSource && !isDetachedSource) return;
@@ -96,7 +107,7 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [onMessage]);
+  }, [onMessage, syncDetachedContent]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -114,17 +125,7 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
       <div className="flex items-center px-3 py-1 bg-gray-800 border-b border-gray-700 text-xs text-gray-400">
         <span>Preview</span>
         <Button
-          onClick={() => {
-            if (detachedWindowRef.current && !detachedWindowRef.current.closed) {
-              detachedWindowRef.current.focus();
-              return;
-            }
-            const detachedWindow = window.open('', '_blank', 'popup=yes,width=960,height=720');
-            if (!detachedWindow) return;
-            detachedWindowRef.current = detachedWindow;
-            syncDetachedContent();
-            onDetachedChange?.(true);
-          }}
+          onClick={openDetachedWindow}
           variant="secondary"
           size="sm"
           className="ml-3 h-6 text-[11px]"
@@ -149,3 +150,4 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
 });
 
 export default PreviewPanel;
+

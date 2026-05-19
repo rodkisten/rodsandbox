@@ -95,6 +95,8 @@ export default function Playground() {
   const previewPanelRef = useRef<PanelImperativeHandle>(null);
   const bottomPanelRef = useRef<PanelImperativeHandle>(null);
   const detachedEditorWindowRef = useRef<Window | null>(null);
+  const detachedEditorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detachedEditorOnReadyRef = useRef<((event: MessageEvent) => void) | null>(null);
 
   const isMobilePortrait = useMobilePortrait();
 
@@ -312,7 +314,7 @@ export default function Playground() {
         tabSize: settings.editorTabSize,
         diagnostics,
       },
-    }, '*');
+    }, window.location.origin);
   }, [activeFile, diagnostics, settings]);
 
   const handleOpenEditorDetached = useCallback(() => {
@@ -324,20 +326,34 @@ export default function Playground() {
     const popup = window.open('/detached-editor', '_blank', 'popup=yes,width=980,height=780');
     if (!popup) return;
     detachedEditorWindowRef.current = popup;
+    // Clear any previous pending ready listener/timeout
+    if (detachedEditorOnReadyRef.current) {
+      window.removeEventListener('message', detachedEditorOnReadyRef.current);
+    }
+    if (detachedEditorTimeoutRef.current) {
+      clearTimeout(detachedEditorTimeoutRef.current);
+    }
     // Wait for the page to signal it is ready, then send the initial sync
     const onReady = (event: MessageEvent) => {
       if (event.source !== popup) return;
       if (event.data?.type !== 'RODSANDBOX_DETACHED_READY') return;
       window.removeEventListener('message', onReady);
+      detachedEditorOnReadyRef.current = null;
+      if (detachedEditorTimeoutRef.current) {
+        clearTimeout(detachedEditorTimeoutRef.current);
+        detachedEditorTimeoutRef.current = null;
+      }
       syncDetachedEditor();
     };
+    detachedEditorOnReadyRef.current = onReady;
     window.addEventListener('message', onReady);
     // Fallback: send sync after 2 s in case the ready signal was missed
-    const timeout = setTimeout(() => {
+    detachedEditorTimeoutRef.current = setTimeout(() => {
       window.removeEventListener('message', onReady);
+      detachedEditorOnReadyRef.current = null;
+      detachedEditorTimeoutRef.current = null;
       syncDetachedEditor();
     }, 2000);
-    return () => clearTimeout(timeout);
   }, [syncDetachedEditor]);
 
   useEffect(() => {
@@ -380,6 +396,8 @@ export default function Playground() {
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
+      if (event.source !== detachedEditorWindowRef.current) return;
+      if (event.origin !== window.location.origin) return;
       const data = event.data as { type?: string; payload?: { fileId?: string; content?: string } };
       if (data?.type === 'RODSANDBOX_DETACHED_EDITOR_CHANGE') {
         const fileId = data.payload?.fileId;
@@ -397,6 +415,12 @@ export default function Playground() {
 
   useEffect(() => {
     return () => {
+      if (detachedEditorTimeoutRef.current) {
+        clearTimeout(detachedEditorTimeoutRef.current);
+      }
+      if (detachedEditorOnReadyRef.current) {
+        window.removeEventListener('message', detachedEditorOnReadyRef.current);
+      }
       if (detachedEditorWindowRef.current && !detachedEditorWindowRef.current.closed) {
         detachedEditorWindowRef.current.close();
       }

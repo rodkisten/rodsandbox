@@ -18,7 +18,8 @@ function sanitizeInlineScriptContent(scriptContent: string): string {
 const CONSOLE_INTERCEPTOR = `
 (function() {
   var _postMessage = function(data) {
-    try { window.parent.postMessage(data, '*'); } catch(e) {}
+    var target = window.opener || window.parent;
+    try { target.postMessage(data, '*'); } catch(e) {}
   };
 
   function safeSerialize(val, seen) {

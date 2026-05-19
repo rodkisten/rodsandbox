@@ -30,6 +30,7 @@ export function openDb(): Promise<IDBPDatabase<RodSandboxDB>> {
 
 function safeLocalStorageGet<T>(key: string): T | undefined {
   try {
+    if (typeof window === 'undefined') return undefined;
     const raw = window.localStorage.getItem(key);
     if (!raw) return undefined;
     return JSON.parse(raw) as T;
@@ -40,6 +41,7 @@ function safeLocalStorageGet<T>(key: string): T | undefined {
 
 function safeLocalStorageSet<T>(key: string, value: T): void {
   try {
+    if (typeof window === 'undefined') return;
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // no-op fallback
@@ -48,6 +50,7 @@ function safeLocalStorageSet<T>(key: string, value: T): void {
 
 function safeLocalStorageRemove(key: string): void {
   try {
+    if (typeof window === 'undefined') return;
     window.localStorage.removeItem(key);
   } catch {
     // no-op fallback

@@ -68,7 +68,9 @@ export function duplicateFile(workspace: Workspace, fileId: FileId): Workspace {
   const baseName = dot > 0 ? file.name.slice(0, dot) : file.name;
   const ext = dot > 0 ? file.name.slice(dot) : '';
   const duplicatedName = `${baseName}.copy${ext}`;
-  const duplicatedPath = file.path.replace(file.name, duplicatedName);
+  const lastSlash = file.path.lastIndexOf('/');
+  const dir = lastSlash >= 0 ? file.path.slice(0, lastSlash + 1) : '';
+  const duplicatedPath = dir + duplicatedName;
   return createFile(workspace, duplicatedName, duplicatedPath, file.language, file.content);
 }
 
