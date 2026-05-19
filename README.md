@@ -100,18 +100,25 @@ No custom server is required.
 - **V3:** CDN module resolution/cache, dependency panel, plugin manager UI, snapshots/share URLs, mobile Safari polish.
 
 
-## Phase 2 status
+## Phase 2/3 implementation checklist
 
-Implemented in this repository:
+Current progress based on implemented features in this repository:
 
-- TS language worker diagnostics plus editor completions and quick-info hover integration.
-- Diagnostics navigation from panel to exact editor line/column.
-- Workspace import/export with JSON and ZIP workflows (command palette + file inputs).
-- Template application as full workspace replacement.
-- Snapshot save/restore/delete workflows with overwrite confirmation.
-- Dependency extraction from bundler output and diagnostics-tab dependency visibility.
+- [x] TS language worker diagnostics integration.
+- [x] Editor completions integration.
+- [x] Quick-info/hover integration.
+- [x] Diagnostics panel click-to-editor navigation.
+- [x] Workspace import/export via JSON and ZIP flows.
+- [x] Template application as full workspace replacement.
+- [x] Snapshot save/restore/delete with overwrite confirmation.
+- [x] Bundler dependency extraction + diagnostics-tab dependency visibility.
+- [x] Go-to-definition command wiring with worker-backed definition lookup.
+- [x] Plugin manager panel with enable/disable persistence wiring.
 
-Remaining for later phases:
+Still pending (next steps):
 
-- Full go-to-definition UX wiring (keyboard/gesture-driven jump target discovery).
-- Advanced plugin manager UI and dependency CDN/module cache flows.
+- [ ] Keyboard/gesture-first go-to-definition UX polish in editor interactions.
+- [ ] Advanced plugin manager UX (search/filter/grouping + richer metadata).
+- [ ] CDN module resolution + dependency cache flows.
+- [ ] Shareable compressed URL workflows.
+- [ ] Marketplace-grade plugin discovery/install UX.
