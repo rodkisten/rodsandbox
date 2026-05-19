@@ -61,7 +61,7 @@ export default function CommandPalette({ open, onClose, commands }: CommandPalet
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-20" onClick={onClose}>
-      <div className="w-full max-w-2xl overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      <div className="w-full max-w-2xl overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl" onClick={(event) => event.stopPropagation()}>
         <div className="border-b border-gray-800 px-3 py-2">
           <input
             autoFocus
@@ -71,12 +71,12 @@ export default function CommandPalette({ open, onClose, commands }: CommandPalet
               setSelectedIndex(0);
             }}
             placeholder="Search commands..."
-            className="w-full bg-transparent text-sm text-gray-100 outline-none"
+            className="w-full bg-transparent text-sm text-neutral-100 outline-none"
           />
         </div>
         <div className="max-h-80 overflow-auto py-1">
           {filteredCommands.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-gray-500">No matching commands</div>
+            <div className="px-3 py-2 text-sm text-neutral-500">No matching commands</div>
           ) : (
             filteredCommands.map((command, index) => (
               <button
@@ -85,10 +85,10 @@ export default function CommandPalette({ open, onClose, commands }: CommandPalet
                   command.action();
                   onClose();
                 }}
-                className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${index === selectedIndex ? 'bg-blue-600/30 text-blue-100' : 'text-gray-200 hover:bg-gray-800'}`}
+                className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${index === selectedIndex ? 'bg-neutral-600/30 text-neutral-100' : 'text-neutral-200 hover:bg-neutral-800'}`}
               >
                 <span>{command.label}</span>
-                {command.shortcut ? <span className="text-xs text-gray-500">{command.shortcut}</span> : null}
+                {command.shortcut ? <span className="text-xs text-neutral-500">{command.shortcut}</span> : null}
               </button>
             ))
           )}
