@@ -18,7 +18,8 @@ function sanitizeInlineScriptContent(scriptContent: string): string {
 const CONSOLE_INTERCEPTOR = `
 (function() {
   var _postMessage = function(data) {
-    try { window.parent.postMessage(data, '*'); } catch(e) {}
+    var target = window.opener || window.parent;
+    try { target.postMessage(data, '*'); } catch(e) {}
   };
 
   function safeSerialize(val, seen) {
@@ -34,6 +35,36 @@ const CONSOLE_INTERCEPTOR = `
     if (t === 'object') {
       if (seen.indexOf(val) !== -1) return { type: 'circular' };
       seen.push(val);
+      if (val instanceof Date) {
+        seen.pop();
+        return { type: 'string', value: val.toISOString() };
+      }
+      if (val instanceof RegExp) {
+        seen.pop();
+        return { type: 'string', value: String(val) };
+      }
+      if (val instanceof Map) {
+        var mapEntries = Array.from(val.entries()).slice(0, 50).map(function(entry) {
+          return [String(entry[0]), safeSerialize(entry[1], seen.slice())];
+        });
+        seen.pop();
+        return { type: 'object', preview: 'Map(' + val.size + ')', entries: mapEntries };
+      }
+      if (val instanceof Set) {
+        var setValues = Array.from(val.values()).slice(0, 50).map(function(item, index) {
+          return [String(index), safeSerialize(item, seen.slice())];
+        });
+        seen.pop();
+        return { type: 'object', preview: 'Set(' + val.size + ')', entries: setValues };
+      }
+      if (typeof Promise !== 'undefined' && val instanceof Promise) {
+        seen.pop();
+        return { type: 'string', value: '[Promise]' };
+      }
+      if (typeof Element !== 'undefined' && val instanceof Element) {
+        seen.pop();
+        return { type: 'string', value: '<' + val.tagName.toLowerCase() + (val.id ? '#' + val.id : '') + '>' };
+      }
       if (val instanceof Error) {
         seen.pop();
         return { type: 'error', name: val.name, message: val.message, stack: val.stack };
@@ -94,24 +125,36 @@ const CONSOLE_INTERCEPTOR = `
     if (!event || !event.data || event.data.type !== 'REPL_EVAL') return;
     var code = typeof event.data.code === 'string' ? event.data.code : '';
     if (!code) return;
-    try {
-      var result = (0, eval)(code);
-      _postMessage({
-        type: 'REPL_RESULT',
-        success: true,
-        args: [safeSerialize(result)],
-        timestamp: Date.now()
-      });
-    } catch (error) {
-      var err = error instanceof Error ? error : new Error(String(error));
-      _postMessage({
-        type: 'REPL_RESULT',
-        success: false,
-        message: err.message,
-        stack: err.stack,
-        timestamp: Date.now()
-      });
-    }
+    (async function() {
+      try {
+        var AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        var evaluator;
+        try {
+          evaluator = new AsyncFunction('return (' + code + ')');
+        } catch (_syntaxExpression) {
+          evaluator = new AsyncFunction(code);
+        }
+        var timeoutPromise = new Promise(function(_, reject) {
+          setTimeout(function() { reject(new Error('Evaluation timed out')); }, 4000);
+        });
+        var result = await Promise.race([evaluator.call(window), timeoutPromise]);
+        _postMessage({
+          type: 'REPL_RESULT',
+          success: true,
+          args: [safeSerialize(result)],
+          timestamp: Date.now()
+        });
+      } catch (error) {
+        var err = error instanceof Error ? error : new Error(String(error));
+        _postMessage({
+          type: 'REPL_RESULT',
+          success: false,
+          message: err.message,
+          stack: err.stack,
+          timestamp: Date.now()
+        });
+      }
+    })();
   });
 })();
 `;

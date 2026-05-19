@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import SwRegister from './sw-register';
 
@@ -7,6 +7,12 @@ export const metadata: Metadata = {
   description: 'Offline-first PWA code playground. Edit TypeScript, HTML, and CSS in your browser.',
   manifest: '/manifest.json',
   applicationName: 'RodSandbox',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

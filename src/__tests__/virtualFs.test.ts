@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { createFile, updateFileContent, deleteFile, renameFile, buildFileTree, listFiles } from '@/filesystem/virtualFs';
+import {
+  createFile,
+  updateFileContent,
+  deleteFile,
+  renameFile,
+  buildFileTree,
+  listFiles,
+  createFolder,
+  renameFolder,
+  deleteFolder,
+  upsertFiles,
+} from '@/filesystem/virtualFs';
 import { createDefaultWorkspace } from '@/filesystem/defaults';
 
 const baseWorkspace = createDefaultWorkspace('test-ws');
@@ -44,5 +55,24 @@ describe('virtualFs', () => {
     const ws = { ...baseWorkspace, activeFileId: 'file-index-html' };
     const updated = deleteFile(ws, 'file-index-html');
     expect(updated.activeFileId).toBeNull();
+  });
+
+  it('creates, renames and deletes folders via keep file strategy', () => {
+    const created = createFolder(baseWorkspace, 'src/components');
+    expect(listFiles(created).some((file) => file.path === 'src/components/.keep')).toBe(true);
+    const renamed = renameFolder(created, 'src/components', 'src/ui');
+    expect(listFiles(renamed).some((file) => file.path === 'src/ui/.keep')).toBe(true);
+    const removed = deleteFolder(renamed, 'src/ui');
+    expect(listFiles(removed).some((file) => file.path.startsWith('src/ui/'))).toBe(false);
+  });
+
+  it('upserts files preserving nested paths', () => {
+    const updated = upsertFiles(baseWorkspace, [
+      { path: 'src/app.ts', content: 'export const app = 1;' },
+      { path: 'index.html', content: '<html></html>' },
+    ]);
+    expect(listFiles(updated).some((file) => file.path === 'src/app.ts')).toBe(true);
+    const index = listFiles(updated).find((file) => file.path === 'index.html');
+    expect(index?.content).toBe('<html></html>');
   });
 });

@@ -1,8 +1,40 @@
 @import "tailwindcss";
 
+:root {
+  --app-bg: #020617;
+  --app-fg: #e2e8f0;
+}
+
+[data-theme="light"] {
+  --app-bg: #f8fafc;
+  --app-fg: #0f172a;
+}
+
+[data-theme="oled"] {
+  --app-bg: #000000;
+  --app-fg: #f5f5f5;
+}
+
+[data-theme="tokyo"] {
+  --app-bg: #1a1b26;
+  --app-fg: #c0caf5;
+}
+
+[data-theme="midnight"] {
+  --app-bg: #020617;
+  --app-fg: #e2e8f0;
+}
+
+[data-theme="high-contrast"] {
+  --app-bg: #000000;
+  --app-fg: #ffffff;
+}
+
 html, body {
   height: 100%;
   overflow: hidden;
+  background: var(--app-bg);
+  color: var(--app-fg);
 }
 
 * {

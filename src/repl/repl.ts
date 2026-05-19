@@ -104,6 +104,15 @@ export class ReplManager {
     return this.history[this.historyIndex];
   }
 
+  getHistory(): string[] {
+    return [...this.history];
+  }
+
+  replaceHistory(nextHistory: string[]): void {
+    this.history = nextHistory.filter((entry) => entry.trim().length > 0);
+    this.historyIndex = this.history.length;
+  }
+
   getBuiltinCommands(): ReplCommand[] {
     return [
       {
@@ -126,4 +135,3 @@ export class ReplManager {
     ];
   }
 }
-

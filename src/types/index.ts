@@ -69,14 +69,42 @@ export interface LayoutSizes {
   sidebarWidth: number;
   previewWidth: number;
   bottomPanelHeight: number;
+  mobileFiles: number;
+  mobileEditor: number;
+  mobilePreview: number;
+  mobileBottom: number;
 }
 
+export type LayoutMode = 'desktop' | 'mobile';
+export type BottomTab = 'console' | 'diagnostics' | 'repl';
+export type ReplRuntimeTarget = 'iframe' | 'detached' | 'auto';
+export type EditorTheme = 'midnight' | 'oled' | 'tokyo' | 'light' | 'high-contrast';
+
 export interface AppSettings {
-  theme: 'dark' | 'light';
+  theme: 'dark' | 'light' | 'oled' | 'tokyo' | 'midnight' | 'high-contrast';
   autoRun: boolean;
   formatOnSave: boolean;
   activeFileId: FileId | null;
   layoutSizes: LayoutSizes;
+  layoutMode: LayoutMode;
+  bottomTab: BottomTab;
+  openedFileIds: FileId[];
+  previewDetached: boolean;
+  replRuntime: ReplRuntimeTarget;
+  replAutocomplete: boolean;
+  replHistory: string[];
+  editorTheme: EditorTheme;
+  editorFontSize: number;
+  editorFontFamily: string;
+  editorLineNumbers: boolean;
+  editorWordWrap: boolean;
+  editorAutocomplete: boolean;
+  editorLinterEnabled: boolean;
+  editorFormatterEnabled: boolean;
+  editorMinimapEnabled: boolean;
+  editorTabSize: number;
+  liveTypecheck: boolean;
+  collapsedPanels: string[];
   enabledPlugins: string[];
 }
 

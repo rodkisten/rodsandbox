@@ -1,80 +1,220 @@
 'use client';
 import React from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Bug, Command, Download, Menu, MoonStar, Paintbrush, Play, PlayCircle, Save, WandSparkles } from 'lucide-react';
+import type { EditorTheme } from '@/types';
 
 interface ToolbarProps {
   onRun: () => void;
   onFormat: () => void;
   onSave: () => void;
   onDownload: () => void;
-  onExport: () => void;
+  onExportZip: () => void;
+  onTypecheck: () => void;
   onOpenCommands: () => void;
+  onOpenEditorDetached: () => void;
   autoRun: boolean;
   onToggleAutoRun: () => void;
   isRunning?: boolean;
   isFormatting?: boolean;
+  theme: 'dark' | 'light' | 'oled' | 'tokyo' | 'midnight' | 'high-contrast';
+  onThemeChange: (theme: 'dark' | 'light' | 'oled' | 'tokyo' | 'midnight' | 'high-contrast') => void;
+  editorTheme: EditorTheme;
+  onEditorThemeChange: (theme: EditorTheme) => void;
+  editorLineNumbers: boolean;
+  onToggleEditorLineNumbers: () => void;
+  editorWordWrap: boolean;
+  onToggleEditorWordWrap: () => void;
+  editorAutocomplete: boolean;
+  onToggleEditorAutocomplete: () => void;
+  liveTypecheck: boolean;
+  onToggleLiveTypecheck: () => void;
+  editorLinterEnabled: boolean;
+  onToggleEditorLinter: () => void;
+  editorFormatterEnabled: boolean;
+  onToggleEditorFormatter: () => void;
+  editorFontSize: number;
+  onEditorFontSizeChange: (size: number) => void;
+  editorTabSize: number;
+  onEditorTabSizeChange: (size: number) => void;
+  diagnosticsCount: number;
 }
 
 export default function Toolbar({
-  onRun, onFormat, onSave, onDownload, onExport, onOpenCommands, autoRun, onToggleAutoRun, isRunning = false, isFormatting = false,
+  onRun,
+  onFormat,
+  onSave,
+  onDownload,
+  onExportZip,
+  onTypecheck,
+  onOpenCommands,
+  onOpenEditorDetached,
+  autoRun,
+  onToggleAutoRun,
+  isRunning = false,
+  isFormatting = false,
+  theme,
+  onThemeChange,
+  editorTheme,
+  onEditorThemeChange,
+  editorLineNumbers,
+  onToggleEditorLineNumbers,
+  editorWordWrap,
+  onToggleEditorWordWrap,
+  editorAutocomplete,
+  onToggleEditorAutocomplete,
+  liveTypecheck,
+  onToggleLiveTypecheck,
+  editorLinterEnabled,
+  onToggleEditorLinter,
+  editorFormatterEnabled,
+  onToggleEditorFormatter,
+  editorFontSize,
+  onEditorFontSizeChange,
+  editorTabSize,
+  onEditorTabSizeChange,
+  diagnosticsCount,
 }: ToolbarProps) {
   return (
-    <div className="flex items-center gap-1 px-3 py-2 bg-gray-900 border-b border-gray-800 flex-shrink-0">
-      <div className="flex items-center gap-1 mr-1">
-        <span className="text-green-400 font-bold text-sm mr-2">⬡ rodsandbox</span>
-      </div>
-      <button
+    <div className="flex items-center gap-1.5 border-b border-gray-800 bg-gray-950 px-2 py-1.5 sm:px-3">
+      <span className="mr-1 hidden text-xs font-semibold text-slate-500 sm:inline">⬡</span>
+      <Button
         onClick={onRun}
         disabled={isRunning}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 disabled:bg-green-900 text-white text-xs font-semibold rounded transition-colors"
+        size="icon"
+        className="h-8 w-8 rounded-md bg-emerald-600 hover:bg-emerald-500"
+        title="Play (Ctrl+Enter)"
       >
-        ▶ Run
-      </button>
-      <button
+        <Play className="h-4 w-4" />
+      </Button>
+      <Button
         onClick={onToggleAutoRun}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded transition-colors ${autoRun ? 'bg-blue-700 text-blue-100' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}`}
-        title="Toggle auto-run"
+        size="icon"
+        variant={autoRun ? 'default' : 'secondary'}
+        className={autoRun ? 'bg-blue-700 hover:bg-blue-600' : ''}
+        title="AutoPlay"
       >
-        ⟳ Auto
-      </button>
-      <div className="w-px h-5 bg-gray-700 mx-1" />
-      <button
-        onClick={onFormat}
-        disabled={isFormatting}
-        className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-300 text-xs rounded transition-colors"
-        title="Format code"
-      >
-        {isFormatting ? '…' : '✦'} Format
-      </button>
-      <button
-        onClick={onSave}
-        className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded transition-colors"
-        title="Save (Ctrl+S)"
-      >
-        💾 Save
-      </button>
-      <div className="w-px h-5 bg-gray-700 mx-1" />
-      <button
-        onClick={onDownload}
-        className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded transition-colors"
-        title="Download active file"
-      >
-        ↓ Download
-      </button>
-      <button
-        onClick={onExport}
-        className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded transition-colors"
-        title="Export workspace as ZIP"
-      >
-        ⊞ Export
-      </button>
-      <div className="w-px h-5 bg-gray-700 mx-1" />
-      <button
-        onClick={onOpenCommands}
-        className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded transition-colors"
-        title="Command palette (Ctrl+K)"
-      >
-        ⌘ Commands
-      </button>
+        <PlayCircle className="h-4 w-4" />
+      </Button>
+      <div className="ml-1 rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-500">
+        {diagnosticsCount > 0 ? `${diagnosticsCount} erros` : 'ok'}
+      </div>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" variant="secondary" className="ml-auto" title="Menu">
+            <Menu className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Ações</DropdownMenuLabel>
+          <DropdownMenuItem onClick={onFormat}>
+            <WandSparkles className="h-4 w-4" /> {isFormatting ? 'Formatando...' : 'Formatar'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onTypecheck}>
+            <Bug className="h-4 w-4" /> Typecheck
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onSave}>
+            <Save className="h-4 w-4" /> Salvar
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenCommands}>
+            <Command className="h-4 w-4" /> Command Palette
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenEditorDetached}>
+            <MoonStar className="h-4 w-4" /> Detach editor
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Editor</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuCheckboxItem checked={editorLineNumbers} onCheckedChange={onToggleEditorLineNumbers}>
+                Números de linha
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={editorWordWrap} onCheckedChange={onToggleEditorWordWrap}>
+                Quebra de linha
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={editorAutocomplete} onCheckedChange={onToggleEditorAutocomplete}>
+                Autocomplete
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={editorLinterEnabled} onCheckedChange={onToggleEditorLinter}>
+                Linter inline
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={editorFormatterEnabled} onCheckedChange={onToggleEditorFormatter}>
+                Formatter ativo
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={liveTypecheck} onCheckedChange={onToggleLiveTypecheck}>
+                Typecheck ao digitar
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="pb-0 pt-1 text-[10px]">Fonte</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={String(editorFontSize)} onValueChange={(value) => onEditorFontSizeChange(Number(value))}>
+                <DropdownMenuRadioItem value="12">12px</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="14">14px</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="16">16px</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="18">18px</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+              <DropdownMenuLabel className="pb-0 pt-1 text-[10px]">Tab Size</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={String(editorTabSize)} onValueChange={(value) => onEditorTabSizeChange(Number(value))}>
+                <DropdownMenuRadioItem value="2">2 espaços</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="4">4 espaços</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Aparência</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuLabel className="pb-0 pt-1 text-[10px]">Tema da aplicação</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={theme} onValueChange={(value) => onThemeChange(value as ToolbarProps['theme'])}>
+                <DropdownMenuRadioItem value="midnight">Midnight</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="oled">OLED Black</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="tokyo">Tokyo</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="high-contrast">High Contrast</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+              <DropdownMenuLabel className="pb-0 pt-1 text-[10px]">Tema do editor</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={editorTheme} onValueChange={(value) => onEditorThemeChange(value as EditorTheme)}>
+                <DropdownMenuRadioItem value="midnight">Midnight</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="oled">OLED</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="tokyo">Tokyo</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="high-contrast">High Contrast</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Arquivos</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onClick={onDownload}>
+                <Download className="h-4 w-4" /> Baixar arquivo atual
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onExportZip}>
+                <Download className="h-4 w-4" /> Exportar ZIP
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onThemeChange(theme)}>
+                <Paintbrush className="h-4 w-4" /> Aplicar tema atual
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
