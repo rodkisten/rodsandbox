@@ -46,7 +46,7 @@ function useMobilePortrait() {
 }
 
 function ResizeGrip() {
-  return <Separator className="relative flex h-3 items-center justify-center bg-gray-900/70 transition-colors hover:bg-blue-500/25 data-[resize-handle-active]:bg-blue-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-gray-700" />;
+  return <Separator className="relative flex h-3 items-center justify-center bg-neutral-900/70 transition-colors hover:bg-blue-500/25 data-[resize-handle-active]:bg-blue-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
 }
 
 export default function Playground() {
@@ -511,7 +511,7 @@ export default function Playground() {
   };
 
   if (loading || settingsLoading) {
-    return <div className="flex h-screen items-center justify-center bg-gray-950 text-gray-400">Loading workspace…</div>;
+    return <div className="flex h-screen items-center justify-center bg-neutral-950 text-neutral-400">Loading workspace…</div>;
   }
 
   return (
@@ -576,8 +576,8 @@ export default function Playground() {
           }}
         >
           <Panel id="m-files" defaultSize={settings.layoutSizes.mobileFiles} minSize={12} collapsible collapsedSize={6} panelRef={filesPanelRef}>
-            <div className="flex h-full flex-col border-b border-gray-800">
-              <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
+            <div className="flex h-full flex-col border-b border-neutral-800">
+              <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
                 <span>Files</span>
                 <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-files', filesPanelRef)} className="h-6 w-6">
                   {isPanelCollapsed('m-files') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
@@ -601,8 +601,8 @@ export default function Playground() {
           </Panel>
           <ResizeGrip />
           <Panel id="m-editor" defaultSize={settings.layoutSizes.mobileEditor} minSize={18} collapsible collapsedSize={6} panelRef={editorPanelRef}>
-            <div className="flex h-full flex-col overflow-hidden bg-gray-950">
-              <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
+            <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
+              <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
                 <span>Editor</span>
                 <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-editor', editorPanelRef)} className="h-6 w-6">
                   {isPanelCollapsed('m-editor') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
@@ -626,7 +626,7 @@ export default function Playground() {
                   tabSize={settings.editorTabSize}
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-gray-600">Select a file to edit</div>
+                <div className="flex h-full items-center justify-center text-neutral-600">Select a file to edit</div>
               )}
             </div>
           </Panel>
@@ -641,8 +641,8 @@ export default function Playground() {
           </Panel>
           <ResizeGrip />
           <Panel id="m-bottom" defaultSize={settings.layoutSizes.mobileBottom} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
-            <div className="flex h-full flex-col overflow-hidden border-t border-gray-800">
-              <div className="flex flex-shrink-0 items-center border-b border-gray-800 bg-gray-900 px-1 py-1">
+            <div className="flex h-full flex-col overflow-hidden border-t border-neutral-800">
+              <div className="flex flex-shrink-0 items-center border-b border-neutral-800 bg-neutral-900 px-1 py-1">
                 <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
                   <TabsList className="bg-transparent p-0">
                     <TabsTrigger value="console">{t('tabs.console')}</TabsTrigger>
@@ -698,7 +698,7 @@ export default function Playground() {
             >
               <Panel id="d-files" defaultSize={settings.layoutSizes.sidebarWidth} minSize={12} maxSize={35} collapsible collapsedSize={6} panelRef={filesPanelRef}>
                 <div className="flex h-full flex-col">
-                  <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
+                  <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
                     <span>Files</span>
                     <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-files', filesPanelRef)} className="h-6 w-6">
                       {isPanelCollapsed('d-files') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
@@ -720,10 +720,10 @@ export default function Playground() {
                   />
                 </div>
               </Panel>
-              <Separator className="w-2 bg-gray-900/70 hover:bg-blue-500/30 data-[resize-handle-active]:bg-blue-500/40" />
+              <Separator className="w-2 bg-neutral-900/70 hover:bg-blue-500/30 data-[resize-handle-active]:bg-blue-500/40" />
               <Panel id="d-editor" defaultSize={Math.max(20, 100 - settings.layoutSizes.sidebarWidth - settings.layoutSizes.previewWidth)} minSize={30} collapsible collapsedSize={6} panelRef={editorPanelRef}>
-                <div className="flex h-full flex-col overflow-hidden bg-gray-950">
-                  <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
+                <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
+                  <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
                     <span>Editor</span>
                     <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-editor', editorPanelRef)} className="h-6 w-6">
                       {isPanelCollapsed('d-editor') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
@@ -747,14 +747,14 @@ export default function Playground() {
                       tabSize={settings.editorTabSize}
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-gray-600">Select a file to edit</div>
+                    <div className="flex h-full items-center justify-center text-neutral-600">Select a file to edit</div>
                   )}
                 </div>
               </Panel>
-              <Separator className="w-2 bg-gray-900/70 hover:bg-blue-500/30 data-[resize-handle-active]:bg-blue-500/40" />
+              <Separator className="w-2 bg-neutral-900/70 hover:bg-blue-500/30 data-[resize-handle-active]:bg-blue-500/40" />
               <Panel id="d-preview" defaultSize={settings.layoutSizes.previewWidth} minSize={20} collapsible collapsedSize={6} panelRef={previewPanelRef}>
                 <div className="flex h-full flex-col overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
+                  <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
                     <span>Preview</span>
                     <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-preview', previewPanelRef)} className="h-6 w-6">
                       {isPanelCollapsed('d-preview') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
@@ -772,11 +772,11 @@ export default function Playground() {
           </Panel>
           <ResizeGrip />
           <Panel id="d-bottom" defaultSize={settings.layoutSizes.bottomPanelHeight} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
-            <div className="flex h-full flex-col overflow-hidden border-t border-gray-800">
-              <div className="flex flex-shrink-0 items-center border-b border-gray-800 bg-gray-900 px-1 py-1">
+            <div className="flex h-full flex-col overflow-hidden border-t border-neutral-800">
+              <div className="flex flex-shrink-0 items-center border-b border-neutral-800 bg-neutral-900 px-1 py-1">
                 <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
                   <TabsList className="bg-transparent p-0">
-                    <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-gray-500">{logs.length}</span> : null}</TabsTrigger>
+                    <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-neutral-500">{logs.length}</span> : null}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
                     {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger> : null}
                   </TabsList>
