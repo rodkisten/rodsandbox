@@ -8,8 +8,8 @@ type ButtonSize = 'default' | 'sm' | 'icon';
 
 const variantStyles: Record<ButtonVariant, string> = {
   default: 'bg-neutral-600 text-white hover:bg-neutral-500',
-  secondary: 'bg-slate-800 text-slate-100 hover:bg-slate-700',
-  ghost: 'bg-transparent text-neutral-300 hover:bg-slate-800 hover:text-neutral-100',
+  secondary: 'bg-neutral-800 text-neutral-100 hover:bg-neutral-700',
+  ghost: 'bg-transparent text-neutral-300 hover:bg-neutral-800 hover:text-neutral-100',
   destructive: 'bg-red-600 text-white hover:bg-red-500',
 };
 

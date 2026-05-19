@@ -152,7 +152,7 @@ function TreeItem({
               if (event.key === 'Enter') handleRename();
               if (event.key === 'Escape') setRenaming(false);
             }}
-            className="h-6 flex-1 rounded border border-slate-600 bg-slate-800 px-1 text-xs"
+            className="h-6 flex-1 rounded border border-neutral-600 bg-neutral-800 px-1 text-xs"
           />
         ) : (
           <button

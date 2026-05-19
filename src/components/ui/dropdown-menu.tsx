@@ -39,7 +39,7 @@ export const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.SubContent
     ref={ref}
     className={cn(
-      'z-50 min-w-[10rem] overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 p-1 text-slate-100 shadow-xl',
+      'z-50 min-w-[10rem] overflow-hidden rounded-md border border-neutral-700 bg-neutral-900 p-1 text-neutral-100 shadow-xl',
       className,
     )}
     {...props}
