@@ -39,7 +39,7 @@ export interface Diagnostic {
   column: number;
   endLine?: number;
   endColumn?: number;
-  source: 'typescript' | 'runtime' | 'format' | 'lint';
+  source: 'typescript' | 'runtime' | 'format' | 'lint' | 'build';
 }
 
 export type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug' | 'table' | 'group' | 'groupEnd' | 'time' | 'timeEnd' | 'assert';

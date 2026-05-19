@@ -47,7 +47,7 @@ function normalizeBuildError(error: unknown, fileId: string): Diagnostic {
     message: error instanceof Error ? error.message : 'Build failed',
     line: 1,
     column: 1,
-    source: 'typescript',
+    source: 'build',
   };
 }
 

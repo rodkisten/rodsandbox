@@ -37,6 +37,10 @@ function generateId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function createDiagnostic(partial: Omit<Diagnostic, 'id'>): Diagnostic {
+  return { id: `diag-${generateId()}`, ...partial };
+}
+
 function useMobilePortrait() {
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   useEffect(() => {
@@ -273,7 +277,17 @@ export default function Playground() {
       timestamp: msg.timestamp,
       groupDepth: 0,
     }]);
-  }, []);
+    if (activeFile) {
+      setDiagnostics((prev) => [...prev, createDiagnostic({
+        fileId: activeFile.id,
+        severity: 'error',
+        message: msg.message ?? 'Runtime error',
+        line: 1,
+        column: 1,
+        source: 'runtime',
+      })]);
+    }
+  }, [activeFile]);
 
   const handleFormat = useCallback(async () => {
     if (!FEATURE_FLAGS.ENABLE_PRETTIER || !activeFile || isFormatting || !settings.editorFormatterEnabled) return;
@@ -284,7 +298,18 @@ export default function Playground() {
       const formatted = await formatter.format(activeFile.content, activeFile.language);
       updateFile(activeFile.id, formatted);
     } catch (error) {
-      console.warn('Format failed:', error instanceof Error ? error.message : error);
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn('Format failed:', message);
+      if (activeFile) {
+        setDiagnostics((prev) => [...prev, createDiagnostic({
+          fileId: activeFile.id,
+          severity: 'error',
+          message: `Format: ${message}`,
+          line: 1,
+          column: 1,
+          source: 'format',
+        })]);
+      }
     } finally {
       setIsFormatting(false);
     }

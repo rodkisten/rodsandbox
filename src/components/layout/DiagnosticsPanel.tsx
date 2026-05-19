@@ -71,6 +71,7 @@ export default function DiagnosticsPanel({
                 {SEVERITY_ICON[diag.severity]}
               </span>
               <span className={`text-xs flex-1 break-all ${SEVERITY_COLORS[diag.severity]}`}>
+                <span className="mr-1 rounded bg-gray-800 px-1 py-0.5 text-[10px] uppercase text-gray-300">{diag.source}</span>
                 {diag.message}
               </span>
               <span className="flex-shrink-0 text-gray-600 text-xs tabular-nums">
