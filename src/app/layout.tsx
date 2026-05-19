@@ -23,8 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </head>
-      <body className="bg-gray-950 text-gray-100 antialiased overflow-hidden">
+      <body className="bg-neutral-950 text-gray-100 antialiased overflow-hidden">
         <SwRegister />
         {children}
       </body>
