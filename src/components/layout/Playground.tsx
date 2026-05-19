@@ -22,6 +22,7 @@ import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constant
 import { listFiles } from '@/filesystem/virtualFs';
 import { TypeScriptWorkerClient } from '@/compiler/tsWorkerClient';
 import { FormatterWorkerClient } from '@/formatter/formatterWorkerClient';
+import { EsbuildBundlerService } from '@/bundler/esbuildBundler';
 import { PluginRegistry } from '@/plugins/registry';
 import { t } from '@/lib/i18n';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -89,6 +90,7 @@ export default function Playground() {
   const typecheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tsWorkerRef = useRef<TypeScriptWorkerClient | null>(null);
   const formatterWorkerRef = useRef<FormatterWorkerClient | null>(null);
+  const bundlerRef = useRef<EsbuildBundlerService | null>(null);
   const pluginRegistryRef = useRef(new PluginRegistry());
   const pluginCompilerVirtualFilesRef = useRef<Record<string, string>>({});
   const pluginPreviewScriptsRef = useRef<string[]>([]);
@@ -105,6 +107,7 @@ export default function Playground() {
   useEffect(() => {
     tsWorkerRef.current = new TypeScriptWorkerClient();
     formatterWorkerRef.current = new FormatterWorkerClient();
+    bundlerRef.current = new EsbuildBundlerService();
     return () => {
       tsWorkerRef.current?.terminate();
       formatterWorkerRef.current?.terminate();
@@ -161,13 +164,14 @@ export default function Playground() {
     }));
   }, [activeFile?.id, updateSettings]);
 
-  const compileWorkspace = useCallback(async (): Promise<{ files: Record<string, string>; diagnosticsCount: number }> => {
+  const compileWorkspace = useCallback(async (): Promise<{ files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string }> => {
     const files = listFiles(workspace);
+    const fileIdByPath = new Map(files.map((file) => [file.path, file.id]));
     const hasRunnableSource = files.some((file) => file.language === 'typescript' || file.language === 'javascript');
 
     if (!hasRunnableSource || !FEATURE_FLAGS.ENABLE_TYPESCRIPT_COMPILER) {
       setDiagnostics([]);
-      return { files: {}, diagnosticsCount: 0 };
+      return { files: {}, diagnosticsCount: 0, bundledCode: '', bundledCssText: '' };
     }
 
     const tsFiles = files
@@ -178,12 +182,32 @@ export default function Playground() {
       tsFiles.push({ path, content });
     }
 
-    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
-    tsWorkerRef.current = worker;
-    const tsDiagnostics = await worker.getDiagnostics(tsFiles);
-    setDiagnostics(tsDiagnostics);
+    const tsWorker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    tsWorkerRef.current = tsWorker;
+    const tsDiagnostics = await tsWorker.getDiagnostics(tsFiles);
 
-    return { files: {}, diagnosticsCount: tsDiagnostics.length };
+    const runtimeFiles = files.map((file) => ({ path: file.path, content: file.content, language: file.language }));
+    const entryFile = files.find((file) => file.path === 'main.ts' || file.path === 'main.js' || file.name === 'main.ts' || file.name === 'main.js')?.path ?? tsFiles[0]?.path ?? 'main.ts';
+    const bundler = bundlerRef.current ?? new EsbuildBundlerService();
+    bundlerRef.current = bundler;
+    const bundleResult = await bundler.build(runtimeFiles, entryFile);
+
+    const normalizedTsDiagnostics = tsDiagnostics.map((diag) => ({
+      ...diag,
+      fileId: fileIdByPath.get(diag.fileId) ?? diag.fileId,
+    }));
+    const normalizedBundlerDiagnostics = bundleResult.diagnostics.map((diag) => ({
+      ...diag,
+      fileId: fileIdByPath.get(diag.fileId) ?? diag.fileId,
+    }));
+    const allDiagnostics = [...normalizedTsDiagnostics, ...normalizedBundlerDiagnostics];
+    setDiagnostics(allDiagnostics);
+
+    const compiledFiles: Record<string, string> = {
+      [`${entryFile.replace(/\.tsx?$/, '').replace(/\.jsx?$/, '')}.js`]: bundleResult.code,
+    };
+
+    return { files: compiledFiles, diagnosticsCount: allDiagnostics.length, bundledCode: bundleResult.code, bundledCssText: bundleResult.cssText };
   }, [workspace]);
 
   const handleTypecheck = useCallback(() => {
@@ -200,6 +224,8 @@ export default function Playground() {
         files: workspace.files,
         compiledFiles: result.files,
         injectedScripts: pluginPreviewScriptsRef.current,
+        bundledCode: result.bundledCode,
+        bundledCssText: result.bundledCssText,
       }));
       if (result.diagnosticsCount > 0) {
         updateSettings((prev) => ({ ...prev, bottomTab: 'diagnostics' }));
