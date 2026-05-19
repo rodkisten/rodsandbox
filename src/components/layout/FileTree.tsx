@@ -126,14 +126,14 @@ function TreeItem({
   return (
     <div>
       <div
-        className={`group relative flex items-center gap-1 rounded px-2 py-1 text-sm ${isActive ? 'bg-blue-600/25 text-blue-100' : 'text-gray-300 hover:bg-gray-800/80'}`}
+        className={`group relative flex items-center gap-1 rounded px-2 py-1 text-sm ${isActive ? 'bg-neutral-600/25 text-neutral-100' : 'text-neutral-300 hover:bg-neutral-800/80'}`}
         style={{ paddingLeft: `${(depth + 1) * 12}px` }}
       >
         {node.type === 'folder' ? (
           <button
             onClick={() => setExpanded((e) => !e)}
             type="button"
-            className="rounded p-0.5 text-gray-500 hover:bg-gray-700 hover:text-gray-200"
+            className="rounded p-0.5 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-200"
           >
             {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
@@ -169,7 +169,7 @@ function TreeItem({
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="rounded p-1 text-gray-500 opacity-0 transition group-hover:opacity-100 hover:bg-gray-700 hover:text-gray-200">
+            <button type="button" className="rounded p-1 text-neutral-500 opacity-0 transition group-hover:opacity-100 hover:bg-neutral-700 hover:text-neutral-200">
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </DropdownMenuTrigger>
@@ -269,7 +269,7 @@ export default function FileTree({
 
   return (
     <div
-      className={`flex h-full select-none flex-col bg-gray-950 ${isDragOver ? 'ring-1 ring-blue-500/70 ring-inset' : ''}`}
+      className={`flex h-full select-none flex-col bg-neutral-950 ${isDragOver ? 'ring-1 ring-blue-500/70 ring-inset' : ''}`}
       onDragOver={(event) => {
         event.preventDefault();
         setIsDragOver(true);
@@ -288,8 +288,8 @@ export default function FileTree({
         void handleFileUpload(droppedFiles);
       }}
     >
-      <div className="flex items-center justify-between border-b border-gray-800 px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Files</span>
+      <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Files</span>
         <div className="flex items-center gap-1">
           <Button
             onClick={() => setCreating(true)}
@@ -366,7 +366,7 @@ export default function FileTree({
       />
 
       {creating && (
-        <div className="border-b border-gray-800 px-2 py-1">
+        <div className="border-b border-neutral-800 px-2 py-1">
           <input
             autoFocus
             value={newFileName}
@@ -380,7 +380,7 @@ export default function FileTree({
               else setCreating(false);
             }}
             placeholder="src/main.ts"
-            className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-xs text-gray-200 outline-none"
+            className="w-full rounded border border-neutral-600 bg-neutral-800 px-2 py-1 text-xs text-neutral-200 outline-none"
           />
         </div>
       )}
