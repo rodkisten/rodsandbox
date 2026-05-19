@@ -82,3 +82,43 @@ No custom server is required.
 - Phase 3 started: plugin APIs + REPL + command palette + PWA wiring are in place.
 - Advanced plugin marketplace, shareable compressed URLs, and snapshot features are pending future phases.
 
+
+
+## Worker model and memory strategy
+
+- Heavy operations are isolated in dedicated workers under `src/workers/` to keep React/UI responsive.
+- Bundling is handled by `bundler.worker.ts` and is initialized lazily on first run.
+- Formatting is handled in `formatter.worker.ts` and loaded on demand.
+- TypeScript diagnostics requests are routed through `ts-language.worker.ts` to avoid keeping compiler logic in components.
+- Requests are keyed with IDs so stale responses can be ignored safely.
+- This architecture is optimized for Safari/iOS by minimizing always-hot runtime state and keeping heavy dependencies lazily loaded.
+
+## Roadmap
+
+- **V1:** shell UI, file tree, editor, preview, logs, IndexedDB, formatting, export, PWA shell.
+- **V2:** richer TS language-service APIs, diagnostics orchestration, palette/REPL expansion, import/export templates.
+- **V3:** CDN module resolution/cache, dependency panel, plugin manager UI, snapshots/share URLs, mobile Safari polish.
+
+
+## Phase 2/3 implementation checklist
+
+Current progress based on implemented features in this repository:
+
+- [x] TS language worker diagnostics integration.
+- [x] Editor completions integration.
+- [x] Quick-info/hover integration.
+- [x] Diagnostics panel click-to-editor navigation.
+- [x] Workspace import/export via JSON and ZIP flows.
+- [x] Template application as full workspace replacement.
+- [x] Snapshot save/restore/delete with overwrite confirmation.
+- [x] Bundler dependency extraction + diagnostics-tab dependency visibility.
+- [x] Go-to-definition command wiring with worker-backed definition lookup.
+- [x] Plugin manager panel with enable/disable persistence wiring.
+
+Still pending (next steps):
+
+- [ ] Keyboard/gesture-first go-to-definition UX polish in editor interactions.
+- [ ] Advanced plugin manager UX (search/filter/grouping + richer metadata).
+- [ ] CDN module resolution + dependency cache flows.
+- [ ] Shareable compressed URL workflows.
+- [ ] Marketplace-grade plugin discovery/install UX.

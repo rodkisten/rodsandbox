@@ -7,6 +7,10 @@ export interface PreviewBuildInput {
   compiledFiles: Record<string, string>;
   /** Additional scripts injected by plugins */
   injectedScripts?: string[];
+  /** Optional bundled application JavaScript produced by esbuild */
+  bundledCode?: string;
+  /** Optional bundled CSS emitted by esbuild */
+  bundledCssText?: string;
 }
 
 function sanitizeInlineScriptContent(scriptContent: string): string {
@@ -202,7 +206,8 @@ export function buildPreviewHtml(input: PreviewBuildInput): string {
 
   // Build inline CSS block
   const cssBlocks = cssFiles.map((f) => `/* ${f.name} */\n${f.content}`).join('\n');
-  const styleTag = cssBlocks ? `<style>\n${cssBlocks}\n</style>` : '';
+  const mergedCss = [cssBlocks, input.bundledCssText ?? ''].filter(Boolean).join('\n');
+  const styleTag = mergedCss ? `<style>\n${mergedCss}\n</style>` : '';
 
   // Build JS blocks — prefer compiled output, fall back to raw JavaScript only.
   const jsBlocks = tsFiles.map((f) => {
@@ -211,7 +216,8 @@ export function buildPreviewHtml(input: PreviewBuildInput): string {
   }).join('\n');
 
   const interceptorScript = `<script>\n${sanitizeInlineScriptContent(CONSOLE_INTERCEPTOR)}\n</script>`;
-  const userScript = jsBlocks ? `<script>\n${sanitizeInlineScriptContent(jsBlocks)}\n</script>` : '';
+  const runtimeScript = input.bundledCode && input.bundledCode.trim().length > 0 ? input.bundledCode : jsBlocks;
+  const userScript = runtimeScript ? `<script>\n${sanitizeInlineScriptContent(runtimeScript)}\n</script>` : '';
   const encodedPluginScripts = (input.injectedScripts ?? []).map((script) =>
     encodeURIComponent(script),
   );

@@ -492,4 +492,50 @@ export class BrowserTypeScriptCompiler {
       normalizeTsDiagnosticToModel(d, path)
     );
   }
+
+  getCompletions(path: string, position: number): Array<{ name: string; kind: string; detail?: string }> {
+    if (!this.files.has(path)) return [];
+    try {
+      const completions = this.languageService.getCompletionsAtPosition(path, position, {});
+      if (!completions) return [];
+      return completions.entries.slice(0, 100).map((entry) => ({
+        name: entry.name,
+        kind: entry.kind,
+        detail: entry.kindModifiers,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  getQuickInfo(path: string, position: number): { display: string; documentation: string; kind: string } | null {
+    if (!this.files.has(path)) return null;
+    try {
+      const info = this.languageService.getQuickInfoAtPosition(path, position);
+      if (!info) return null;
+      const display = ts.displayPartsToString(info.displayParts ?? []);
+      const documentation = ts.displayPartsToString(info.documentation ?? []);
+      return { display, documentation, kind: info.kind };
+    } catch {
+      return null;
+    }
+  }
+
+
+
+  getDefinitionLocation(path: string, position: number): { path: string; line: number; column: number } | null {
+    if (!this.files.has(path)) return null;
+    try {
+      const defs = this.languageService.getDefinitionAtPosition(path, position);
+      if (!defs || defs.length === 0) return null;
+      const def = defs[0];
+      const source = this.languageService.getProgram()?.getSourceFile(def.fileName);
+      if (!source) return null;
+      const lc = source.getLineAndCharacterOfPosition(def.textSpan.start);
+      return { path: def.fileName, line: lc.line + 1, column: lc.character + 1 };
+    } catch {
+      return null;
+    }
+  }
+
 }
