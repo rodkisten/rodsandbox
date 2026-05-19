@@ -1,5 +1,5 @@
 'use client';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { html } from '@codemirror/lang-html';
@@ -80,6 +80,7 @@ interface EditorProps {
   linterEnabled: boolean;
   tabSize: number;
   hoverProvider?: (position: number) => Promise<{ display: string; documentation: string } | null>;
+  jumpTo?: { line: number; column: number; token: string } | null;
 }
 
 export default function Editor({
@@ -98,6 +99,7 @@ export default function Editor({
   linterEnabled,
   tabSize,
   hoverProvider,
+  jumpTo,
 }: EditorProps) {
   const handleChange = useCallback((value: string) => {
     onChange(value);
@@ -125,6 +127,20 @@ export default function Editor({
       return true;
     },
   }]);
+
+
+  const editorViewRef = useRef<EditorView | null>(null);
+
+  useEffect(() => {
+    if (!jumpTo || !editorViewRef.current) return;
+    const view = editorViewRef.current;
+    const line = Math.max(1, Math.min(jumpTo.line, view.state.doc.lines));
+    const lineInfo = view.state.doc.line(line);
+    const col = Math.max(1, jumpTo.column);
+    const pos = Math.min(lineInfo.to, lineInfo.from + col - 1);
+    view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+    view.focus();
+  }, [jumpTo]);
 
   const extensions = useMemo(() => {
 
@@ -195,6 +211,7 @@ export default function Editor({
   return (
     <div className="h-full w-full overflow-auto">
       <CodeMirror
+        onCreateEditor={(view) => { editorViewRef.current = view; }}
         value={file.content}
         height="100%"
         extensions={extensions}

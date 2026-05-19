@@ -94,6 +94,7 @@ export default function Playground() {
     predicate: (value: SerializedValue) => boolean;
     format: (value: SerializedValue) => string;
   }>>([]);
+  const [editorJumpTarget, setEditorJumpTarget] = useState<{ line: number; column: number; token: string } | null>(null);
 
   const previewRef = useRef<PreviewPanelHandle>(null);
   const autoRunTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -370,7 +371,10 @@ export default function Playground() {
   }, [handleImportWorkspaceJson, replaceWorkspaceFiles]);
 
   const handleSelectDiagnostic = useCallback((diag: Diagnostic) => {
-    if (workspace.files[diag.fileId]) setActiveFile(diag.fileId);
+    if (workspace.files[diag.fileId]) {
+      setActiveFile(diag.fileId);
+      setEditorJumpTarget({ line: diag.line, column: diag.column, token: diag.id });
+    }
   }, [setActiveFile, workspace.files]);
 
   const handleReplEvaluate = useCallback((code: string, runtime: 'iframe' | 'detached' | 'auto') => {
@@ -832,6 +836,7 @@ export default function Playground() {
                   linterEnabled={settings.editorLinterEnabled}
                   tabSize={settings.editorTabSize}
                   hoverProvider={tsLanguageHoverProvider}
+                  jumpTo={editorJumpTarget}
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-gray-600">Select a file to edit</div>
@@ -954,6 +959,7 @@ export default function Playground() {
                       linterEnabled={settings.editorLinterEnabled}
                       tabSize={settings.editorTabSize}
                   hoverProvider={tsLanguageHoverProvider}
+                  jumpTo={editorJumpTarget}
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-gray-600">Select a file to edit</div>
