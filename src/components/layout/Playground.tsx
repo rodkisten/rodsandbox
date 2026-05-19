@@ -13,6 +13,7 @@ import PreviewPanel, { PreviewPanelHandle } from './PreviewPanel';
 import LogsPanel from './LogsPanel';
 import DiagnosticsPanel from './DiagnosticsPanel';
 import DependencyPanel from './DependencyPanel';
+import PluginManagerPanel from './PluginManagerPanel';
 import ReplPanel from './ReplPanel';
 import CommandPalette, { CommandPaletteCommand } from '@/components/ui/CommandPalette';
 import { buildPreviewHtml } from '@/preview/builder';
@@ -28,6 +29,7 @@ import { TypeScriptWorkerClient } from '@/compiler/tsWorkerClient';
 import { FormatterWorkerClient } from '@/formatter/formatterWorkerClient';
 import { EsbuildBundlerService } from '@/bundler/esbuildBundler';
 import { PluginRegistry } from '@/plugins/registry';
+import { builtinPlugins } from '@/plugins/builtin';
 import { t } from '@/lib/i18n';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -94,6 +96,7 @@ export default function Playground() {
     predicate: (value: SerializedValue) => boolean;
     format: (value: SerializedValue) => string;
   }>>([]);
+  const [pluginManagerItems, setPluginManagerItems] = useState<Array<{ id: string; name: string; enabled: boolean; error?: string }>>([]);
   const [editorJumpTarget, setEditorJumpTarget] = useState<{ line: number; column: number; token: string } | null>(null);
 
   const previewRef = useRef<PreviewPanelHandle>(null);
@@ -130,6 +133,17 @@ export default function Playground() {
 
   useEffect(() => {
     if (!FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM) return;
+
+    for (const plugin of builtinPlugins) {
+      pluginRegistryRef.current.register(plugin);
+    }
+
+    const enabled = new Set(settings.enabledPlugins);
+    for (const registered of pluginRegistryRef.current.listPlugins()) {
+      if (enabled.size === 0 || enabled.has(registered.plugin.id)) pluginRegistryRef.current.enable(registered.plugin.id);
+      else pluginRegistryRef.current.disable(registered.plugin.id);
+    }
+
     pluginRegistryRef.current.initializeAll({
       editor: {
         registerAutocompleteProvider: (source) => {
@@ -166,8 +180,16 @@ export default function Playground() {
           setPluginLogFormatters((prev) => [...prev, { predicate, format }]);
         },
       },
+    }).then(() => {
+      const next = pluginRegistryRef.current.listPlugins().map((registered) => ({
+        id: registered.plugin.id,
+        name: registered.plugin.name,
+        enabled: registered.enabled,
+        error: registered.error,
+      }));
+      setPluginManagerItems(next);
     }).catch(console.error);
-  }, []);
+  }, [settings.enabledPlugins]);
 
   useEffect(() => {
     if (!activeFile?.id) return;
@@ -394,6 +416,26 @@ export default function Playground() {
     }
     await handleImportWorkspaceJson(file);
   }, [handleImportWorkspaceJson, replaceWorkspaceFiles]);
+
+  const handleTogglePlugin = useCallback((id: string, nextEnabled: boolean) => {
+    if (nextEnabled) pluginRegistryRef.current.enable(id);
+    else pluginRegistryRef.current.disable(id);
+
+    updateSettings((prev) => ({
+      ...prev,
+      enabledPlugins: nextEnabled
+        ? Array.from(new Set([...prev.enabledPlugins, id]))
+        : prev.enabledPlugins.filter((pluginId) => pluginId !== id),
+    }));
+
+    const next = pluginRegistryRef.current.listPlugins().map((registered) => ({
+      id: registered.plugin.id,
+      name: registered.plugin.name,
+      enabled: registered.enabled,
+      error: registered.error,
+    }));
+    setPluginManagerItems(next);
+  }, [updateSettings]);
 
   const handleSelectDiagnostic = useCallback((diag: Diagnostic) => {
     if (workspace.files[diag.fileId]) {
@@ -778,7 +820,7 @@ export default function Playground() {
       return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
     }
     if (settings.bottomTab === 'diagnostics') {
-      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>; 
+      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>; 
     }
     if (FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM) {
       return (
