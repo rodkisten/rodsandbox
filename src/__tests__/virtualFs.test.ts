@@ -10,6 +10,7 @@ import {
   renameFolder,
   deleteFolder,
   upsertFiles,
+  replaceWorkspaceFiles,
 } from '@/filesystem/virtualFs';
 import { createDefaultWorkspace } from '@/filesystem/defaults';
 
@@ -76,10 +77,6 @@ describe('virtualFs', () => {
     expect(index?.content).toBe('<html></html>');
   });
 });
-
-
-import { replaceWorkspaceFiles } from '@/filesystem/virtualFs';
-
 describe('replaceWorkspaceFiles', () => {
   it('replaces workspace files and chooses active file', () => {
     const base = createDefaultWorkspace('replace-ws');

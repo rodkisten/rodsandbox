@@ -81,6 +81,7 @@ interface EditorProps {
   tabSize: number;
   hoverProvider?: (position: number) => Promise<{ display: string; documentation: string } | null>;
   jumpTo?: { line: number; column: number; token: string } | null;
+  onCursorPositionChange?: (position: number) => void;
 }
 
 export default function Editor({
@@ -100,6 +101,7 @@ export default function Editor({
   tabSize,
   hoverProvider,
   jumpTo,
+  onCursorPositionChange,
 }: EditorProps) {
   const handleChange = useCallback((value: string) => {
     onChange(value);
@@ -190,6 +192,12 @@ export default function Editor({
       syntaxHighlighting(defaultHighlightStyle),
       ...(wordWrap ? [EditorView.lineWrapping] : []),
       ...(hoverExtension ? [hoverExtension] : []),
+      ...(onCursorPositionChange
+        ? [EditorView.updateListener.of((update) => {
+          if (!update.selectionSet && !update.docChanged) return;
+          onCursorPositionChange(update.state.selection.main.head);
+        })]
+        : []),
       ...extraExtensions,
     ] as Extension[];
   }, [
@@ -206,12 +214,16 @@ export default function Editor({
     wordWrap,
     extraExtensions,
     hoverProvider,
+    onCursorPositionChange,
   ]);
 
   return (
     <div className="h-full w-full overflow-auto">
       <CodeMirror
-        onCreateEditor={(view) => { editorViewRef.current = view; }}
+        onCreateEditor={(view) => {
+          editorViewRef.current = view;
+          onCursorPositionChange?.(view.state.selection.main.head);
+        }}
         value={file.content}
         height="100%"
         extensions={extensions}

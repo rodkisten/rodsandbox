@@ -37,4 +37,16 @@ describe('snapshots', () => {
     deleteWorkspaceSnapshot(snap.id);
     expect(getWorkspaceSnapshot(snap.id)).toBeNull();
   });
+
+  it('ignores malformed snapshots in localStorage', () => {
+    const ws = createDefaultWorkspace('ws-4');
+    localStorage.setItem('rodsandbox:snapshots:v1', JSON.stringify([
+      { id: 'broken', files: 'not-an-array' },
+      { id: 'valid', name: 'ok', createdAt: 1, workspaceId: ws.id, files: [{ path: 'main.ts', language: 'typescript', content: 'export {};' }] },
+    ]));
+
+    const listed = listWorkspaceSnapshots(ws.id);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.id).toBe('valid');
+  });
 });

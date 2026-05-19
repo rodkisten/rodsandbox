@@ -117,6 +117,7 @@ export default function Playground() {
   const detachedEditorOnReadyRef = useRef<((event: MessageEvent) => void) | null>(null);
   const workspaceImportInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceBundleImportInputRef = useRef<HTMLInputElement | null>(null);
+  const editorCursorRef = useRef<{ fileId: string; position: number } | null>(null);
 
   const isMobilePortrait = useMobilePortrait();
 
@@ -281,7 +282,9 @@ export default function Playground() {
 
     const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
     tsWorkerRef.current = worker;
-    const position = Math.max(0, activeFile.content.length - 1);
+    const position = editorCursorRef.current?.fileId === activeFile.id
+      ? editorCursorRef.current.position
+      : Math.max(0, activeFile.content.length - 1);
     const location = await worker.getDefinition(files, activeFile.path, position);
     if (!location) return;
 
@@ -960,6 +963,9 @@ export default function Playground() {
                 <Editor
                   file={activeFile}
                   onChange={(content: string) => updateFile(activeFile.id, content)}
+                  onCursorPositionChange={(position) => {
+                    editorCursorRef.current = { fileId: activeFile.id, position };
+                  }}
                   onSave={handleSave}
                   diagnostics={diagnostics}
                   extraExtensions={pluginEditorExtensions}
@@ -1083,6 +1089,9 @@ export default function Playground() {
                     <Editor
                       file={activeFile}
                       onChange={(content: string) => updateFile(activeFile.id, content)}
+                      onCursorPositionChange={(position) => {
+                        editorCursorRef.current = { fileId: activeFile.id, position };
+                      }}
                       onSave={handleSave}
                       diagnostics={diagnostics}
                       extraExtensions={pluginEditorExtensions}

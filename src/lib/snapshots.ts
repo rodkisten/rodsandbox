@@ -15,14 +15,35 @@ export interface WorkspaceSnapshot {
 }
 
 const SNAPSHOT_STORAGE_KEY = 'rodsandbox:snapshots:v1';
+const VALID_FILE_LANGUAGES: ReadonlySet<FileLanguage> = new Set(['typescript', 'javascript', 'html', 'css', 'json', 'markdown']);
+
+function isSnapshotFile(value: unknown): value is WorkspaceSnapshotFile {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<WorkspaceSnapshotFile>;
+  return typeof candidate.path === 'string'
+    && typeof candidate.content === 'string'
+    && typeof candidate.language === 'string'
+    && VALID_FILE_LANGUAGES.has(candidate.language as FileLanguage);
+}
+
+function isSnapshot(value: unknown): value is WorkspaceSnapshot {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<WorkspaceSnapshot>;
+  return typeof candidate.id === 'string'
+    && typeof candidate.name === 'string'
+    && typeof candidate.workspaceId === 'string'
+    && typeof candidate.createdAt === 'number'
+    && Array.isArray(candidate.files)
+    && candidate.files.every(isSnapshotFile);
+}
 
 function loadSnapshots(): WorkspaceSnapshot[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(SNAPSHOT_STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as WorkspaceSnapshot[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(isSnapshot) : [];
   } catch {
     return [];
   }
