@@ -17,6 +17,7 @@ import { EditorState, Extension } from '@codemirror/state';
 import type { CompletionSource } from '@codemirror/autocomplete';
 import { VirtualFile, Diagnostic, FileLanguage, EditorTheme } from '@/types';
 import { getDiagnosticRange } from './diagnosticRanges';
+import { material, materialInit } from './themes/material';
 
 function getLanguageExtension(language: FileLanguage) {
   switch (language) {
@@ -129,6 +130,7 @@ export default function Editor({
       ? autocompletion(extraAutocompleteProviders.length > 0 ? { override: extraAutocompleteProviders } : undefined)
       : [];
     return [
+      material,
       getLanguageExtension(file.language),
       createEditorTheme(theme),
       EditorView.theme({
@@ -147,6 +149,7 @@ export default function Editor({
       ...extraExtensions,
     ] as Extension[];
   }, [
+    material,
     autocompleteEnabled,
     extraAutocompleteProviders,
     file.language,
@@ -168,6 +171,12 @@ export default function Editor({
         height="100%"
         extensions={extensions}
         onChange={handleChange}
+        theme={materialInit({
+          settings: {
+            caret: '#c6c6c6',
+            fontFamily: 'monospace',
+          }
+        })}
         basicSetup={{
           lineNumbers,
           highlightActiveLineGutter: lineNumbers,
