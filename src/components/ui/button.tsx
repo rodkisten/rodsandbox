@@ -7,9 +7,9 @@ type ButtonVariant = 'default' | 'secondary' | 'ghost' | 'destructive';
 type ButtonSize = 'default' | 'sm' | 'icon';
 
 const variantStyles: Record<ButtonVariant, string> = {
-  default: 'bg-blue-600 text-white hover:bg-blue-500',
+  default: 'bg-neutral-600 text-white hover:bg-neutral-500',
   secondary: 'bg-slate-800 text-slate-100 hover:bg-slate-700',
-  ghost: 'bg-transparent text-slate-300 hover:bg-slate-800 hover:text-slate-100',
+  ghost: 'bg-transparent text-neutral-300 hover:bg-slate-800 hover:text-neutral-100',
   destructive: 'bg-red-600 text-white hover:bg-red-500',
 };
 
