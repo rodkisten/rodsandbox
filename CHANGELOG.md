@@ -30,3 +30,16 @@
 ### Added
 - Initial Next.js playground shell with file tree, CodeMirror editor, preview panel, logs, and IndexedDB persistence
 
+
+## [0.4.0] - 2026-05-19
+
+### Added
+- Worker-first architecture foundation for heavy runtime tasks:
+  - `bundler.worker.ts` for lazy-loaded browser bundling entrypoint
+  - `formatter.worker.ts` for off-main-thread formatting
+  - `ts-language.worker.ts` for TypeScript diagnostics requests
+  - shared worker message contracts in `src/workers/messages.ts`
+- New `EsbuildBundlerService` abstraction in `src/bundler/esbuildBundler.ts`.
+
+### Notes
+- esbuild wasm is loaded remotely inside the bundler worker to keep the app backend-free and avoid server dependencies.

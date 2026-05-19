@@ -82,3 +82,19 @@ No custom server is required.
 - Phase 3 started: plugin APIs + REPL + command palette + PWA wiring are in place.
 - Advanced plugin marketplace, shareable compressed URLs, and snapshot features are pending future phases.
 
+
+
+## Worker model and memory strategy
+
+- Heavy operations are isolated in dedicated workers under `src/workers/` to keep React/UI responsive.
+- Bundling is handled by `bundler.worker.ts` and is initialized lazily on first run.
+- Formatting is handled in `formatter.worker.ts` and loaded on demand.
+- TypeScript diagnostics requests are routed through `ts-language.worker.ts` to avoid keeping compiler logic in components.
+- Requests are keyed with IDs so stale responses can be ignored safely.
+- This architecture is optimized for Safari/iOS by minimizing always-hot runtime state and keeping heavy dependencies lazily loaded.
+
+## Roadmap
+
+- **V1:** shell UI, file tree, editor, preview, logs, IndexedDB, formatting, export, PWA shell.
+- **V2:** richer TS language-service APIs, diagnostics orchestration, palette/REPL expansion, import/export templates.
+- **V3:** CDN module resolution/cache, dependency panel, plugin manager UI, snapshots/share URLs, mobile Safari polish.
