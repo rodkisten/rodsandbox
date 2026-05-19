@@ -639,6 +639,53 @@ export default function Playground() {
   }, [isMobilePortrait, settings.collapsedPanels]);
 
 
+
+  const localCompletionSource = useMemo<CompletionSource>(() => {
+    return (context: CompletionContext) => {
+      if (!activeFile || !settings.editorAutocomplete) return null;
+      if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return null;
+
+      const word = context.matchBefore(/\w*/);
+      if (!word) return null;
+      if (word.from === word.to && !context.explicit) return null;
+
+      const text = context.state.doc.toString();
+      const symbolRegex = /(?:const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/g;
+      const localSymbols = new Set<string>();
+      let match: RegExpExecArray | null;
+      while ((match = symbolRegex.exec(text)) !== null) localSymbols.add(match[1]);
+
+      const snippets: Completion[] = [
+        { label: 'for', type: 'keyword', detail: 'for loop snippet', apply: `for (let i = 0; i < count; i++) {
+  
+}` },
+        { label: 'if', type: 'keyword', detail: 'if snippet', apply: `if (condition) {
+  
+}` },
+        { label: 'async', type: 'keyword', detail: 'async function snippet', apply: `async function name() {
+  
+}` },
+      ];
+
+      const virtualGlobals = [
+        'window', 'document', 'console', 'fetch', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
+        'localStorage', 'sessionStorage', 'URL', 'Blob', 'Promise', 'Map', 'Set',
+      ];
+
+      const options: Completion[] = [
+        ...Array.from(localSymbols).map((label) => ({ label, type: 'variable', detail: 'local symbol' as const })),
+        ...virtualGlobals.map((label) => ({ label, type: 'variable', detail: 'virtual global' as const })),
+        ...snippets,
+      ];
+
+      return {
+        from: word.from,
+        options,
+        validFor: /^\w*$/,
+      };
+    };
+  }, [activeFile, settings.editorAutocomplete]);
+
   const tsLanguageCompletionSource = useMemo<CompletionSource>(() => {
     return async (context: CompletionContext) => {
       if (!settings.editorAutocomplete || !activeFile) return null;
@@ -826,7 +873,7 @@ export default function Playground() {
                   onSave={handleSave}
                   diagnostics={diagnostics}
                   extraExtensions={pluginEditorExtensions}
-                  extraAutocompleteProviders={[tsLanguageCompletionSource, ...pluginAutocompleteProviders]}
+                  extraAutocompleteProviders={[tsLanguageCompletionSource, localCompletionSource, ...pluginAutocompleteProviders]}
                   theme={settings.editorTheme}
                   fontSize={settings.editorFontSize}
                   fontFamily={settings.editorFontFamily}
@@ -949,7 +996,7 @@ export default function Playground() {
                       onSave={handleSave}
                       diagnostics={diagnostics}
                       extraExtensions={pluginEditorExtensions}
-                      extraAutocompleteProviders={[tsLanguageCompletionSource, ...pluginAutocompleteProviders]}
+                      extraAutocompleteProviders={[tsLanguageCompletionSource, localCompletionSource, ...pluginAutocompleteProviders]}
                       theme={settings.editorTheme}
                       fontSize={settings.editorFontSize}
                       fontFamily={settings.editorFontFamily}
