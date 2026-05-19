@@ -31,6 +31,34 @@ const REPL_SNIPPETS = [
   'JSON.stringify()',
 ];
 
+
+const EDITOR_DEFAULT_CONFIG = {
+  lineNumbers: true,
+  highlightActiveLineGutter: true,
+  highlightSpecialChars: true,
+  history: true,
+  foldGutter: true,
+  drawSelection: true,
+  dropCursor: true,
+  allowMultipleSelections: true,
+  indentOnInput: true,
+  syntaxHighlighting: true,
+  bracketMatching: true,
+  closeBrackets: true,
+  autocompletion: true,
+  rectangularSelection: true,
+  crosshairCursor: true,
+  highlightActiveLine: true,
+  highlightSelectionMatches: true,
+  closeBracketsKeymap: true,
+  defaultKeymap: true,
+  searchKeymap: true,
+  historyKeymap: true,
+  foldKeymap: true,
+  completionKeymap: true,
+  lintKeymap: true,
+}
+
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp);
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
@@ -290,7 +318,9 @@ export default function ReplPanel({
             lineNumbers: false,
             foldGutter: false,
             history: false,
-            autocompletion: false,
+            autocompletion: true,
+            syntaxHighlighting: true,
+            bracketMatching: true
           }}
         />
       </div>
