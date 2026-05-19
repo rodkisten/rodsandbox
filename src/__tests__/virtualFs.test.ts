@@ -76,3 +76,20 @@ describe('virtualFs', () => {
     expect(index?.content).toBe('<html></html>');
   });
 });
+
+
+import { replaceWorkspaceFiles } from '@/filesystem/virtualFs';
+
+describe('replaceWorkspaceFiles', () => {
+  it('replaces workspace files and chooses active file', () => {
+    const base = createDefaultWorkspace('replace-ws');
+    const updated = replaceWorkspaceFiles(base, [
+      { path: 'index.html', content: '<html></html>', language: 'html' },
+      { path: 'main.ts', content: 'console.log(1);', language: 'typescript' },
+    ]);
+    expect(Object.values(updated.files).length).toBe(2);
+    expect(updated.activeFileId).toBeTruthy();
+    const active = updated.activeFileId ? updated.files[updated.activeFileId] : null;
+    expect(active?.path).toBe('main.ts');
+  });
+});

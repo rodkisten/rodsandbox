@@ -221,3 +221,43 @@ export function buildFileTree(workspace: Workspace): TreeNode[] {
 
   return root;
 }
+
+
+export function replaceWorkspaceFiles(
+  workspace: Workspace,
+  filesToSet: Array<{ path: string; content: string; language?: FileLanguage }>,
+  nextActivePath?: string,
+): Workspace {
+  const now = Date.now();
+  const files: Record<FileId, VirtualFile> = {};
+
+  for (const entry of filesToSet) {
+    const normalizedPath = entry.path.replace(/^\/+/, '');
+    if (!normalizedPath) continue;
+    const id: FileId = `file-${generateId()}`;
+    const name = normalizedPath.split('/').pop() || 'file.ts';
+    const language = entry.language ?? inferLanguageFromPath(normalizedPath);
+    files[id] = {
+      id,
+      name,
+      path: normalizedPath,
+      language,
+      content: entry.content,
+      dirty: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  const activeId = Object.values(files).find((file) => file.path === nextActivePath)?.id
+    ?? Object.values(files).find((file) => file.path === 'main.ts' || file.path === 'main.js')?.id
+    ?? Object.values(files)[0]?.id
+    ?? null;
+
+  return {
+    ...workspace,
+    files,
+    activeFileId: activeId,
+    updatedAt: now,
+  };
+}

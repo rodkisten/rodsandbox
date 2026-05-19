@@ -85,6 +85,10 @@ export function useWorkspace() {
     updateWorkspace(VirtualFs.upsertFiles(workspace, entries));
   }, [workspace, updateWorkspace]);
 
+  const replaceWorkspaceFiles = useCallback((entries: Array<{ path: string; content: string; language?: FileLanguage }>, nextActivePath?: string) => {
+    updateWorkspace(VirtualFs.replaceWorkspaceFiles(workspace, entries, nextActivePath));
+  }, [workspace, updateWorkspace]);
+
   const saveWorkspace = useCallback(() => {
     Db.saveWorkspace(workspace).catch(console.error);
   }, [workspace]);
@@ -104,6 +108,7 @@ export function useWorkspace() {
     deleteFolder,
     renameFolder,
     upsertFiles,
+    replaceWorkspaceFiles,
     saveWorkspace,
   };
 }

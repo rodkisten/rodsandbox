@@ -75,6 +75,7 @@ export default function Playground() {
     deleteFolder,
     renameFolder,
     upsertFiles,
+    replaceWorkspaceFiles,
     saveWorkspace,
   } = useWorkspace();
   const { settings, loading: settingsLoading, updateSettings } = useAppSettings();
@@ -355,8 +356,8 @@ export default function Playground() {
       language: entry.language,
       content: entry.content,
     }));
-    upsertFiles(entries);
-  }, [upsertFiles]);
+    replaceWorkspaceFiles(entries);
+  }, [replaceWorkspaceFiles]);
 
   const handleSelectDiagnostic = useCallback((diag: Diagnostic) => {
     if (workspace.files[diag.fileId]) setActiveFile(diag.fileId);
@@ -524,8 +525,8 @@ export default function Playground() {
       const shouldRestore = window.confirm(`Restore snapshot "${snapshot.name}" and overwrite ${changed.length} changed files?`);
       if (!shouldRestore) return;
     }
-    upsertFiles(snapshot.files.map((file) => ({ path: file.path, language: file.language, content: file.content })));
-  }, [upsertFiles, workspace]);
+    replaceWorkspaceFiles(snapshot.files.map((file) => ({ path: file.path, language: file.language, content: file.content })));
+  }, [replaceWorkspaceFiles, workspace]);
 
   const handleDeleteSnapshot = useCallback((snapshotId: string) => {
     const snapshot = getWorkspaceSnapshot(snapshotId);
@@ -538,8 +539,8 @@ export default function Playground() {
   const applyTemplate = useCallback((templateId: string) => {
     const template = getTemplateById(templateId as Parameters<typeof getTemplateById>[0]);
     if (!template) return;
-    upsertFiles(template.files.map((file) => ({ path: file.path, content: file.content, language: file.language })));
-  }, [upsertFiles]);
+    replaceWorkspaceFiles(template.files.map((file) => ({ path: file.path, content: file.content, language: file.language })));
+  }, [replaceWorkspaceFiles]);
 
 
   const snapshotSummaries = useMemo(() => {
