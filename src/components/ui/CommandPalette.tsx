@@ -62,7 +62,7 @@ export default function CommandPalette({ open, onClose, commands }: CommandPalet
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-20" onClick={onClose}>
       <div className="w-full max-w-2xl overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-        <div className="border-b border-gray-800 px-3 py-2">
+        <div className="border-b border-neutral-800 px-3 py-2">
           <input
             autoFocus
             value={query}
