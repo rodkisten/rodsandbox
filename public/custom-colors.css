@@ -1,0 +1,183 @@
+/* ==========================================================================
+   Palette
+   Modern CSS version using custom properties + color-mix()
+   ========================================================================== */
+
+:root {
+  --adjust-tone: 15%;
+
+  --red: #ac4142;
+  --green: #90a959;
+  --yellow: #f4bf75;
+  --blue: #6a9fb5;
+  --maroon: #8f5536;
+  --purple: #aa759f;
+  --orange: #d28445;
+  --cyan: #75b5aa;
+  --pink: #ff00cc;
+  --grey: #7f7f7f;
+
+  --medium-red: var(--red);
+  --light-red: color-mix(in oklab, var(--red), white var(--adjust-tone));
+  --dark-red: color-mix(in oklab, var(--red), black var(--adjust-tone));
+
+  --medium-green: var(--green);
+  --light-green: color-mix(in oklab, var(--green), white var(--adjust-tone));
+  --dark-green: color-mix(in oklab, var(--green), black var(--adjust-tone));
+
+  --medium-yellow: var(--yellow);
+  --light-yellow: color-mix(in oklab, var(--yellow), white var(--adjust-tone));
+  --dark-yellow: color-mix(in oklab, var(--yellow), black var(--adjust-tone));
+
+  --medium-blue: var(--blue);
+  --light-blue: color-mix(in oklab, var(--blue), white var(--adjust-tone));
+  --dark-blue: color-mix(in oklab, var(--blue), black var(--adjust-tone));
+
+  --medium-maroon: var(--maroon);
+  --light-maroon: color-mix(in oklab, var(--maroon), white var(--adjust-tone));
+  --dark-maroon: color-mix(in oklab, var(--maroon), black var(--adjust-tone));
+
+  --medium-purple: var(--purple);
+  --light-purple: color-mix(in oklab, var(--purple), white var(--adjust-tone));
+  --dark-purple: color-mix(in oklab, var(--purple), black var(--adjust-tone));
+
+  --medium-orange: var(--orange);
+  --light-orange: color-mix(in oklab, var(--orange), white var(--adjust-tone));
+  --dark-orange: color-mix(in oklab, var(--orange), black var(--adjust-tone));
+
+  --medium-cyan: var(--cyan);
+  --light-cyan: color-mix(in oklab, var(--cyan), white var(--adjust-tone));
+  --dark-cyan: color-mix(in oklab, var(--cyan), black var(--adjust-tone));
+
+  --medium-pink: var(--pink);
+  --light-pink: color-mix(in oklab, var(--pink), white var(--adjust-tone));
+  --dark-pink: color-mix(in oklab, var(--pink), black var(--adjust-tone));
+
+  --medium-grey: var(--grey);
+  --light-grey: color-mix(in oklab, var(--grey), white var(--adjust-tone));
+  --dark-grey: color-mix(in oklab, var(--grey), black var(--adjust-tone));
+}
+
+/* ==========================================================================
+   Color helpers
+   ========================================================================== */
+
+.light-red::before {
+  color: var(--light-red);
+}
+
+.medium-red::before {
+  color: var(--medium-red);
+}
+
+.dark-red::before {
+  color: color-mix(in oklab, var(--dark-red), white 15%);
+}
+
+.light-green::before {
+  color: color-mix(in oklab, var(--light-green), black 5%);
+}
+
+.medium-green::before {
+  color: var(--medium-green);
+}
+
+.dark-green::before {
+  color: var(--dark-green);
+}
+
+.light-yellow::before {
+  color: color-mix(in oklab, var(--light-yellow), black 23%);
+}
+
+.medium-yellow::before {
+  color: color-mix(in oklab, var(--medium-yellow), black 15%);
+}
+
+.dark-yellow::before {
+  color: color-mix(in oklab, var(--dark-yellow), black 10%);
+}
+
+.light-blue::before {
+  color: color-mix(in oklab, var(--light-blue), black 18%);
+}
+
+.medium-blue::before {
+  color: var(--medium-blue);
+}
+
+.dark-blue::before {
+  color: var(--dark-blue);
+}
+
+.light-maroon::before {
+  color: var(--light-maroon);
+}
+
+.medium-maroon::before {
+  color: var(--medium-maroon);
+}
+
+.dark-maroon::before {
+  color: color-mix(in oklab, var(--dark-maroon), white 8%);
+}
+
+.light-purple::before {
+  color: var(--light-purple);
+}
+
+.medium-purple::before {
+  color: var(--medium-purple);
+}
+
+.dark-purple::before {
+  color: var(--dark-purple);
+}
+
+.light-orange::before {
+  color: color-mix(in oklab, var(--light-orange), black 8%);
+}
+
+.medium-orange::before {
+  color: var(--medium-orange);
+}
+
+.dark-orange::before {
+  color: var(--dark-orange);
+}
+
+.light-cyan::before {
+  color: color-mix(in oklab, var(--light-cyan), black 18%);
+}
+
+.medium-cyan::before {
+  color: var(--medium-cyan);
+}
+
+.dark-cyan::before {
+  color: var(--dark-cyan);
+}
+
+.light-pink::before {
+  color: var(--light-pink);
+}
+
+.medium-pink::before {
+  color: var(--medium-pink);
+}
+
+.dark-pink::before {
+  color: color-mix(in oklab, var(--dark-pink), white 5%);
+}
+
+.light-grey::before {
+  color: var(--light-grey);
+}
+
+.medium-grey::before {
+  color: var(--medium-grey);
+}
+
+.dark-grey::before {
+  color: color-mix(in oklab, var(--dark-grey), white 15%);
+}
