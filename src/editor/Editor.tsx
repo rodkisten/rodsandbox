@@ -6,7 +6,7 @@ import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
-import { keymap, EditorView } from '@codemirror/view';
+import { keymap, EditorView, hoverTooltip } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
@@ -79,6 +79,7 @@ interface EditorProps {
   autocompleteEnabled: boolean;
   linterEnabled: boolean;
   tabSize: number;
+  hoverProvider?: (position: number) => Promise<{ display: string; documentation: string } | null>;
 }
 
 export default function Editor({
@@ -96,6 +97,7 @@ export default function Editor({
   autocompleteEnabled,
   linterEnabled,
   tabSize,
+  hoverProvider,
 }: EditorProps) {
   const handleChange = useCallback((value: string) => {
     onChange(value);
@@ -125,7 +127,34 @@ export default function Editor({
   }]);
 
   const extensions = useMemo(() => {
-    const completion = autocompleteEnabled
+
+    const hoverExtension = hoverProvider
+      ? hoverTooltip(async (view, pos) => {
+        const info = await hoverProvider(pos);
+        if (!info) return null;
+        return {
+          pos,
+          end: pos,
+          create() {
+            const dom = document.createElement('div');
+            dom.className = 'rounded border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-gray-100 shadow-lg';
+            const title = document.createElement('div');
+            title.className = 'font-semibold text-blue-200';
+            title.textContent = info.display;
+            dom.appendChild(title);
+            if (info.documentation) {
+              const doc = document.createElement('div');
+              doc.className = 'mt-1 text-gray-300';
+              doc.textContent = info.documentation;
+              dom.appendChild(doc);
+            }
+            return { dom };
+          },
+        };
+      }, { hoverTime: 250 })
+      : null;
+
+        const completion = autocompleteEnabled
       ? autocompletion(extraAutocompleteProviders.length > 0 ? { override: extraAutocompleteProviders } : undefined)
       : [];
     return [
@@ -144,6 +173,7 @@ export default function Editor({
       ...(linterEnabled ? [lintGutter(), linter((view) => linterSource(view.state.doc))] : []),
       syntaxHighlighting(defaultHighlightStyle),
       ...(wordWrap ? [EditorView.lineWrapping] : []),
+      ...(hoverExtension ? [hoverExtension] : []),
       ...extraExtensions,
     ] as Extension[];
   }, [
@@ -159,6 +189,7 @@ export default function Editor({
     theme,
     wordWrap,
     extraExtensions,
+    hoverProvider,
   ]);
 
   return (

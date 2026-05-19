@@ -661,6 +661,29 @@ export default function Playground() {
     };
   }, [activeFile, settings.editorAutocomplete, workspace]);
 
+
+  const tsLanguageHoverProvider = useCallback(async (position: number) => {
+    if (!activeFile) return null;
+    if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return null;
+
+    const files = listFiles(workspace)
+      .filter((file) => file.language === 'typescript' || file.language === 'javascript')
+      .map((file) => ({
+        path: file.path,
+        content: file.id === activeFile.id ? activeFile.content : file.content,
+      }));
+
+    for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
+      files.push({ path, content });
+    }
+
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    tsWorkerRef.current = worker;
+    const info = await worker.getQuickInfo(files, activeFile.path, position);
+    if (!info) return null;
+    return { display: info.display, documentation: info.documentation };
+  }, [activeFile, workspace]);
+
   const renderBottomPanelContent = () => {
     if (settings.bottomTab === 'console') {
       return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
@@ -796,6 +819,7 @@ export default function Playground() {
                   autocompleteEnabled={settings.editorAutocomplete}
                   linterEnabled={settings.editorLinterEnabled}
                   tabSize={settings.editorTabSize}
+                  hoverProvider={tsLanguageHoverProvider}
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-gray-600">Select a file to edit</div>
@@ -917,6 +941,7 @@ export default function Playground() {
                       autocompleteEnabled={settings.editorAutocomplete}
                       linterEnabled={settings.editorLinterEnabled}
                       tabSize={settings.editorTabSize}
+                  hoverProvider={tsLanguageHoverProvider}
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-gray-600">Select a file to edit</div>
