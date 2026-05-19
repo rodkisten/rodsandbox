@@ -301,9 +301,19 @@ export default function Playground() {
         fileName: activeFile.name,
         path: activeFile.path,
         content: activeFile.content,
+        language: activeFile.language,
+        theme: settings.editorTheme,
+        fontSize: settings.editorFontSize,
+        fontFamily: settings.editorFontFamily,
+        lineNumbers: settings.editorLineNumbers,
+        wordWrap: settings.editorWordWrap,
+        autocompleteEnabled: settings.editorAutocomplete,
+        linterEnabled: settings.editorLinterEnabled,
+        tabSize: settings.editorTabSize,
+        diagnostics,
       },
     }, '*');
-  }, [activeFile]);
+  }, [activeFile, diagnostics, settings]);
 
   const handleOpenEditorDetached = useCallback(() => {
     if (detachedEditorWindowRef.current && !detachedEditorWindowRef.current.closed) {
@@ -311,52 +321,23 @@ export default function Playground() {
       syncDetachedEditor();
       return;
     }
-    const popup = window.open('', '_blank', 'popup=yes,width=980,height=780');
+    const popup = window.open('/detached-editor', '_blank', 'popup=yes,width=980,height=780');
     if (!popup) return;
     detachedEditorWindowRef.current = popup;
-    popup.document.open();
-    popup.document.write(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>RodSandbox Detached Editor</title>
-<style>
-  html,body{margin:0;height:100%;background:#020617;color:#e2e8f0;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
-  .root{display:flex;flex-direction:column;height:100%}
-  .top{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #1e293b;background:#0b1220}
-  .name{font-size:12px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .badge{font-size:10px;border:1px solid #334155;border-radius:999px;padding:2px 6px;color:#94a3b8}
-  textarea{flex:1;width:100%;border:0;resize:none;outline:none;background:#020617;color:#e2e8f0;padding:12px;font-size:14px;line-height:1.5;tab-size:2}
-</style></head><body>
-<div class="root"><div class="top"><span class="badge">detached editor</span><span id="file-name" class="name">Sem arquivo ativo</span></div><textarea id="code" spellcheck="false" placeholder="Selecione um arquivo no editor principal..."></textarea></div>
-<script>
-(() => {
-  let fileId = null;
-  const input = document.getElementById('code');
-  const name = document.getElementById('file-name');
-  window.addEventListener('message', (event) => {
-    if (!event.data || event.data.type !== 'RODSANDBOX_EDITOR_SYNC') return;
-    const payload = event.data.payload || {};
-    fileId = payload.fileId ?? null;
-    name.textContent = payload.path || payload.fileName || 'Sem arquivo ativo';
-    if (typeof payload.content === 'string' && document.activeElement !== input) {
-      input.value = payload.content;
-    }
-  });
-  input.addEventListener('input', () => {
-    if (!fileId) return;
-    window.opener?.postMessage({ type: 'RODSANDBOX_DETACHED_EDITOR_CHANGE', payload: { fileId, content: input.value } }, '*');
-  });
-  input.addEventListener('keydown', (event) => {
-    const mod = event.metaKey || event.ctrlKey;
-    if (mod && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      window.opener?.postMessage({ type: 'RODSANDBOX_DETACHED_EDITOR_SAVE' }, '*');
-    }
-  });
-})();
-</script></body></html>`);
-    popup.document.close();
-    syncDetachedEditor();
+    // Wait for the page to signal it is ready, then send the initial sync
+    const onReady = (event: MessageEvent) => {
+      if (event.source !== popup) return;
+      if (event.data?.type !== 'RODSANDBOX_DETACHED_READY') return;
+      window.removeEventListener('message', onReady);
+      syncDetachedEditor();
+    };
+    window.addEventListener('message', onReady);
+    // Fallback: send sync after 2 s in case the ready signal was missed
+    const timeout = setTimeout(() => {
+      window.removeEventListener('message', onReady);
+      syncDetachedEditor();
+    }, 2000);
+    return () => clearTimeout(timeout);
   }, [syncDetachedEditor]);
 
   useEffect(() => {
