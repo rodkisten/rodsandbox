@@ -521,4 +521,21 @@ export class BrowserTypeScriptCompiler {
     }
   }
 
+
+
+  getDefinitionLocation(path: string, position: number): { path: string; line: number; column: number } | null {
+    if (!this.files.has(path)) return null;
+    try {
+      const defs = this.languageService.getDefinitionAtPosition(path, position);
+      if (!defs || defs.length === 0) return null;
+      const def = defs[0];
+      const source = this.languageService.getProgram()?.getSourceFile(def.fileName);
+      if (!source) return null;
+      const lc = source.getLineAndCharacterOfPosition(def.textSpan.start);
+      return { path: def.fileName, line: lc.line + 1, column: lc.character + 1 };
+    } catch {
+      return null;
+    }
+  }
+
 }

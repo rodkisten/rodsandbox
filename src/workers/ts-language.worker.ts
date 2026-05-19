@@ -46,5 +46,12 @@ self.onmessage = (event: MessageEvent<TsMessage>) => {
     const service = syncFiles(msg.files);
     const info = service.getQuickInfo(msg.path, msg.position);
     self.postMessage({ type: 'TS_QUICK_INFO_RESULT', requestId: msg.requestId, info });
+    return;
+  }
+
+  if (msg.type === 'TS_DEFINITION') {
+    const service = syncFiles(msg.files);
+    const location = service.getDefinitionLocation(msg.path, msg.position);
+    self.postMessage({ type: 'TS_DEFINITION_RESULT', requestId: msg.requestId, location });
   }
 };

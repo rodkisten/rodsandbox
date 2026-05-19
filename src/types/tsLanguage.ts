@@ -9,3 +9,9 @@ export interface TsQuickInfo {
   documentation: string;
   kind: string;
 }
+
+export interface TsDefinitionLocation {
+  path: string;
+  line: number;
+  column: number;
+}

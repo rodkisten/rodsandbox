@@ -10,9 +10,12 @@ export interface FormatterFailure { type: 'FORMAT_RESULT'; requestId: number; su
 export type FormatterMessage = FormatterRequest | FormatterResult | FormatterFailure;
 export interface TsDiagnosticsRequest { type: 'TS_DIAGNOSTICS'; requestId: number; files: Array<{ path: string; content: string }>; }
 export interface TsDiagnosticsResult { type: 'TS_DIAGNOSTICS_RESULT'; requestId: number; diagnostics: Diagnostic[]; }
-export type TsMessage = TsDiagnosticsRequest | TsDiagnosticsResult | TsCompletionsRequest | TsCompletionsResult | TsQuickInfoRequest | TsQuickInfoResult;
+export type TsMessage = TsDiagnosticsRequest | TsDiagnosticsResult | TsCompletionsRequest | TsCompletionsResult | TsQuickInfoRequest | TsQuickInfoResult | TsDefinitionRequest | TsDefinitionResult;
 
 export interface TsCompletionsRequest { type: 'TS_COMPLETIONS'; requestId: number; path: string; position: number; files: Array<{ path: string; content: string }>; }
 export interface TsCompletionsResult { type: 'TS_COMPLETIONS_RESULT'; requestId: number; items: Array<{ name: string; kind: string; detail?: string }>; }
 export interface TsQuickInfoRequest { type: 'TS_QUICK_INFO'; requestId: number; path: string; position: number; files: Array<{ path: string; content: string }>; }
 export interface TsQuickInfoResult { type: 'TS_QUICK_INFO_RESULT'; requestId: number; info: { display: string; documentation: string; kind: string } | null; }
+
+export interface TsDefinitionRequest { type: 'TS_DEFINITION'; requestId: number; path: string; position: number; files: Array<{ path: string; content: string }>; }
+export interface TsDefinitionResult { type: 'TS_DEFINITION_RESULT'; requestId: number; location: { path: string; line: number; column: number } | null; }

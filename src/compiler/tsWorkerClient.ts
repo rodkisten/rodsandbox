@@ -1,6 +1,6 @@
 import type { Diagnostic } from '@/types';
 import type { TsMessage } from '@/workers/messages';
-import type { TsCompletionItem, TsQuickInfo } from '@/types/tsLanguage';
+import type { TsCompletionItem, TsDefinitionLocation, TsQuickInfo } from '@/types/tsLanguage';
 
 export class TypeScriptWorkerClient {
   private worker: Worker | null = null;
@@ -53,6 +53,22 @@ export class TypeScriptWorkerClient {
       };
       worker.addEventListener('message', onMessage);
       worker.postMessage({ type: 'TS_QUICK_INFO', requestId, files, path, position });
+    });
+  }
+
+
+  async getDefinition(files: Array<{ path: string; content: string }>, path: string, position: number): Promise<TsDefinitionLocation | null> {
+    const worker = this.getWorker();
+    const requestId = ++this.requestId;
+    return new Promise((resolve) => {
+      const onMessage = (event: MessageEvent<TsMessage>) => {
+        const msg = event.data;
+        if (msg.type !== 'TS_DEFINITION_RESULT' || msg.requestId !== requestId) return;
+        worker.removeEventListener('message', onMessage);
+        resolve(msg.location);
+      };
+      worker.addEventListener('message', onMessage);
+      worker.postMessage({ type: 'TS_DEFINITION', requestId, files, path, position });
     });
   }
 

@@ -226,6 +226,31 @@ export default function Playground() {
     return { files: compiledFiles, diagnosticsCount: allDiagnostics.length, bundledCode: bundleResult.code, bundledCssText: bundleResult.cssText, dependencies: bundleResult.dependencies };
   }, [workspace]);
 
+
+  const handleGoToDefinition = useCallback(async () => {
+    if (!activeFile) return;
+    if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return;
+
+    const files = listFiles(workspace)
+      .filter((file) => file.language === 'typescript' || file.language === 'javascript')
+      .map((file) => ({ path: file.path, content: file.content }));
+
+    for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
+      files.push({ path, content });
+    }
+
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    tsWorkerRef.current = worker;
+    const position = Math.max(0, activeFile.content.length - 1);
+    const location = await worker.getDefinition(files, activeFile.path, position);
+    if (!location) return;
+
+    const targetFile = Object.values(workspace.files).find((file) => file.path === location.path);
+    if (!targetFile) return;
+    setActiveFile(targetFile.id);
+    setEditorJumpTarget({ line: location.line, column: location.column, token: `def-${location.path}-${location.line}-${location.column}` });
+  }, [activeFile, setActiveFile, workspace]);
+
   const handleTypecheck = useCallback(() => {
     void compileWorkspace().then((result) => {
       if (result.diagnosticsCount > 0) {
@@ -568,6 +593,7 @@ export default function Playground() {
       { id: 'save', label: t('toolbar.save'), shortcut: 'Ctrl+S', action: handleSave },
       { id: 'toggle-auto', label: t('toolbar.autoRun'), action: () => updateSettings((prev) => ({ ...prev, autoRun: !prev.autoRun })) },
       { id: 'typecheck', label: 'Typecheck', action: handleTypecheck },
+      { id: 'goto-definition', label: 'Go to definition (active symbol)', action: () => void handleGoToDefinition() },
       { id: 'download', label: t('toolbar.download'), action: handleDownload },
       { id: 'export', label: t('toolbar.export'), action: handleExportZip },
       { id: 'export-json', label: 'Export workspace JSON', action: handleExportWorkspaceJson },
@@ -601,7 +627,7 @@ export default function Playground() {
       action: command.action,
     }));
     return [...baseCommands, ...templateCommands, ...snapshotCommands, ...pluginCommands];
-  }, [applyTemplate, handleDeleteSnapshot, handleDownload, handleExportWorkspaceJson, handleExportZip, handleFormat, handleOpenEditorDetached, handleRestoreSnapshot, handleRun, handleSave, handleSaveSnapshot, handleTypecheck, pluginEditorCommands, snapshotSummaries, updateSettings]);
+  }, [applyTemplate, handleDeleteSnapshot, handleDownload, handleExportWorkspaceJson, handleExportZip, handleFormat, handleGoToDefinition, handleOpenEditorDetached, handleRestoreSnapshot, handleRun, handleSave, handleSaveSnapshot, handleTypecheck, pluginEditorCommands, snapshotSummaries, updateSettings]);
 
   const isPanelCollapsed = useCallback((panelId: string) => settings.collapsedPanels.includes(panelId), [settings.collapsedPanels]);
 
