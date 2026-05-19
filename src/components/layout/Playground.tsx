@@ -20,7 +20,8 @@ import { exportWorkspaceAsZip } from '@/lib/archive';
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
 import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constants';
 import { listFiles } from '@/filesystem/virtualFs';
-import type { BrowserTypeScriptCompiler } from '@/compiler';
+import { TypeScriptWorkerClient } from '@/compiler/tsWorkerClient';
+import { FormatterWorkerClient } from '@/formatter/formatterWorkerClient';
 import { PluginRegistry } from '@/plugins/registry';
 import { t } from '@/lib/i18n';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -86,7 +87,8 @@ export default function Playground() {
   const previewRef = useRef<PreviewPanelHandle>(null);
   const autoRunTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typecheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const compilerRef = useRef<BrowserTypeScriptCompiler | null>(null);
+  const tsWorkerRef = useRef<TypeScriptWorkerClient | null>(null);
+  const formatterWorkerRef = useRef<FormatterWorkerClient | null>(null);
   const pluginRegistryRef = useRef(new PluginRegistry());
   const pluginCompilerVirtualFilesRef = useRef<Record<string, string>>({});
   const pluginPreviewScriptsRef = useRef<string[]>([]);
@@ -101,12 +103,11 @@ export default function Playground() {
   const isMobilePortrait = useMobilePortrait();
 
   useEffect(() => {
-    let cancelled = false;
-    import('@/compiler').then(({ BrowserTypeScriptCompiler }) => {
-      if (!cancelled) compilerRef.current = new BrowserTypeScriptCompiler();
-    });
+    tsWorkerRef.current = new TypeScriptWorkerClient();
+    formatterWorkerRef.current = new FormatterWorkerClient();
     return () => {
-      cancelled = true;
+      tsWorkerRef.current?.terminate();
+      formatterWorkerRef.current?.terminate();
     };
   }, []);
 
@@ -162,32 +163,27 @@ export default function Playground() {
 
   const compileWorkspace = useCallback(async (): Promise<{ files: Record<string, string>; diagnosticsCount: number }> => {
     const files = listFiles(workspace);
-    let compiledFiles: Record<string, string> = {};
-    let compiler = compilerRef.current;
     const hasRunnableSource = files.some((file) => file.language === 'typescript' || file.language === 'javascript');
 
-    if (hasRunnableSource && FEATURE_FLAGS.ENABLE_TYPESCRIPT_COMPILER) {
-      if (!compiler) {
-        const { BrowserTypeScriptCompiler } = await import('@/compiler');
-        compiler = compilerRef.current ?? new BrowserTypeScriptCompiler();
-        compilerRef.current = compiler;
-      }
-
-      for (const file of files) {
-        if (file.language === 'typescript' || file.language === 'javascript') {
-          compiler.updateFile(file.path, file.content);
-        }
-      }
-      for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
-        compiler.updateFile(path, content);
-      }
-      const result = compiler.compile();
-      compiledFiles = result.files;
-      setDiagnostics(result.diagnostics);
-      return { files: result.files, diagnosticsCount: result.diagnostics.length };
+    if (!hasRunnableSource || !FEATURE_FLAGS.ENABLE_TYPESCRIPT_COMPILER) {
+      setDiagnostics([]);
+      return { files: {}, diagnosticsCount: 0 };
     }
-    setDiagnostics([]);
-    return { files: compiledFiles, diagnosticsCount: 0 };
+
+    const tsFiles = files
+      .filter((file) => file.language === 'typescript' || file.language === 'javascript')
+      .map((file) => ({ path: file.path, content: file.content }));
+
+    for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
+      tsFiles.push({ path, content });
+    }
+
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    tsWorkerRef.current = worker;
+    const tsDiagnostics = await worker.getDiagnostics(tsFiles);
+    setDiagnostics(tsDiagnostics);
+
+    return { files: {}, diagnosticsCount: tsDiagnostics.length };
   }, [workspace]);
 
   const handleTypecheck = useCallback(() => {
@@ -253,8 +249,9 @@ export default function Playground() {
     if (!FEATURE_FLAGS.ENABLE_PRETTIER || !activeFile || isFormatting || !settings.editorFormatterEnabled) return;
     setIsFormatting(true);
     try {
-      const { formatFile } = await import('@/formatter/prettier');
-      const formatted = await formatFile(activeFile.content, activeFile.language);
+      const formatter = formatterWorkerRef.current ?? new FormatterWorkerClient();
+      formatterWorkerRef.current = formatter;
+      const formatted = await formatter.format(activeFile.content, activeFile.language);
       updateFile(activeFile.id, formatted);
     } catch (error) {
       console.warn('Format failed:', error instanceof Error ? error.message : error);
