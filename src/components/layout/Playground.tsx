@@ -21,6 +21,7 @@ import { exportWorkspaceJson, importWorkspaceJson } from '@/lib/workspaceTransfe
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
 import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constants';
 import { listFiles } from '@/filesystem/virtualFs';
+import { WORKSPACE_TEMPLATES, getTemplateById } from '@/filesystem/templates';
 import { TypeScriptWorkerClient } from '@/compiler/tsWorkerClient';
 import { FormatterWorkerClient } from '@/formatter/formatterWorkerClient';
 import { EsbuildBundlerService } from '@/bundler/esbuildBundler';
@@ -476,6 +477,13 @@ export default function Playground() {
   const errorCount = diagnostics.filter((diag) => diag.severity === 'error').length;
   const warnCount = diagnostics.filter((diag) => diag.severity === 'warning').length;
 
+
+  const applyTemplate = useCallback((templateId: string) => {
+    const template = getTemplateById(templateId as Parameters<typeof getTemplateById>[0]);
+    if (!template) return;
+    upsertFiles(template.files.map((file) => ({ path: file.path, content: file.content, language: file.language })));
+  }, [upsertFiles]);
+
   const commandPaletteCommands = useMemo<CommandPaletteCommand[]>(() => {
     const baseCommands: CommandPaletteCommand[] = [
       { id: 'run', label: t('toolbar.run'), shortcut: 'Ctrl+Enter', action: handleRun },
@@ -490,13 +498,18 @@ export default function Playground() {
       { id: 'editor-detached', label: 'Open editor detached', action: handleOpenEditorDetached },
       { id: 'preview-detached', label: 'Open preview in new window', action: () => previewRef.current?.openDetached() },
     ];
+    const templateCommands: CommandPaletteCommand[] = WORKSPACE_TEMPLATES.map((template) => ({
+      id: `template-${template.id}`,
+      label: `Template: ${template.name}`,
+      action: () => applyTemplate(template.id),
+    }));
     const pluginCommands: CommandPaletteCommand[] = pluginEditorCommands.map((command) => ({
       id: `plugin-${command.id}`,
       label: `Plugin: ${command.id}`,
       action: command.action,
     }));
-    return [...baseCommands, ...pluginCommands];
-  }, [handleDownload, handleExportWorkspaceJson, handleExportZip, handleFormat, handleOpenEditorDetached, handleRun, handleSave, handleTypecheck, pluginEditorCommands, updateSettings]);
+    return [...baseCommands, ...templateCommands, ...pluginCommands];
+  }, [applyTemplate, handleDownload, handleExportWorkspaceJson, handleExportZip, handleFormat, handleOpenEditorDetached, handleRun, handleSave, handleTypecheck, pluginEditorCommands, updateSettings]);
 
   const isPanelCollapsed = useCallback((panelId: string) => settings.collapsedPanels.includes(panelId), [settings.collapsedPanels]);
 
