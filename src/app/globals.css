@@ -35,6 +35,9 @@ html, body {
   overflow: hidden;
   background: var(--app-bg);
   color: var(--app-fg);
+  
+  /** prevent zoom **/
+  touch-action: pan-x pan-y;
 }
 
 * {
