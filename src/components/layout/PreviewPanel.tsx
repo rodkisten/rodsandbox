@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { PREVIEW_SANDBOX_ATTRS } from '@/constants';
 import { PreviewMessage } from '@/types';
+import { Button } from '@/components/ui/button';
 
 interface PreviewPanelProps {
   previewHtml: string | null;
@@ -112,7 +113,7 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
     <div className="h-full w-full bg-white dark:bg-gray-950 flex flex-col">
       <div className="flex items-center px-3 py-1 bg-gray-800 border-b border-gray-700 text-xs text-gray-400">
         <span>Preview</span>
-        <button
+        <Button
           onClick={() => {
             if (detachedWindowRef.current && !detachedWindowRef.current.closed) {
               detachedWindowRef.current.focus();
@@ -124,11 +125,12 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
             syncDetachedContent();
             onDetachedChange?.(true);
           }}
-          className="ml-3 rounded bg-gray-700 px-2 py-0.5 text-[11px] text-gray-200 transition-colors hover:bg-gray-600"
-          type="button"
+          variant="secondary"
+          size="sm"
+          className="ml-3 h-6 text-[11px]"
         >
           Open in New Window
-        </button>
+        </Button>
         <div className="flex gap-1.5 ml-auto">
           <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
           <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />

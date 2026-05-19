@@ -43,7 +43,7 @@ export function createDefaultSettings(): AppSettings {
     editorMinimapEnabled: false,
     editorTabSize: 2,
     liveTypecheck: true,
-    collapsedPanels: [],
+    collapsedPanels: ['d-files', 'd-bottom', 'm-files', 'm-bottom'],
     enabledPlugins: [],
   };
 }
@@ -54,6 +54,7 @@ function mergeSettings(saved: AppSettings | undefined): AppSettings {
   return {
     ...defaults,
     ...saved,
+    collapsedPanels: saved.collapsedPanels && saved.collapsedPanels.length > 0 ? saved.collapsedPanels : defaults.collapsedPanels,
     layoutSizes: {
       ...defaults.layoutSizes,
       ...saved.layoutSizes,

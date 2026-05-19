@@ -22,6 +22,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface FileTreeProps {
   workspace: Workspace;
@@ -240,6 +241,7 @@ export default function FileTree({
 }: FileTreeProps) {
   const [newFileName, setNewFileName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const uploadFileRef = useRef<HTMLInputElement>(null);
   const uploadFolderRef = useRef<HTMLInputElement>(null);
   const uploadZipRef = useRef<HTMLInputElement>(null);
@@ -266,23 +268,43 @@ export default function FileTree({
   };
 
   return (
-    <div className="flex h-full select-none flex-col bg-gray-950">
+    <div
+      className={`flex h-full select-none flex-col bg-gray-950 ${isDragOver ? 'ring-1 ring-blue-500/70 ring-inset' : ''}`}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setIsDragOver(false);
+        const droppedFiles = event.dataTransfer.files;
+        if (!droppedFiles?.length) return;
+        const first = droppedFiles[0];
+        if (first && first.name.toLowerCase().endsWith('.zip') && droppedFiles.length === 1) {
+          void handleZipUpload(first);
+          return;
+        }
+        void handleFileUpload(droppedFiles);
+      }}
+    >
       <div className="flex items-center justify-between border-b border-gray-800 px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Files</span>
         <div className="flex items-center gap-1">
-          <button
+          <Button
             onClick={() => setCreating(true)}
-            className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-200"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
             title="Novo arquivo"
-            type="button"
           >
             <Plus className="h-4 w-4" />
-          </button>
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-gray-200">
+              <Button variant="ghost" size="icon" className="h-7 w-7">
                 <MoreHorizontal className="h-4 w-4" />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Ações</DropdownMenuLabel>
@@ -363,6 +385,11 @@ export default function FileTree({
         </div>
       )}
       <div className="flex-1 overflow-auto py-1">
+        {isDragOver ? (
+          <div className="mx-2 mb-2 rounded border border-dashed border-blue-500/60 bg-blue-500/10 px-2 py-1 text-[11px] text-blue-300">
+            Solte ZIP/arquivos aqui para importar
+          </div>
+        ) : null}
         {tree.map((node) => (
           <TreeItem
             key={node.id}

@@ -24,6 +24,8 @@ import type { BrowserTypeScriptCompiler } from '@/compiler';
 import { PluginRegistry } from '@/plugins/registry';
 import { t } from '@/lib/i18n';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const Editor = dynamic(() => import('@/editor/Editor'), { ssr: false });
 
@@ -92,6 +94,7 @@ export default function Playground() {
   const editorPanelRef = useRef<PanelImperativeHandle>(null);
   const previewPanelRef = useRef<PanelImperativeHandle>(null);
   const bottomPanelRef = useRef<PanelImperativeHandle>(null);
+  const detachedEditorWindowRef = useRef<Window | null>(null);
 
   const isMobilePortrait = useMobilePortrait();
 
@@ -288,6 +291,74 @@ export default function Playground() {
     previewRef.current?.evaluate(code, runtime);
   }, []);
 
+  const syncDetachedEditor = useCallback(() => {
+    const detached = detachedEditorWindowRef.current;
+    if (!detached || detached.closed || !activeFile) return;
+    detached.postMessage({
+      type: 'RODSANDBOX_EDITOR_SYNC',
+      payload: {
+        fileId: activeFile.id,
+        fileName: activeFile.name,
+        path: activeFile.path,
+        content: activeFile.content,
+      },
+    }, '*');
+  }, [activeFile]);
+
+  const handleOpenEditorDetached = useCallback(() => {
+    if (detachedEditorWindowRef.current && !detachedEditorWindowRef.current.closed) {
+      detachedEditorWindowRef.current.focus();
+      syncDetachedEditor();
+      return;
+    }
+    const popup = window.open('', '_blank', 'popup=yes,width=980,height=780');
+    if (!popup) return;
+    detachedEditorWindowRef.current = popup;
+    popup.document.open();
+    popup.document.write(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>RodSandbox Detached Editor</title>
+<style>
+  html,body{margin:0;height:100%;background:#020617;color:#e2e8f0;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+  .root{display:flex;flex-direction:column;height:100%}
+  .top{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #1e293b;background:#0b1220}
+  .name{font-size:12px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .badge{font-size:10px;border:1px solid #334155;border-radius:999px;padding:2px 6px;color:#94a3b8}
+  textarea{flex:1;width:100%;border:0;resize:none;outline:none;background:#020617;color:#e2e8f0;padding:12px;font-size:14px;line-height:1.5;tab-size:2}
+</style></head><body>
+<div class="root"><div class="top"><span class="badge">detached editor</span><span id="file-name" class="name">Sem arquivo ativo</span></div><textarea id="code" spellcheck="false" placeholder="Selecione um arquivo no editor principal..."></textarea></div>
+<script>
+(() => {
+  let fileId = null;
+  const input = document.getElementById('code');
+  const name = document.getElementById('file-name');
+  window.addEventListener('message', (event) => {
+    if (!event.data || event.data.type !== 'RODSANDBOX_EDITOR_SYNC') return;
+    const payload = event.data.payload || {};
+    fileId = payload.fileId ?? null;
+    name.textContent = payload.path || payload.fileName || 'Sem arquivo ativo';
+    if (typeof payload.content === 'string' && document.activeElement !== input) {
+      input.value = payload.content;
+    }
+  });
+  input.addEventListener('input', () => {
+    if (!fileId) return;
+    window.opener?.postMessage({ type: 'RODSANDBOX_DETACHED_EDITOR_CHANGE', payload: { fileId, content: input.value } }, '*');
+  });
+  input.addEventListener('keydown', (event) => {
+    const mod = event.metaKey || event.ctrlKey;
+    if (mod && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      window.opener?.postMessage({ type: 'RODSANDBOX_DETACHED_EDITOR_SAVE' }, '*');
+    }
+  });
+})();
+</script></body></html>`);
+    popup.document.close();
+    syncDetachedEditor();
+  }, [syncDetachedEditor]);
+
   useEffect(() => {
     if (!settings.autoRun) return;
     if (autoRunTimer.current) clearTimeout(autoRunTimer.current);
@@ -322,6 +393,35 @@ export default function Playground() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [handleRun]);
 
+  useEffect(() => {
+    syncDetachedEditor();
+  }, [syncDetachedEditor]);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; payload?: { fileId?: string; content?: string } };
+      if (data?.type === 'RODSANDBOX_DETACHED_EDITOR_CHANGE') {
+        const fileId = data.payload?.fileId;
+        const content = data.payload?.content;
+        if (!fileId || typeof content !== 'string') return;
+        updateFile(fileId, content);
+      }
+      if (data?.type === 'RODSANDBOX_DETACHED_EDITOR_SAVE') {
+        void handleSave();
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [handleSave, updateFile]);
+
+  useEffect(() => {
+    return () => {
+      if (detachedEditorWindowRef.current && !detachedEditorWindowRef.current.closed) {
+        detachedEditorWindowRef.current.close();
+      }
+    };
+  }, []);
+
   const fileNames = useMemo(
     () => Object.fromEntries(Object.values(workspace.files).map((file) => [file.id, file.name])),
     [workspace.files],
@@ -338,6 +438,7 @@ export default function Playground() {
       { id: 'typecheck', label: 'Typecheck', action: handleTypecheck },
       { id: 'download', label: t('toolbar.download'), action: handleDownload },
       { id: 'export', label: t('toolbar.export'), action: handleExportZip },
+      { id: 'editor-detached', label: 'Open editor detached', action: handleOpenEditorDetached },
       { id: 'preview-detached', label: 'Open preview in new window', action: () => previewRef.current?.openDetached() },
     ];
     const pluginCommands: CommandPaletteCommand[] = pluginEditorCommands.map((command) => ({
@@ -346,7 +447,7 @@ export default function Playground() {
       action: command.action,
     }));
     return [...baseCommands, ...pluginCommands];
-  }, [handleDownload, handleExportZip, handleFormat, handleRun, handleSave, handleTypecheck, pluginEditorCommands, updateSettings]);
+  }, [handleDownload, handleExportZip, handleFormat, handleOpenEditorDetached, handleRun, handleSave, handleTypecheck, pluginEditorCommands, updateSettings]);
 
   const isPanelCollapsed = useCallback((panelId: string) => settings.collapsedPanels.includes(panelId), [settings.collapsedPanels]);
 
@@ -361,6 +462,27 @@ export default function Playground() {
         : [...prev.collapsedPanels, panelId],
     }));
   }, [settings.collapsedPanels, updateSettings]);
+
+  useEffect(() => {
+    const map: Record<string, React.RefObject<PanelImperativeHandle | null>> = isMobilePortrait
+      ? {
+        'm-files': filesPanelRef,
+        'm-editor': editorPanelRef,
+        'm-preview': previewPanelRef,
+        'm-bottom': bottomPanelRef,
+      }
+      : {
+        'd-files': filesPanelRef,
+        'd-editor': editorPanelRef,
+        'd-preview': previewPanelRef,
+        'd-bottom': bottomPanelRef,
+      };
+    Object.entries(map).forEach(([panelId, panelRef]) => {
+      if (!panelRef.current) return;
+      if (settings.collapsedPanels.includes(panelId)) panelRef.current.collapse();
+      else panelRef.current.expand();
+    });
+  }, [isMobilePortrait, settings.collapsedPanels]);
 
   const renderBottomPanelContent = () => {
     if (settings.bottomTab === 'console') {
@@ -397,6 +519,7 @@ export default function Playground() {
         onExportZip={handleExportZip}
         onTypecheck={handleTypecheck}
         onOpenCommands={() => setIsPaletteOpen(true)}
+        onOpenEditorDetached={handleOpenEditorDetached}
         autoRun={settings.autoRun}
         onToggleAutoRun={() => updateSettings((prev) => ({ ...prev, autoRun: !prev.autoRun }))}
         isFormatting={isFormatting}
@@ -420,6 +543,7 @@ export default function Playground() {
         onEditorFontSizeChange={(editorFontSize) => updateSettings((prev) => ({ ...prev, editorFontSize }))}
         editorTabSize={settings.editorTabSize}
         onEditorTabSizeChange={(editorTabSize) => updateSettings((prev) => ({ ...prev, editorTabSize }))}
+        diagnosticsCount={errorCount}
       />
 
       {isMobilePortrait ? (
@@ -450,9 +574,9 @@ export default function Playground() {
             <div className="flex h-full flex-col border-b border-gray-800">
               <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
                 <span>Files</span>
-                <button type="button" onClick={() => togglePanelCollapse('m-files', filesPanelRef)} className="rounded p-0.5 hover:bg-gray-700">
+                <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-files', filesPanelRef)} className="h-6 w-6">
                   {isPanelCollapsed('m-files') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </button>
+                </Button>
               </div>
               <FileTree
                 workspace={workspace}
@@ -475,9 +599,9 @@ export default function Playground() {
             <div className="flex h-full flex-col overflow-hidden bg-gray-950">
               <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
                 <span>Editor</span>
-                <button type="button" onClick={() => togglePanelCollapse('m-editor', editorPanelRef)} className="rounded p-0.5 hover:bg-gray-700">
+                <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-editor', editorPanelRef)} className="h-6 w-6">
                   {isPanelCollapsed('m-editor') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </button>
+                </Button>
               </div>
               {activeFile ? (
                 <Editor
@@ -513,15 +637,17 @@ export default function Playground() {
           <ResizeGrip />
           <Panel id="m-bottom" defaultSize={settings.layoutSizes.mobileBottom} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
             <div className="flex h-full flex-col overflow-hidden border-t border-gray-800">
-              <div className="flex flex-shrink-0 items-center border-b border-gray-800 bg-gray-900">
-                <button onClick={() => updateSettings((prev) => ({ ...prev, bottomTab: 'console' }))} className={`border-b-2 px-4 py-1.5 text-xs font-medium ${settings.bottomTab === 'console' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{t('tabs.console')}</button>
-                <button onClick={() => updateSettings((prev) => ({ ...prev, bottomTab: 'diagnostics' }))} className={`border-b-2 px-4 py-1.5 text-xs font-medium ${settings.bottomTab === 'diagnostics' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{t('tabs.diagnostics')} {errorCount > 0 ? <span className="text-red-400">{errorCount}</span> : null} {warnCount > 0 ? <span className="text-yellow-400">{warnCount}</span> : null}</button>
-                {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? (
-                  <button onClick={() => updateSettings((prev) => ({ ...prev, bottomTab: 'repl' }))} className={`border-b-2 px-4 py-1.5 text-xs font-medium ${settings.bottomTab === 'repl' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{t('tabs.repl')}</button>
-                ) : null}
-                <button type="button" onClick={() => togglePanelCollapse('m-bottom', bottomPanelRef)} className="ml-auto mr-2 rounded p-1 text-gray-500 hover:bg-gray-700 hover:text-gray-200">
+              <div className="flex flex-shrink-0 items-center border-b border-gray-800 bg-gray-900 px-1 py-1">
+                <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
+                  <TabsList className="bg-transparent p-0">
+                    <TabsTrigger value="console">{t('tabs.console')}</TabsTrigger>
+                    <TabsTrigger value="diagnostics">{t('tabs.diagnostics')} {errorCount > 0 ? <span className="ml-1 text-red-400">{errorCount}</span> : null} {warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
+                    {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger> : null}
+                  </TabsList>
+                </Tabs>
+                <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-bottom', bottomPanelRef)} className="ml-auto mr-1">
                   {isPanelCollapsed('m-bottom') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </button>
+                </Button>
               </div>
               <div className="flex-1 overflow-hidden">{renderBottomPanelContent()}</div>
             </div>
@@ -569,9 +695,9 @@ export default function Playground() {
                 <div className="flex h-full flex-col">
                   <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
                     <span>Files</span>
-                    <button type="button" onClick={() => togglePanelCollapse('d-files', filesPanelRef)} className="rounded p-0.5 hover:bg-gray-700">
+                    <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-files', filesPanelRef)} className="h-6 w-6">
                       {isPanelCollapsed('d-files') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                    </button>
+                    </Button>
                   </div>
                   <FileTree
                     workspace={workspace}
@@ -594,9 +720,9 @@ export default function Playground() {
                 <div className="flex h-full flex-col overflow-hidden bg-gray-950">
                   <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
                     <span>Editor</span>
-                    <button type="button" onClick={() => togglePanelCollapse('d-editor', editorPanelRef)} className="rounded p-0.5 hover:bg-gray-700">
+                    <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-editor', editorPanelRef)} className="h-6 w-6">
                       {isPanelCollapsed('d-editor') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                    </button>
+                    </Button>
                   </div>
                   {activeFile ? (
                     <Editor
@@ -625,9 +751,9 @@ export default function Playground() {
                 <div className="flex h-full flex-col overflow-hidden">
                   <div className="flex items-center justify-between border-b border-gray-800 bg-gray-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-gray-400">
                     <span>Preview</span>
-                    <button type="button" onClick={() => togglePanelCollapse('d-preview', previewPanelRef)} className="rounded p-0.5 hover:bg-gray-700">
+                    <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-preview', previewPanelRef)} className="h-6 w-6">
                       {isPanelCollapsed('d-preview') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                    </button>
+                    </Button>
                   </div>
                   <PreviewPanel
                     ref={previewRef}
@@ -642,15 +768,17 @@ export default function Playground() {
           <ResizeGrip />
           <Panel id="d-bottom" defaultSize={settings.layoutSizes.bottomPanelHeight} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
             <div className="flex h-full flex-col overflow-hidden border-t border-gray-800">
-              <div className="flex flex-shrink-0 items-center border-b border-gray-800 bg-gray-900">
-                <button onClick={() => updateSettings((prev) => ({ ...prev, bottomTab: 'console' }))} className={`border-b-2 px-4 py-1.5 text-xs font-medium ${settings.bottomTab === 'console' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-gray-600">{logs.length}</span> : null}</button>
-                <button onClick={() => updateSettings((prev) => ({ ...prev, bottomTab: 'diagnostics' }))} className={`border-b-2 px-4 py-1.5 text-xs font-medium ${settings.bottomTab === 'diagnostics' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</button>
-                {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? (
-                  <button onClick={() => updateSettings((prev) => ({ ...prev, bottomTab: 'repl' }))} className={`border-b-2 px-4 py-1.5 text-xs font-medium ${settings.bottomTab === 'repl' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{t('tabs.repl')}</button>
-                ) : null}
-                <button type="button" onClick={() => togglePanelCollapse('d-bottom', bottomPanelRef)} className="ml-auto mr-2 rounded p-1 text-gray-500 hover:bg-gray-700 hover:text-gray-200">
+              <div className="flex flex-shrink-0 items-center border-b border-gray-800 bg-gray-900 px-1 py-1">
+                <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
+                  <TabsList className="bg-transparent p-0">
+                    <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-gray-500">{logs.length}</span> : null}</TabsTrigger>
+                    <TabsTrigger value="diagnostics">{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
+                    {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger> : null}
+                  </TabsList>
+                </Tabs>
+                <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-bottom', bottomPanelRef)} className="ml-auto mr-1">
                   {isPanelCollapsed('d-bottom') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </button>
+                </Button>
               </div>
               <div className="flex-1 overflow-hidden">{renderBottomPanelContent()}</div>
             </div>
