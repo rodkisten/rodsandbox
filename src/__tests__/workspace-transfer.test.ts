@@ -15,4 +15,14 @@ describe('workspaceTransfer', () => {
   it('rejects invalid payloads', () => {
     expect(() => importWorkspaceJson('{"version":2}')).toThrow();
   });
+
+  it('normalizes invalid languages from imported payloads', () => {
+    const restored = importWorkspaceJson(JSON.stringify({
+      version: 1,
+      name: 'demo',
+      files: [{ path: 'src/main.tsx', language: 'not-real', content: 'export const a = 1;' }],
+    }));
+
+    expect(restored.files[0]?.language).toBe('typescript');
+  });
 });

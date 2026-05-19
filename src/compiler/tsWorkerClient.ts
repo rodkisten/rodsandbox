@@ -2,6 +2,10 @@ import type { Diagnostic } from '@/types';
 import type { TsMessage } from '@/workers/messages';
 import type { TsCompletionItem, TsDefinitionLocation, TsQuickInfo } from '@/types/tsLanguage';
 
+const WORKER_REQUEST_TIMEOUT_MS = 20_000;
+type TsRequestMessage = Extract<TsMessage, { type: 'TS_DIAGNOSTICS' | 'TS_COMPLETIONS' | 'TS_QUICK_INFO' | 'TS_DEFINITION' }>;
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
 export class TypeScriptWorkerClient {
   private worker: Worker | null = null;
   private requestId = 0;
@@ -11,69 +15,91 @@ export class TypeScriptWorkerClient {
     return this.worker;
   }
 
-  async getDiagnostics(files: Array<{ path: string; content: string }>): Promise<Diagnostic[]> {
+  private resetWorker(): void {
+    this.worker?.terminate();
+    this.worker = null;
+  }
+
+  private requestWithFallback<Result>(
+    payload: DistributiveOmit<TsRequestMessage, 'requestId'>,
+    matchAndExtract: (message: TsMessage, requestId: number) => { matched: true; value: Result } | { matched: false },
+    fallback: Result,
+  ): Promise<Result> {
     const worker = this.getWorker();
     const requestId = ++this.requestId;
+
     return new Promise((resolve) => {
-      const onMessage = (event: MessageEvent<TsMessage>) => {
-        const msg = event.data;
-        if (msg.type !== 'TS_DIAGNOSTICS_RESULT' || msg.requestId !== requestId) return;
+      let isSettled = false;
+      const settle = (value: Result, shouldResetWorker = false) => {
+        if (isSettled) return;
+        isSettled = true;
+        clearTimeout(timeout);
         worker.removeEventListener('message', onMessage);
-        resolve(msg.diagnostics);
+        worker.removeEventListener('error', onError);
+        worker.removeEventListener('messageerror', onMessageError);
+        if (shouldResetWorker) this.resetWorker();
+        resolve(value);
       };
+
+      const onMessage = (event: MessageEvent<TsMessage>) => {
+        const extracted = matchAndExtract(event.data, requestId);
+        if (!extracted.matched) return;
+        settle(extracted.value);
+      };
+
+      const onError = () => settle(fallback, true);
+      const onMessageError = () => settle(fallback, true);
+      const timeout = setTimeout(() => settle(fallback, true), WORKER_REQUEST_TIMEOUT_MS);
+
       worker.addEventListener('message', onMessage);
-      worker.postMessage({ type: 'TS_DIAGNOSTICS', requestId, files });
+      worker.addEventListener('error', onError);
+      worker.addEventListener('messageerror', onMessageError);
+      worker.postMessage({ ...payload, requestId });
     });
+  }
+
+  async getDiagnostics(files: Array<{ path: string; content: string }>): Promise<Diagnostic[]> {
+    return this.requestWithFallback<Diagnostic[]>(
+      { type: 'TS_DIAGNOSTICS', files },
+      (msg, requestId) => (msg.type === 'TS_DIAGNOSTICS_RESULT' && msg.requestId === requestId
+        ? { matched: true, value: msg.diagnostics ?? [] as Diagnostic[] }
+        : { matched: false }),
+      [],
+    );
   }
 
   async getCompletions(files: Array<{ path: string; content: string }>, path: string, position: number): Promise<TsCompletionItem[]> {
-    const worker = this.getWorker();
-    const requestId = ++this.requestId;
-    return new Promise((resolve) => {
-      const onMessage = (event: MessageEvent<TsMessage>) => {
-        const msg = event.data;
-        if (msg.type !== 'TS_COMPLETIONS_RESULT' || msg.requestId !== requestId) return;
-        worker.removeEventListener('message', onMessage);
-        resolve(msg.items);
-      };
-      worker.addEventListener('message', onMessage);
-      worker.postMessage({ type: 'TS_COMPLETIONS', requestId, files, path, position });
-    });
+    return this.requestWithFallback<TsCompletionItem[]>(
+      { type: 'TS_COMPLETIONS', files, path, position },
+      (msg, requestId) => (msg.type === 'TS_COMPLETIONS_RESULT' && msg.requestId === requestId
+        ? { matched: true, value: msg.items ?? [] as TsCompletionItem[] }
+        : { matched: false }),
+      [],
+    );
   }
 
   async getQuickInfo(files: Array<{ path: string; content: string }>, path: string, position: number): Promise<TsQuickInfo | null> {
-    const worker = this.getWorker();
-    const requestId = ++this.requestId;
-    return new Promise((resolve) => {
-      const onMessage = (event: MessageEvent<TsMessage>) => {
-        const msg = event.data;
-        if (msg.type !== 'TS_QUICK_INFO_RESULT' || msg.requestId !== requestId) return;
-        worker.removeEventListener('message', onMessage);
-        resolve(msg.info);
-      };
-      worker.addEventListener('message', onMessage);
-      worker.postMessage({ type: 'TS_QUICK_INFO', requestId, files, path, position });
-    });
+    return this.requestWithFallback<TsQuickInfo | null>(
+      { type: 'TS_QUICK_INFO', files, path, position },
+      (msg, requestId) => (msg.type === 'TS_QUICK_INFO_RESULT' && msg.requestId === requestId
+        ? { matched: true, value: msg.info ?? null }
+        : { matched: false }),
+      null,
+    );
   }
 
 
   async getDefinition(files: Array<{ path: string; content: string }>, path: string, position: number): Promise<TsDefinitionLocation | null> {
-    const worker = this.getWorker();
-    const requestId = ++this.requestId;
-    return new Promise((resolve) => {
-      const onMessage = (event: MessageEvent<TsMessage>) => {
-        const msg = event.data;
-        if (msg.type !== 'TS_DEFINITION_RESULT' || msg.requestId !== requestId) return;
-        worker.removeEventListener('message', onMessage);
-        resolve(msg.location);
-      };
-      worker.addEventListener('message', onMessage);
-      worker.postMessage({ type: 'TS_DEFINITION', requestId, files, path, position });
-    });
+    return this.requestWithFallback<TsDefinitionLocation | null>(
+      { type: 'TS_DEFINITION', files, path, position },
+      (msg, requestId) => (msg.type === 'TS_DEFINITION_RESULT' && msg.requestId === requestId
+        ? { matched: true, value: msg.location ?? null }
+        : { matched: false }),
+      null,
+    );
   }
 
   terminate(): void {
-    this.worker?.terminate();
-    this.worker = null;
+    this.resetWorker();
   }
 }

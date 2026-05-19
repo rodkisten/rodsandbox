@@ -32,15 +32,27 @@ export function resolveVirtualImportPath(importer: string, specifier: string): s
 /**
  * Infer esbuild loader from a file path.
  */
-export function inferVirtualLoader(path: string): 'ts' | 'js' | 'css' | 'text' | 'json' {
+export function inferVirtualLoader(path: string): 'ts' | 'tsx' | 'js' | 'jsx' | 'css' | 'text' | 'json' {
   if (path.endsWith('.css')) return 'css';
   if (path.endsWith('.json')) return 'json';
   if (path.endsWith('.txt') || path.endsWith('.md') || path.endsWith('.html')) return 'text';
-  if (path.endsWith('.js') || path.endsWith('.mjs') || path.endsWith('.jsx')) return 'js';
+  if (path.endsWith('.jsx')) return 'jsx';
+  if (path.endsWith('.tsx')) return 'tsx';
+  if (path.endsWith('.js') || path.endsWith('.mjs') || path.endsWith('.cjs')) return 'js';
   return 'ts';
 }
 
 export function resolveWithKnownExtensions(candidate: string, hasFile: (path: string) => boolean): string | null {
-  const probe = [candidate, `${candidate}.ts`, `${candidate}.js`, `${candidate}.css`, `${candidate}.json`];
+  const probe = [
+    candidate,
+    `${candidate}.ts`,
+    `${candidate}.tsx`,
+    `${candidate}.js`,
+    `${candidate}.jsx`,
+    `${candidate}.mjs`,
+    `${candidate}.cjs`,
+    `${candidate}.css`,
+    `${candidate}.json`,
+  ];
   return probe.find((path) => hasFile(path)) ?? null;
 }

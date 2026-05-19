@@ -23,7 +23,7 @@ import { exportWorkspaceJson, importWorkspaceJson } from '@/lib/workspaceTransfe
 import { createWorkspaceSnapshot, deleteWorkspaceSnapshot, diffSnapshotAgainstWorkspace, getWorkspaceSnapshot, listWorkspaceSnapshots } from '@/lib/snapshots';
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
 import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constants';
-import { listFiles } from '@/filesystem/virtualFs';
+import { inferLanguageFromPath, listFiles } from '@/filesystem/virtualFs';
 import { WORKSPACE_TEMPLATES, getTemplateById } from '@/filesystem/templates';
 import { TypeScriptWorkerClient } from '@/compiler/tsWorkerClient';
 import { FormatterWorkerClient } from '@/formatter/formatterWorkerClient';
@@ -140,8 +140,9 @@ export default function Playground() {
 
     const enabled = new Set(settings.enabledPlugins);
     for (const registered of pluginRegistryRef.current.listPlugins()) {
-      if (enabled.size === 0 || enabled.has(registered.plugin.id)) pluginRegistryRef.current.enable(registered.plugin.id);
-      else pluginRegistryRef.current.disable(registered.plugin.id);
+      const pluginId = registered.plugin.id;
+      if (enabled.size === 0 || enabled.has(pluginId)) pluginRegistryRef.current.enable(pluginId);
+      else pluginRegistryRef.current.disable(pluginId);
     }
 
     pluginRegistryRef.current.initializeAll({
@@ -203,17 +204,19 @@ export default function Playground() {
   const compileWorkspace = useCallback(async (): Promise<{ files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string; dependencies: string[] }> => {
     const files = listFiles(workspace);
     const fileIdByPath = new Map(files.map((file) => [file.path, file.id]));
-    const hasRunnableSource = files.some((file) => file.language === 'typescript' || file.language === 'javascript');
+    let hasRunnableSource = false;
+    const tsFiles: Array<{ path: string; content: string }> = [];
+    for (const file of files) {
+      if (file.language !== 'typescript' && file.language !== 'javascript') continue;
+      hasRunnableSource = true;
+      tsFiles.push({ path: file.path, content: file.content });
+    }
 
     if (!hasRunnableSource || !FEATURE_FLAGS.ENABLE_TYPESCRIPT_COMPILER) {
       setDiagnostics([]);
       setDependencies([]);
       return { files: {}, diagnosticsCount: 0, bundledCode: '', bundledCssText: '', dependencies: [] };
     }
-
-    const tsFiles = files
-      .filter((file) => file.language === 'typescript' || file.language === 'javascript')
-      .map((file) => ({ path: file.path, content: file.content }));
 
     for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
       tsFiles.push({ path, content });
@@ -223,8 +226,21 @@ export default function Playground() {
     tsWorkerRef.current = tsWorker;
     const tsDiagnostics = await tsWorker.getDiagnostics(tsFiles);
 
-    const runtimeFiles = files.map((file) => ({ path: file.path, content: file.content, language: file.language }));
-    const entryFile = files.find((file) => file.path === 'main.ts' || file.path === 'main.js' || file.name === 'main.ts' || file.name === 'main.js')?.path ?? tsFiles[0]?.path ?? 'main.ts';
+    const runtimeFilesByPath = new Map(files.map((file) => [file.path, { path: file.path, content: file.content, language: file.language }]));
+    for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
+      runtimeFilesByPath.set(path, { path, content, language: inferLanguageFromPath(path) });
+    }
+    const runtimeFiles = Array.from(runtimeFilesByPath.values());
+    const entryFile = files.find((file) => (
+      file.path === 'main.ts'
+      || file.path === 'main.tsx'
+      || file.path === 'main.js'
+      || file.path === 'main.jsx'
+      || file.name === 'main.ts'
+      || file.name === 'main.tsx'
+      || file.name === 'main.js'
+      || file.name === 'main.jsx'
+    ))?.path ?? tsFiles[0]?.path ?? 'main.ts';
     const bundler = bundlerRef.current ?? new EsbuildBundlerService();
     bundlerRef.current = bundler;
     const bundleResult = await bundler.build(runtimeFiles, entryFile);
@@ -253,9 +269,11 @@ export default function Playground() {
     if (!activeFile) return;
     if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return;
 
-    const files = listFiles(workspace)
-      .filter((file) => file.language === 'typescript' || file.language === 'javascript')
-      .map((file) => ({ path: file.path, content: file.content }));
+    const files: Array<{ path: string; content: string }> = [];
+    for (const file of listFiles(workspace)) {
+      if (file.language !== 'typescript' && file.language !== 'javascript') continue;
+      files.push({ path: file.path, content: file.content });
+    }
 
     for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
       files.push({ path, content });
@@ -764,12 +782,14 @@ export default function Playground() {
       if (word.from === word.to && !context.explicit) return null;
 
       const docText = context.state.doc.toString();
-      const files = listFiles(workspace)
-        .filter((file) => file.language === 'typescript' || file.language === 'javascript')
-        .map((file) => ({
+      const files: Array<{ path: string; content: string }> = [];
+      for (const file of listFiles(workspace)) {
+        if (file.language !== 'typescript' && file.language !== 'javascript') continue;
+        files.push({
           path: file.path,
           content: file.id === activeFile.id ? docText : file.content,
-        }));
+        });
+      }
 
       for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
         files.push({ path, content });
@@ -797,12 +817,14 @@ export default function Playground() {
     if (!activeFile) return null;
     if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return null;
 
-    const files = listFiles(workspace)
-      .filter((file) => file.language === 'typescript' || file.language === 'javascript')
-      .map((file) => ({
+    const files: Array<{ path: string; content: string }> = [];
+    for (const file of listFiles(workspace)) {
+      if (file.language !== 'typescript' && file.language !== 'javascript') continue;
+      files.push({
         path: file.path,
         content: file.id === activeFile.id ? activeFile.content : file.content,
-      }));
+      });
+    }
 
     for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
       files.push({ path, content });

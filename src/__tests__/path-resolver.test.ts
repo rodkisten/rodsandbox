@@ -19,15 +19,17 @@ describe('pathResolver', () => {
 
   it('infers loaders by extension', () => {
     expect(inferVirtualLoader('main.ts')).toBe('ts');
-    expect(inferVirtualLoader('main.jsx')).toBe('js');
+    expect(inferVirtualLoader('main.tsx')).toBe('tsx');
+    expect(inferVirtualLoader('main.jsx')).toBe('jsx');
     expect(inferVirtualLoader('styles.css')).toBe('css');
     expect(inferVirtualLoader('data.json')).toBe('json');
     expect(inferVirtualLoader('index.html')).toBe('text');
   });
 
   it('resolves known extensions', () => {
-    const set = new Set(['src/main.ts', 'src/styles.css']);
-    expect(resolveWithKnownExtensions('src/main', (path) => set.has(path))).toBe('src/main.ts');
+    const set = new Set(['src/main.tsx', 'src/component.jsx', 'src/styles.css']);
+    expect(resolveWithKnownExtensions('src/main', (path) => set.has(path))).toBe('src/main.tsx');
+    expect(resolveWithKnownExtensions('src/component', (path) => set.has(path))).toBe('src/component.jsx');
     expect(resolveWithKnownExtensions('src/styles', (path) => set.has(path))).toBe('src/styles.css');
     expect(resolveWithKnownExtensions('src/missing', (path) => set.has(path))).toBeNull();
   });
