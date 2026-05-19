@@ -19,6 +19,7 @@ import { buildPreviewHtml } from '@/preview/builder';
 import { downloadFile } from '@/lib/download';
 import { exportWorkspaceAsZip } from '@/lib/archive';
 import { exportWorkspaceJson, importWorkspaceJson } from '@/lib/workspaceTransfer';
+import { createWorkspaceSnapshot, deleteWorkspaceSnapshot, diffSnapshotAgainstWorkspace, getWorkspaceSnapshot, listWorkspaceSnapshots } from '@/lib/snapshots';
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
 import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constants';
 import { listFiles } from '@/filesystem/virtualFs';
@@ -507,11 +508,43 @@ export default function Playground() {
   const warnCount = diagnostics.filter((diag) => diag.severity === 'warning').length;
 
 
+
+
+  const handleSaveSnapshot = useCallback(() => {
+    const proposed = window.prompt('Snapshot name', `Snapshot ${new Date().toLocaleString()}`);
+    if (proposed === null) return;
+    createWorkspaceSnapshot(workspace, proposed);
+  }, [workspace]);
+
+  const handleRestoreSnapshot = useCallback((snapshotId: string) => {
+    const snapshot = getWorkspaceSnapshot(snapshotId);
+    if (!snapshot) return;
+    const changed = diffSnapshotAgainstWorkspace(snapshot, workspace);
+    if (changed.length > 0) {
+      const shouldRestore = window.confirm(`Restore snapshot "${snapshot.name}" and overwrite ${changed.length} changed files?`);
+      if (!shouldRestore) return;
+    }
+    upsertFiles(snapshot.files.map((file) => ({ path: file.path, language: file.language, content: file.content })));
+  }, [upsertFiles, workspace]);
+
+  const handleDeleteSnapshot = useCallback((snapshotId: string) => {
+    const snapshot = getWorkspaceSnapshot(snapshotId);
+    if (!snapshot) return;
+    const shouldDelete = window.confirm(`Delete snapshot "${snapshot.name}"?`);
+    if (!shouldDelete) return;
+    deleteWorkspaceSnapshot(snapshotId);
+  }, []);
+
   const applyTemplate = useCallback((templateId: string) => {
     const template = getTemplateById(templateId as Parameters<typeof getTemplateById>[0]);
     if (!template) return;
     upsertFiles(template.files.map((file) => ({ path: file.path, content: file.content, language: file.language })));
   }, [upsertFiles]);
+
+
+  const snapshotSummaries = useMemo(() => {
+    return listWorkspaceSnapshots(workspace.id).map((snapshot) => ({ id: snapshot.id, name: snapshot.name }));
+  }, [workspace.id]);
 
   const commandPaletteCommands = useMemo<CommandPaletteCommand[]>(() => {
     const baseCommands: CommandPaletteCommand[] = [
@@ -532,13 +565,27 @@ export default function Playground() {
       label: `Template: ${template.name}`,
       action: () => applyTemplate(template.id),
     }));
+    const snapshotCommands: CommandPaletteCommand[] = [
+      { id: 'snapshot-save', label: 'Snapshot: Save current workspace', action: handleSaveSnapshot },
+      ...snapshotSummaries.map((snapshot) => ({
+        id: `snapshot-restore-${snapshot.id}`,
+        label: `Snapshot: Restore ${snapshot.name}`,
+        action: () => handleRestoreSnapshot(snapshot.id),
+      })),
+      ...snapshotSummaries.map((snapshot) => ({
+        id: `snapshot-delete-${snapshot.id}`,
+        label: `Snapshot: Delete ${snapshot.name}`,
+        action: () => handleDeleteSnapshot(snapshot.id),
+      })),
+    ];
+
     const pluginCommands: CommandPaletteCommand[] = pluginEditorCommands.map((command) => ({
       id: `plugin-${command.id}`,
       label: `Plugin: ${command.id}`,
       action: command.action,
     }));
-    return [...baseCommands, ...templateCommands, ...pluginCommands];
-  }, [applyTemplate, handleDownload, handleExportWorkspaceJson, handleExportZip, handleFormat, handleOpenEditorDetached, handleRun, handleSave, handleTypecheck, pluginEditorCommands, updateSettings]);
+    return [...baseCommands, ...templateCommands, ...snapshotCommands, ...pluginCommands];
+  }, [applyTemplate, handleDeleteSnapshot, handleDownload, handleExportWorkspaceJson, handleExportZip, handleFormat, handleOpenEditorDetached, handleRestoreSnapshot, handleRun, handleSave, handleSaveSnapshot, handleTypecheck, pluginEditorCommands, snapshotSummaries, updateSettings]);
 
   const isPanelCollapsed = useCallback((panelId: string) => settings.collapsedPanels.includes(panelId), [settings.collapsedPanels]);
 
