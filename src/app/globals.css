@@ -1,23 +1,80 @@
 @import "tailwindcss";
 
+/* ─── Design tokens ──────────────────────────────────────────────────────────
+   All surfaces, borders, and interactive states are defined as CSS variables
+   so every panel and component stays visually consistent.
+   ─────────────────────────────────────────────────────────────────────────── */
+
 :root {
+  /* Core background / foreground */
   --app-bg: #020617;
   --app-fg: #e2e8f0;
+
+  /* Surface layers (panel backgrounds) */
+  --surface-0: #020617;   /* page background */
+  --surface-1: #0b1120;   /* panel background */
+  --surface-2: #111827;   /* card / toolbar */
+  --surface-3: #1e293b;   /* hover / selected */
+
+  /* Border colors */
+  --border-subtle: rgba(255,255,255,0.06);
+  --border-default: rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.18);
+
+  /* Brand accent */
+  --accent: #38bdf8;
+  --accent-muted: rgba(56,189,248,0.15);
+
+  /* Status colors */
+  --status-error: #f87171;
+  --status-warn: #fbbf24;
+  --status-ok: #34d399;
+  --status-info: #60a5fa;
+
+  /* Safe-area insets (overridden by the browser) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Typography */
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Transitions */
+  --transition-fast: 100ms ease;
+  --transition-base: 180ms ease;
 }
 
 [data-theme="light"] {
   --app-bg: #f8fafc;
   --app-fg: #0f172a;
+  --surface-0: #f8fafc;
+  --surface-1: #f1f5f9;
+  --surface-2: #e2e8f0;
+  --surface-3: #cbd5e1;
+  --border-subtle: rgba(0,0,0,0.05);
+  --border-default: rgba(0,0,0,0.10);
+  --border-strong: rgba(0,0,0,0.18);
 }
 
 [data-theme="oled"] {
   --app-bg: #000000;
   --app-fg: #f5f5f5;
+  --surface-0: #000000;
+  --surface-1: #0a0a0a;
+  --surface-2: #111111;
+  --surface-3: #1a1a1a;
 }
 
 [data-theme="tokyo"] {
   --app-bg: #1a1b26;
   --app-fg: #c0caf5;
+  --surface-0: #1a1b26;
+  --surface-1: #1f2335;
+  --surface-2: #24283b;
+  --surface-3: #292e42;
+  --accent: #7aa2f7;
 }
 
 [data-theme="midnight"] {
@@ -28,47 +85,76 @@
 [data-theme="high-contrast"] {
   --app-bg: #000000;
   --app-fg: #ffffff;
+  --border-default: rgba(255,255,255,0.30);
+  --border-strong: rgba(255,255,255,0.50);
 }
+
+/* ─── Base ───────────────────────────────────────────────────────────────── */
 
 html, body {
   height: 100%;
   overflow: hidden;
   background: var(--app-bg);
   color: var(--app-fg);
-  
-  /** prevent zoom **/
+  font-family: var(--font-sans);
+  /* Prevent pinch-to-zoom from breaking the IDE layout */
   touch-action: pan-x pan-y;
+  /* Smooth text rendering on macOS / iOS */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* ─── Scrollbars ─────────────────────────────────────────────────────────── */
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #374151 #111827;
+  scrollbar-color: #374151 transparent;
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #111827;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #374151;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #4b5563;
 }
 
+/* ─── Mobile input fix ───────────────────────────────────────────────────── */
 
-textarea {
-  font-size: 16px !important; /* Engana o Safari */
-  transform: scale(0.75);     /* Reduz visualmente para ~12px */
-  transform-origin: left center; /* Mantém o alinhamento correto */
+/**
+ * Prevent iOS Safari from zooming into inputs/textareas on focus.
+ * font-size ≥ 16px is the threshold that disables auto-zoom.
+ * The visual size remains controlled by the surrounding layout.
+ */
+input,
+textarea,
+select {
+  font-size: 16px !important;
 }
 
+/* ─── Utilities ──────────────────────────────────────────────────────────── */
 
+/** Full-height container that respects safe-area insets */
+.safe-area-full {
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
 
+/** Translucent glass surface used by panels and overlays */
+.glass {
+  background: rgba(11, 17, 32, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
