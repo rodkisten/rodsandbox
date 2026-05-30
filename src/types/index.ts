@@ -103,7 +103,7 @@ export interface LayoutSizes {
 export type LayoutMode = 'desktop' | 'mobile';
 export type BottomTab = 'console' | 'diagnostics' | 'repl' | 'terminal' | 'git';
 export type ReplRuntimeTarget = 'iframe' | 'detached' | 'auto';
-export type EditorTheme = 'midnight' | 'oled' | 'tokyo' | 'light' | 'high-contrast';
+export type EditorTheme = 'github-dark' | 'github-light' | 'dracula' | 'monokai' | 'nord' | 'solarized-dark' | 'solarized-light' | 'one-dark' | 'tokyo-night' | 'midnight';
 
 export interface AppSettings {
   theme: 'dark' | 'light' | 'oled' | 'tokyo' | 'midnight' | 'high-contrast';
@@ -211,7 +211,7 @@ export interface GitDiff {
 
 // ─── Terminal ─────────────────────────────────────────────────────────────────
 
-export type TerminalRuntimeKind = 'local' | 'vercel-fallback' | 'remote';
+export type TerminalRuntimeKind = 'local' | 'browser' | 'node-pty' | 'vercel-fallback' | 'remote';
 
 /** Describes the capabilities of the current terminal runtime. */
 export interface TerminalRuntimeInfo {

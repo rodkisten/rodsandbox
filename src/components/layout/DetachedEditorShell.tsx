@@ -36,7 +36,7 @@ function makeFile(p: SyncPayload): VirtualFile {
   };
 }
 
-const DEFAULT_THEME: EditorTheme = 'midnight';
+const DEFAULT_THEME: EditorTheme = 'github-dark';
 
 export default function DetachedEditorShell() {
   const [syncPayload, setSyncPayload] = useState<SyncPayload | null>(null);
@@ -88,7 +88,9 @@ export default function DetachedEditorShell() {
   }, []);
 
   const theme = syncPayload?.theme ?? DEFAULT_THEME;
-  const bg = theme === 'light' ? '#f8fafc' : theme === 'oled' ? '#000000' : theme === 'tokyo' ? '#1a1b26' : '#020617';
+  // Determine background colour from theme name for the shell wrapper.
+  const lightThemes = new Set(['github-light', 'solarized-light']);
+  const bg = lightThemes.has(theme) ? '#ffffff' : '#0d1117';
 
   if (!syncPayload) {
     return (
@@ -102,7 +104,7 @@ export default function DetachedEditorShell() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: bg, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderBottom: '1px solid #1e293b', background: theme === 'oled' ? '#0b0b0b' : '#0b1220', flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderBottom: '1px solid #1e293b', background: '#0b1220', flexShrink: 0 }}>
         <span style={{ fontSize: 10, border: '1px solid #334155', borderRadius: 999, padding: '2px 6px', color: '#94a3b8', letterSpacing: '0.05em' }}>
           detached editor
         </span>

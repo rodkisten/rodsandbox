@@ -7,8 +7,8 @@
  * | Kind             | Description                                            |
  * |------------------|--------------------------------------------------------|
  * | `browser`        | Full browser-based shell (BrowserShell) — default      |
+ * | `node-pty`       | Real PTY via /api/terminal (requires Node.js server)   |
  * | `vercel-fallback`| No process execution — shows an informational message  |
- * | `local`          | Reserved for a future Node.js / node-pty API route     |
  *
  * @see {@link TerminalRuntimeInfo} for capability flags.
  */
@@ -65,10 +65,131 @@ export interface TerminalAdapter {
 
 /**
  * Returns the best available terminal adapter for the current environment.
- * Always returns the BrowserShellAdapter which works everywhere.
+ * Tries the node-pty API adapter first; falls back to BrowserShellAdapter.
  */
 export function createTerminalAdapter(workspace?: Workspace): TerminalAdapter {
+  // Prefer node-pty API when running on a Node.js server (not Edge/Vercel).
+  if (typeof window !== 'undefined') {
+    return new NodePtyAdapter(workspace);
+  }
   return new BrowserShellAdapter(workspace);
+}
+
+// ─── Node PTY adapter ─────────────────────────────────────────────────────────
+
+/**
+ * Real PTY adapter backed by the /api/terminal SSE API.
+ * Requires a Node.js server with node-pty installed.
+ * Falls back to BrowserShellAdapter if the API is unavailable.
+ */
+export class NodePtyAdapter implements TerminalAdapter {
+  readonly info: TerminalRuntimeInfo = {
+    kind: 'node-pty' as TerminalRuntimeKind,
+    label: 'Node PTY',
+    supportsExecution: true,
+  };
+
+  private sessionId: string | null = null;
+  private eventSource: EventSource | null = null;
+  private cols = 80;
+  private rows = 24;
+  private handlers: TerminalHandlers | null = null;
+  private fallback: BrowserShellAdapter | null = null;
+  private readonly workspace: Workspace | undefined;
+
+  constructor(workspace?: Workspace) {
+    this.workspace = workspace;
+  }
+
+  async connect(handlers: TerminalHandlers): Promise<void> {
+    this.handlers = handlers;
+
+    try {
+      // Try to create a PTY session on the server.
+      const res = await fetch('/api/terminal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cols: this.cols, rows: this.rows }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const { sessionId } = await res.json() as { sessionId: string };
+      this.sessionId = sessionId;
+
+      // Open an SSE stream to receive PTY output.
+      const es = new EventSource(`/api/terminal?sid=${sessionId}`);
+      this.eventSource = es;
+
+      es.onmessage = (event) => {
+        try {
+          const { data } = JSON.parse(event.data as string) as { data: string };
+          handlers.onData(data);
+        } catch {
+          // Malformed SSE — ignore.
+        }
+      };
+
+      es.onerror = () => {
+        handlers.onError('Terminal connection lost');
+      };
+
+      // Update the info label to reflect the real adapter.
+      (this.info as { label: string }).label = 'Node PTY';
+
+    } catch {
+      // node-pty API not available — fall back to browser shell.
+      (this.info as { kind: string; label: string }).kind = 'browser';
+      (this.info as { label: string }).label = 'Browser Shell';
+      const fb = new BrowserShellAdapter(this.workspace);
+      this.fallback = fb;
+      await fb.connect(handlers);
+    }
+  }
+
+  write(data: string): void {
+    if (this.fallback) {
+      this.fallback.write(data);
+      return;
+    }
+    if (!this.sessionId) return;
+    fetch(`/api/terminal/input?sid=${this.sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    }).catch(() => {
+      // Fire-and-forget; errors are surfaced via onError.
+    });
+  }
+
+  resize(cols: number, rows: number): void {
+    this.cols = cols;
+    this.rows = rows;
+    if (this.fallback) {
+      this.fallback.resize(cols, rows);
+      return;
+    }
+    if (!this.sessionId) return;
+    fetch(`/api/terminal/resize?sid=${this.sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cols, rows }),
+    }).catch(() => {});
+  }
+
+  disconnect(): void {
+    this.eventSource?.close();
+    this.eventSource = null;
+    if (this.fallback) {
+      this.fallback.disconnect();
+      this.fallback = null;
+    }
+    if (this.sessionId) {
+      fetch(`/api/terminal/close?sid=${this.sessionId}`, { method: 'POST' }).catch(() => {});
+      this.sessionId = null;
+    }
+    this.handlers = null;
+  }
 }
 
 // ─── Browser shell adapter ────────────────────────────────────────────────────

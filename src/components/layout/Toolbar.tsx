@@ -190,11 +190,16 @@ export default function Toolbar({
               </DropdownMenuRadioGroup>
               <DropdownMenuLabel className="pb-0 pt-1 text-[10px]">Tema do editor</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={editorTheme} onValueChange={(value) => onEditorThemeChange(value as EditorTheme)}>
+                <DropdownMenuRadioItem value="github-dark">GitHub Dark</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="github-light">GitHub Light</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="dracula">Dracula</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="monokai">Monokai</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="nord">Nord</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="one-dark">One Dark</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="tokyo-night">Tokyo Night</DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="midnight">Midnight</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="oled">OLED</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="tokyo">Tokyo</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="high-contrast">High Contrast</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="solarized-dark">Solarized Dark</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="solarized-light">Solarized Light</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>

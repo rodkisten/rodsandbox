@@ -168,7 +168,7 @@ export class BrowserShell {
    */
   private resolve(path: string): string {
     if (!path || path === '~') return '/';
-    let p = path.startsWith('/') ? path : `${this.cwd}/${path}`;
+    const p = path.startsWith('/') ? path : `${this.cwd}/${path}`;
     // Resolve ..
     const parts: string[] = [];
     for (const seg of p.split('/')) {

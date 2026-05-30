@@ -17,7 +17,7 @@ import { EditorState, Extension } from '@codemirror/state';
 import type { CompletionSource } from '@codemirror/autocomplete';
 import { VirtualFile, Diagnostic, FileLanguage, EditorTheme } from '@/types';
 import { getDiagnosticRange } from './diagnosticRanges';
-import { material, materialInit } from './themes/material';
+import { getEditorTheme, type EditorThemeKey } from './themes';
 
 function getLanguageExtension(language: FileLanguage) {
   switch (language) {
@@ -29,40 +29,6 @@ function getLanguageExtension(language: FileLanguage) {
     case 'markdown': return markdown();
     default: return javascript();
   }
-}
-
-function createEditorTheme(theme: EditorTheme): Extension {
-  const dark = theme !== 'light';
-  const palette = {
-    midnight: { bg: '#020617', fg: '#e2e8f0', gutter: '#0f172a', accent: '#38bdf8' },
-    oled: { bg: '#000000', fg: '#f8fafc', gutter: '#0b0b0b', accent: '#22d3ee' },
-    tokyo: { bg: '#1a1b26', fg: '#c0caf5', gutter: '#16161e', accent: '#7aa2f7' },
-    light: { bg: '#f8fafc', fg: '#0f172a', gutter: '#f1f5f9', accent: '#2563eb' },
-    'high-contrast': { bg: '#000000', fg: '#ffffff', gutter: '#000000', accent: '#ffff00' },
-  } as const;
-  const p = palette[theme];
-  return EditorView.theme({
-    '&': {
-      color: p.fg,
-      backgroundColor: p.bg,
-      height: '100%',
-    },
-    '.cm-content': {
-      caretColor: p.accent,
-    },
-    '.cm-cursor, .cm-dropCursor': { borderLeftColor: p.accent },
-    '.cm-gutters': {
-      backgroundColor: p.gutter,
-      color: dark ? '#94a3b8' : '#64748b',
-      border: 'none',
-    },
-    '.cm-activeLineGutter': {
-      backgroundColor: dark ? '#1e293b' : '#e2e8f0',
-    },
-    '.cm-activeLine': {
-      backgroundColor: dark ? '#0f172a' : '#e2e8f0',
-    },
-  }, { dark });
 }
 
 interface EditorProps {
@@ -131,7 +97,6 @@ export default function Editor({
     },
   }]);
 
-
   const editorViewRef = useRef<EditorView | null>(null);
 
   useEffect(() => {
@@ -145,7 +110,12 @@ export default function Editor({
     view.focus();
   }, [jumpTo]);
 
+  const selectedTheme = getEditorTheme(theme as EditorThemeKey);
+
   const extensions = useMemo(() => {
+    const fontExtension = EditorView.theme({
+      '&': { fontSize: `${fontSize}px`, fontFamily },
+    });
 
     const hoverExtension = hoverProvider
       ? hoverTooltip(async (view, pos) => {
@@ -173,15 +143,12 @@ export default function Editor({
       }, { hoverTime: 250 })
       : null;
 
-        const completion = autocompleteEnabled
+    const completion = autocompleteEnabled
       ? autocompletion(extraAutocompleteProviders.length > 0 ? { override: extraAutocompleteProviders } : undefined)
       : [];
     return [
       getLanguageExtension(file.language),
-      //createEditorTheme(theme),
-      /**EditorView.theme({
-        '&': { fontSize: `${fontSize}px`, fontFamily },
-      }),**/
+      fontExtension,
       EditorState.tabSize.of(Math.max(1, Math.min(8, tabSize))),
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...completionKeymap]),
@@ -202,7 +169,6 @@ export default function Editor({
       ...extraExtensions,
     ] as Extension[];
   }, [
-    material,
     autocompleteEnabled,
     extraAutocompleteProviders,
     file.language,
@@ -212,7 +178,6 @@ export default function Editor({
     linterSource,
     saveKeymap,
     tabSize,
-    theme,
     wordWrap,
     extraExtensions,
     hoverProvider,
@@ -230,12 +195,7 @@ export default function Editor({
         height="auto"
         extensions={extensions}
         onChange={handleChange}
-        theme={materialInit({
-          settings: {
-            caret: '#c6c6c6',
-            fontFamily: 'monospace',
-          }
-        })}
+        theme={selectedTheme}
         basicSetup={{
           lineNumbers,
           highlightActiveLineGutter: lineNumbers,
@@ -246,7 +206,7 @@ export default function Editor({
           dropCursor: true,
           allowMultipleSelections: true,
           indentOnInput: true,
-          syntaxHighlighting: true,
+          syntaxHighlighting: false,
           bracketMatching: true,
           closeBrackets: true,
           autocompletion: false,
@@ -266,3 +226,4 @@ export default function Editor({
     </div>
   );
 }
+

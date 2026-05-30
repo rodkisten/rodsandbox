@@ -1,47 +1,90 @@
 /**
- * Terminal API route — stub for future PTY/shell execution.
- *
- * TODO: Implement a real PTY session using `node-pty`:
- *
- * ```ts
- * import pty from 'node-pty';
- * const term = pty.spawn('bash', [], { name: 'xterm-256color', cols: 80, rows: 24 });
- * ```
+ * Terminal API route — real PTY sessions via node-pty.
  *
  * Architecture:
- * - POST /api/terminal      → start session, return sessionId
- * - GET  /api/terminal      → SSE stream for output (by ?sessionId=)
- * - POST /api/terminal/input → send input to running PTY
- * - POST /api/terminal/resize → resize the PTY
+ * - POST /api/terminal           → create session, returns { sessionId }
+ * - GET  /api/terminal?sid=...   → SSE stream of PTY output
  *
- * NOTE: This route is not compatible with Vercel serverless functions because:
- *  1. Vercel functions time out after 10–30 s — not suitable for long-lived connections.
- *  2. `node-pty` spawns native processes, which Vercel's sandboxed environment does not allow.
- *  3. Persistent state (session map) cannot be shared across function invocations.
- *
- * Deploy on a Node.js server (Railway, Fly.io, self-hosted) to enable this endpoint.
- *
- * @see {@link LocalTerminalAdapter} in `src/services/terminal/adapter.ts`
+ * NOTE: Requires Node.js runtime (not Edge). Works during `next dev` and on
+ * any self-hosted Node.js server (Railway, Fly.io, etc.).
+ * Not compatible with Vercel serverless due to native binaries and long-lived connections.
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { sessions, createSession } from './sessions';
 
-export async function POST() {
-  return NextResponse.json(
-    {
-      error: 'Terminal execution is not yet implemented.',
-      hint: 'TODO: Add node-pty integration. See src/app/api/terminal/route.ts for details.',
-    },
-    { status: 501 },
-  );
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+// POST /api/terminal → create a new PTY session
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const cols = Number(body.cols) || 80;
+    const rows = Number(body.rows) || 24;
+    const sid = createSession(cols, rows);
+    return NextResponse.json({ sessionId: sid });
+  } catch (err) {
+    console.error('[terminal] POST error:', err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
 
-export async function GET() {
-  return NextResponse.json(
-    {
-      error: 'Terminal SSE stream is not yet implemented.',
-      hint: 'TODO: Return a Server-Sent Events stream of PTY output.',
+// GET /api/terminal?sid=... → SSE stream of PTY output
+export async function GET(req: NextRequest) {
+  const sid = req.nextUrl.searchParams.get('sid') ?? '';
+  const session = sessions.get(sid);
+
+  if (!session) {
+    return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+  }
+
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    start(controller) {
+      // Send buffered output that arrived before the client connected.
+      for (const chunk of session.buffer) {
+        const payload = `data: ${JSON.stringify({ data: chunk })}\n\n`;
+        controller.enqueue(encoder.encode(payload));
+      }
+      session.buffer = [];
+
+      // Register live output handler.
+      session.onData = (data: string) => {
+        try {
+          const payload = `data: ${JSON.stringify({ data })}\n\n`;
+          controller.enqueue(encoder.encode(payload));
+        } catch {
+          // Client disconnected — ignore.
+        }
+      };
+
+      // Keep-alive ping every 15 s.
+      const pingInterval = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(': ping\n\n'));
+        } catch {
+          clearInterval(pingInterval);
+        }
+      }, 15_000);
+
+      session.cleanup = () => {
+        clearInterval(pingInterval);
+        try { controller.close(); } catch { /* ignore */ }
+      };
     },
-    { status: 501 },
-  );
+    cancel() {
+      const s = sessions.get(sid);
+      if (s) s.onData = null;
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  });
 }
