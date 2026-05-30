@@ -30,6 +30,9 @@ import {
   Minus,
   Plus,
   RefreshCw,
+  Upload,
+  Download,
+  Link,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -64,6 +67,12 @@ export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
   const [committing, setCommitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const [remoteUrl, setRemoteUrl] = useState('');
+  const [remoteToken, setRemoteToken] = useState('');
+  const [showRemote, setShowRemote] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [pulling, setPulling] = useState(false);
 
   const [diffs, setDiffs] = useState<GitDiff[]>([]);
   const [showDiff, setShowDiff] = useState(false);
@@ -202,6 +211,40 @@ export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
       setError(String(err));
     }
   }, [workspace.id, onFilesChanged, refreshAll]);
+
+  const handlePush = useCallback(async () => {
+    if (!serviceRef.current) return;
+    setPushing(true);
+    setError('');
+    try {
+      if (remoteUrl) await serviceRef.current.addRemote('origin', remoteUrl);
+      await serviceRef.current.push({ token: remoteToken || undefined });
+      setSuccess('Pushed successfully.');
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setPushing(false);
+    }
+  }, [remoteUrl, remoteToken]);
+
+  const handlePull = useCallback(async () => {
+    if (!serviceRef.current) return;
+    setPulling(true);
+    setError('');
+    try {
+      if (remoteUrl) await serviceRef.current.addRemote('origin', remoteUrl);
+      await serviceRef.current.pull({ token: remoteToken || undefined });
+      const { readFsToWorkspace } = await import('@/services/git/gitService');
+      const entries = await readFsToWorkspace(workspace.id);
+      onFilesChanged?.(entries);
+      await refreshAll(serviceRef.current);
+      setSuccess('Pulled successfully.');
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setPulling(false);
+    }
+  }, [remoteUrl, remoteToken, workspace.id, onFilesChanged, refreshAll]);
 
   const handleShowDiff = useCallback(async () => {
     if (!serviceRef.current) return;
@@ -372,6 +415,57 @@ export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
               {committing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitCommitIcon className="h-3.5 w-3.5" />}
               Commit
             </Button>
+          </div>
+
+          {/* Remote section */}
+          <div className="flex-shrink-0 border-t border-neutral-800">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-neutral-500 hover:text-neutral-300"
+              onClick={() => setShowRemote((s) => !s)}
+            >
+              <Link className="h-3.5 w-3.5" />
+              <span>Remote</span>
+              {showRemote ? <ChevronDown className="ml-auto h-3 w-3" /> : <ChevronRight className="ml-auto h-3 w-3" />}
+            </button>
+            {showRemote && (
+              <div className="space-y-2 px-3 pb-3">
+                <input
+                  value={remoteUrl}
+                  onChange={(e) => setRemoteUrl(e.target.value)}
+                  placeholder="Remote URL (e.g. https://github.com/user/repo)"
+                  className="w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-sky-500/60 placeholder-neutral-600"
+                />
+                <input
+                  value={remoteToken}
+                  onChange={(e) => setRemoteToken(e.target.value)}
+                  type="password"
+                  placeholder="Personal Access Token (optional)"
+                  className="w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-sky-500/60 placeholder-neutral-600"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="flex-1 gap-1.5 text-xs"
+                    disabled={pulling}
+                    onClick={() => void handlePull()}
+                  >
+                    {pulling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    Pull
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1 gap-1.5 text-xs"
+                    disabled={pushing}
+                    onClick={() => void handlePush()}
+                  >
+                    {pushing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                    Push
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

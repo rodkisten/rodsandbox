@@ -18,6 +18,7 @@
  */
 
 import git from 'isomorphic-git';
+import http from 'isomorphic-git/http/web';
 import LightningFS from '@isomorphic-git/lightning-fs';
 import {
   GitStatusEntry,
@@ -361,25 +362,43 @@ export class GitService {
    *
    * For now this throws a clear error guiding the user.
    */
-  async push(_options: PushOptions = {}): Promise<void> {
-    // TODO: Implement push via /api/git-proxy when available.
-    throw new Error(
-      'Push is not yet supported in the browser. ' +
-      'TODO: Add a CORS-enabled git proxy at /api/git-proxy or configure a remote runner.',
-    );
+  async push(options: PushOptions = {}): Promise<void> {
+    const remote = options.remote ?? 'origin';
+    const branch = options.branch ?? (await this.currentBranch()) ?? 'main';
+    const onAuth = options.token
+      ? () => ({ username: 'x-access-token', password: options.token! })
+      : undefined;
+    await git.push({
+      fs: this.fs,
+      http,
+      dir: this.dir,
+      remote,
+      remoteRef: branch,
+      corsProxy: 'https://cors.isomorphic-git.org',
+      onAuth,
+    });
   }
 
-  /**
-   * Pulls from the remote and fast-forward merges.
-   *
-   * Same CORS limitation as push applies.
-   */
-  async pull(_options: PullOptions = {}): Promise<void> {
-    // TODO: Implement pull via /api/git-proxy.
-    throw new Error(
-      'Pull is not yet supported in the browser. ' +
-      'TODO: Add a CORS-enabled git proxy at /api/git-proxy.',
-    );
+  async pull(options: PullOptions = {}): Promise<void> {
+    const remote = options.remote ?? 'origin';
+    const branch = options.branch ?? (await this.currentBranch()) ?? 'main';
+    const onAuth = options.token
+      ? () => ({ username: 'x-access-token', password: options.token! })
+      : undefined;
+    await git.pull({
+      fs: this.fs,
+      http,
+      dir: this.dir,
+      remote,
+      remoteRef: branch,
+      corsProxy: 'https://cors.isomorphic-git.org',
+      onAuth,
+      author: {
+        name: options.authorName ?? GIT_DEFAULT_AUTHOR_NAME,
+        email: options.authorEmail ?? GIT_DEFAULT_AUTHOR_EMAIL,
+      },
+      fastForwardOnly: false,
+    });
   }
 
   // ─── Diff ─────────────────────────────────────────────────────────────────
@@ -476,7 +495,7 @@ async function diffFile(
       // File existed in HEAD — read the blob.
       const headCommit = await git.readCommit({ fs, dir, oid: headRef });
       const tree = await git.readTree({ fs, dir, oid: headCommit.commit.tree });
-      const entry = findInTree(tree.tree, filepath);
+      const entry = await findInTree(fs, dir, tree.tree as TreeEntry[], filepath);
       if (entry) {
         const blob = await git.readBlob({ fs, dir, oid: entry.oid });
         oldContent = new TextDecoder().decode(blob.blob);
@@ -504,49 +523,91 @@ interface TreeEntry {
   type: string;
 }
 
-function findInTree(tree: TreeEntry[], filepath: string): TreeEntry | undefined {
+async function findInTree(
+  fs: LightningFS,
+  dir: string,
+  tree: TreeEntry[],
+  filepath: string,
+): Promise<TreeEntry | undefined> {
   const parts = filepath.split('/');
   if (parts.length === 1) {
-    return tree.find((e) => e.path === filepath);
+    return tree.find((e) => e.path === parts[0]);
   }
-  // Nested path — would need recursive tree traversal.
-  // For simplicity we return undefined for nested paths.
-  return undefined;
+  const [head, ...rest] = parts;
+  const subtreeEntry = tree.find((e) => e.path === head && e.type === 'tree');
+  if (!subtreeEntry) return undefined;
+  const subtree = await git.readTree({ fs, dir, oid: subtreeEntry.oid });
+  return findInTree(fs, dir, subtree.tree as TreeEntry[], rest.join('/'));
 }
 
 /**
- * Produces a minimal unified diff between two text contents.
- * Uses a simple line-by-line diff (no LCS — suitable for display only).
+ * Produces a unified diff between two text contents using LCS-based diffing.
  */
 function computeDiffHunks(oldText: string, newText: string): GitDiffHunk[] {
-  const oldLines = oldText.split('\n');
-  const newLines = newText.split('\n');
-  const lines: GitDiffLine[] = [];
+  const oldLines = oldText === '' ? [] : oldText.split('\n');
+  const newLines = newText === '' ? [] : newText.split('\n');
 
-  // Simple diff: mark all old lines as removed, new lines as added.
-  // TODO: Implement Myers diff algorithm for proper unified diff output.
-  const maxLen = Math.max(oldLines.length, newLines.length);
-  for (let i = 0; i < maxLen; i++) {
-    if (i < oldLines.length && i < newLines.length) {
-      if (oldLines[i] !== newLines[i]) {
-        lines.push({ type: 'remove', content: oldLines[i], oldLine: i + 1 });
-        lines.push({ type: 'add', content: newLines[i], newLine: i + 1 });
+  // Build LCS table.
+  const m = oldLines.length;
+  const n = newLines.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      if (oldLines[i] === newLines[j]) {
+        dp[i][j] = 1 + dp[i + 1][j + 1];
       } else {
-        lines.push({ type: 'context', content: oldLines[i], oldLine: i + 1, newLine: i + 1 });
+        dp[i][j] = Math.max(dp[i + 1][j], dp[i][j + 1]);
       }
-    } else if (i < oldLines.length) {
-      lines.push({ type: 'remove', content: oldLines[i], oldLine: i + 1 });
-    } else {
-      lines.push({ type: 'add', content: newLines[i], newLine: i + 1 });
     }
   }
 
-  if (lines.every((l) => l.type === 'context')) return [];
+  // Trace back to produce diff operations.
+  const ops: GitDiffLine[] = [];
+  let i = 0, j = 0;
+  let oldLineNo = 1, newLineNo = 1;
+  while (i < m || j < n) {
+    if (i < m && j < n && oldLines[i] === newLines[j]) {
+      ops.push({ type: 'context', content: oldLines[i], oldLine: oldLineNo++, newLine: newLineNo++ });
+      i++; j++;
+    } else if (j < n && (i >= m || dp[i][j + 1] >= dp[i + 1][j])) {
+      ops.push({ type: 'add', content: newLines[j], newLine: newLineNo++ });
+      j++;
+    } else {
+      ops.push({ type: 'remove', content: oldLines[i], oldLine: oldLineNo++ });
+      i++;
+    }
+  }
 
-  return [
-    {
-      header: `@@ -1,${oldLines.length} +1,${newLines.length} @@`,
-      lines,
-    },
-  ];
+  if (ops.every((l) => l.type === 'context')) return [];
+
+  // Group into hunks with 3-line context.
+  const CONTEXT = 3;
+  const changeIndices = ops
+    .map((op, idx) => (op.type !== 'context' ? idx : -1))
+    .filter((idx) => idx !== -1);
+
+  if (changeIndices.length === 0) return [];
+
+  const hunks: GitDiffHunk[] = [];
+  let idx = 0;
+  while (idx < changeIndices.length) {
+    const start = Math.max(0, changeIndices[idx] - CONTEXT);
+    let end = changeIndices[idx] + CONTEXT;
+    while (idx + 1 < changeIndices.length && changeIndices[idx + 1] <= end + CONTEXT) {
+      idx++;
+      end = changeIndices[idx] + CONTEXT;
+    }
+    end = Math.min(ops.length - 1, end);
+    const hunkLines = ops.slice(start, end + 1);
+    const oldStart = hunkLines.find((l) => l.oldLine !== undefined)?.oldLine ?? 1;
+    const newStart = hunkLines.find((l) => l.newLine !== undefined)?.newLine ?? 1;
+    const oldCount = hunkLines.filter((l) => l.type !== 'add').length;
+    const newCount = hunkLines.filter((l) => l.type !== 'remove').length;
+    hunks.push({
+      header: `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`,
+      lines: hunkLines,
+    });
+    idx++;
+  }
+  return hunks;
 }

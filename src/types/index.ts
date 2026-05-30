@@ -131,6 +131,7 @@ export interface AppSettings {
   liveTypecheck: boolean;
   collapsedPanels: string[];
   enabledPlugins: string[];
+  sidebarView: 'files' | 'git';
 }
 
 export interface TreeNode {

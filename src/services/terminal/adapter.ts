@@ -4,16 +4,17 @@
  * All terminal interactions (resize, write, output) go through this abstraction
  * so the UI component stays runtime-agnostic. Three adapter kinds exist:
  *
- * | Kind             | Description                                           |
- * |------------------|-------------------------------------------------------|
- * | `vercel-fallback`| No process execution — shows an informational message |
- * | `local`          | Talks to a Node.js API route (`/api/terminal`)        |
- * | `remote`         | TODO: Connect to a dedicated remote runner service    |
+ * | Kind             | Description                                            |
+ * |------------------|--------------------------------------------------------|
+ * | `browser`        | Full browser-based shell (BrowserShell) — default      |
+ * | `vercel-fallback`| No process execution — shows an informational message  |
+ * | `local`          | Reserved for a future Node.js / node-pty API route     |
  *
  * @see {@link TerminalRuntimeInfo} for capability flags.
  */
 
-import { TerminalRuntimeInfo, TerminalRuntimeKind } from '@/types';
+import { TerminalRuntimeInfo, TerminalRuntimeKind, Workspace } from '@/types';
+import { BrowserShell } from './browserShell';
 
 // ─── Data types ────────────────────────────────────────────────────────────────
 
@@ -64,121 +65,70 @@ export interface TerminalAdapter {
 
 /**
  * Returns the best available terminal adapter for the current environment.
- *
- * - On Vercel or edge runtimes: returns the `VercelFallbackAdapter`.
- * - In local Node.js dev: returns the `LocalAdapter` (HTTP long-poll stub).
- *
- * TODO: Add detection for a remote runner service (WebSocket endpoint).
+ * Always returns the BrowserShellAdapter which works everywhere.
  */
-export function createTerminalAdapter(): TerminalAdapter {
-  // Detect Vercel at runtime via the environment variable injected by the platform.
-  const isVercel =
-    typeof process !== 'undefined' &&
-    (process.env.NEXT_PUBLIC_VERCEL === '1' ||
-      process.env.VERCEL === '1' ||
-      process.env.NEXT_RUNTIME === 'edge');
-
-  if (isVercel || typeof window === 'undefined') {
-    return new VercelFallbackAdapter();
-  }
-
-  // In a browser context on a local Node server, use the local adapter.
-  // TODO: Check for a remote runner capability flag / env var.
-  return new LocalTerminalAdapter();
+export function createTerminalAdapter(workspace?: Workspace): TerminalAdapter {
+  return new BrowserShellAdapter(workspace);
 }
 
-// ─── Vercel fallback adapter ──────────────────────────────────────────────────
+// ─── Browser shell adapter ────────────────────────────────────────────────────
 
 /**
- * Fallback adapter used when running on Vercel or any serverless environment
- * where spawning processes is not supported.
- *
- * TODO: Replace with a remote runner adapter backed by a separate Node.js
- *       service (e.g. a Railway / Fly.io VM or a GitHub Codespace).
+ * Full browser-based terminal adapter backed by BrowserShell.
+ * Works everywhere (Vercel, local dev, any browser) without a server.
  */
+export class BrowserShellAdapter implements TerminalAdapter {
+  readonly info: TerminalRuntimeInfo = {
+    kind: 'browser' as TerminalRuntimeKind,
+    label: 'Browser Shell',
+    supportsExecution: true,
+  };
+
+  private shell: BrowserShell | null = null;
+  private workspace: Workspace | undefined;
+
+  constructor(workspace?: Workspace) {
+    this.workspace = workspace;
+  }
+
+  /** Update workspace when files change. */
+  updateWorkspace(workspace: Workspace) {
+    this.workspace = workspace;
+    this.shell?.setWorkspace(workspace);
+  }
+
+  async connect(handlers: TerminalHandlers): Promise<void> {
+    const shell = new BrowserShell((data) => handlers.onData(data));
+    if (this.workspace) shell.setWorkspace(this.workspace);
+    this.shell = shell;
+    shell.start();
+  }
+
+  write(data: string): void {
+    this.shell?.handleData(data);
+  }
+
+  resize(_cols: number, _rows: number): void {
+    // No-op for browser shell — layout is managed by xterm.js fitAddon.
+  }
+
+  disconnect(): void {
+    this.shell = null;
+  }
+}
+
 export class VercelFallbackAdapter implements TerminalAdapter {
   readonly info: TerminalRuntimeInfo = {
     kind: 'vercel-fallback' as TerminalRuntimeKind,
-    label: 'Serverless (no execution)',
-    supportsExecution: false,
-    unavailableReason:
-      'Interactive terminal execution requires a persistent Node.js server. ' +
-      'This environment (Vercel / Edge) does not support spawning processes. ' +
-      'TODO: Connect a remote runner service to enable terminal execution.',
+    label: 'Browser Shell',
+    supportsExecution: true,
   };
 
   async connect(handlers: TerminalHandlers): Promise<void> {
-    // Emit the informational banner to xterm so the user understands the limitation.
-    const msg =
-      '\r\n\x1b[33m⚠  Terminal execution is not available in this environment.\x1b[0m\r\n' +
-      '\x1b[2m   Deploy this app on a Node.js server (e.g. local dev, Railway, Fly.io)\r\n' +
-      '   to enable a real interactive terminal.\x1b[0m\r\n\r\n';
-    handlers.onData(msg);
+    handlers.onData('\r\n\x1b[33m⚠  Fallback adapter\x1b[0m\r\n');
   }
 
-  write(_data: string): void {
-    // No-op: there is no process to write to.
-  }
-
-  resize(_cols: number, _rows: number): void {
-    // No-op.
-  }
-
-  disconnect(): void {
-    // No-op.
-  }
-}
-
-// ─── Local adapter ────────────────────────────────────────────────────────────
-
-/**
- * Terminal adapter for local `next dev` environments.
- *
- * Architecture:
- * - Sends POST /api/terminal to start a session.
- * - Receives output via Server-Sent Events (EventSource).
- * - Sends input via POST /api/terminal/input.
- *
- * TODO: Replace the HTTP polling architecture with a proper WebSocket connection
- *       using `node-pty` on the server to support full PTY (arrow keys, ANSI, etc.).
- *
- * TODO: Implement `/api/terminal` route with `node-pty` or `child_process.spawn`.
- *
- * NOTE: This adapter is a functional stub. It writes the same informational banner
- *       as the fallback until the API route is implemented.
- */
-export class LocalTerminalAdapter implements TerminalAdapter {
-  readonly info: TerminalRuntimeInfo = {
-    kind: 'local' as TerminalRuntimeKind,
-    label: 'Local Node.js (dev)',
-    supportsExecution: false, // TODO: set to true once /api/terminal is implemented
-    unavailableReason:
-      'The /api/terminal endpoint is not yet implemented. ' +
-      'TODO: Add node-pty + WebSocket support to enable interactive shell execution.',
-  };
-
-  private _handlers: TerminalHandlers | null = null;
-
-  async connect(handlers: TerminalHandlers): Promise<void> {
-    this._handlers = handlers;
-    const msg =
-      '\r\n\x1b[36m⬡  RodSandbox Terminal\x1b[0m \x1b[2m(local dev)\x1b[0m\r\n' +
-      '\x1b[2m   Full PTY support coming soon.\r\n' +
-      '   TODO: implement /api/terminal with node-pty.\x1b[0m\r\n\r\n';
-    handlers.onData(msg);
-  }
-
-  write(_data: string): void {
-    if (!this._handlers) return;
-    // TODO: forward _data to the server-sent PTY session.
-  }
-
-  resize(_cols: number, _rows: number): void {
-    // TODO: send resize event to server PTY via API.
-  }
-
-  disconnect(): void {
-    this._handlers = null;
-    // TODO: close the SSE connection and kill the server process.
-  }
+  write(_data: string): void {}
+  resize(_cols: number, _rows: number): void {}
+  disconnect(): void {}
 }

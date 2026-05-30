@@ -45,6 +45,7 @@ export function createDefaultSettings(): AppSettings {
     liveTypecheck: true,
     collapsedPanels: ['d-files', 'd-bottom', 'm-files', 'm-bottom'],
     enabledPlugins: [],
+    sidebarView: 'files',
   };
 }
 
