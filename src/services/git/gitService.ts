@@ -611,3 +611,139 @@ function computeDiffHunks(oldText: string, newText: string): GitDiffHunk[] {
   }
   return hunks;
 }
+
+// ─── GitHub REST API helpers ──────────────────────────────────────────────────
+
+export interface GithubCloneEntry { path: string; content: string }
+
+/**
+ * Clones a GitHub repository using the public REST API (no CORS issues).
+ * Fetches the recursive tree then each blob's content via /contents/ endpoint.
+ *
+ * @param owner  GitHub username or org.
+ * @param repo   Repository name.
+ * @param token  Optional GitHub PAT for private repos or higher rate limits.
+ * @param ref    Optional ref (branch/tag/sha). Defaults to the repo's default branch.
+ */
+export async function cloneViaGithubApi(
+  owner: string,
+  repo: string,
+  token?: string,
+  ref = 'HEAD',
+): Promise<GithubCloneEntry[]> {
+  const headers: Record<string, string> = { Accept: 'application/vnd.github.v3+json' };
+  if (token) headers['Authorization'] = `token ${token}`;
+
+  // Resolve ref to a sha via commits endpoint
+  const refRes = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/commits/${ref}`,
+    { headers },
+  );
+  if (!refRes.ok) {
+    const msg = await refRes.text().catch(() => refRes.statusText);
+    throw new Error(`GitHub API: ${refRes.status} – ${msg}`);
+  }
+  const refData = await refRes.json() as { sha: string; commit: { tree: { sha: string } } };
+  const treeSha = refData.commit.tree.sha;
+
+  // Fetch the full recursive tree
+  const treeRes = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/git/trees/${treeSha}?recursive=1`,
+    { headers },
+  );
+  if (!treeRes.ok) {
+    const msg = await treeRes.text().catch(() => treeRes.statusText);
+    throw new Error(`GitHub tree API: ${treeRes.status} – ${msg}`);
+  }
+  const treeData = await treeRes.json() as {
+    tree: Array<{ path: string; type: string; url: string; size?: number }>;
+  };
+
+  const blobs = treeData.tree.filter(
+    (item) => item.type === 'blob' && (item.size ?? 0) < 500_000,
+  );
+
+  // Fetch blob contents in parallel (limit concurrency to 10)
+  const entries: GithubCloneEntry[] = [];
+  const CONCURRENCY = 10;
+  for (let i = 0; i < blobs.length; i += CONCURRENCY) {
+    const batch = blobs.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map(async (blob) => {
+        const blobRes = await fetch(blob.url, { headers });
+        if (!blobRes.ok) throw new Error(`blob fetch failed: ${blob.path}`);
+        const blobData = await blobRes.json() as { content: string; encoding: string };
+        let content: string;
+        if (blobData.encoding === 'base64') {
+          content = atob(blobData.content.replace(/\n/g, ''));
+        } else {
+          content = blobData.content;
+        }
+        return { path: blob.path, content };
+      }),
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled') entries.push(r.value);
+    }
+  }
+  return entries;
+}
+
+/**
+ * Pushes workspace files to a GitHub repository using the Contents API.
+ * Creates or updates each file individually.
+ *
+ * @param owner   GitHub username or org.
+ * @param repo    Repository name.
+ * @param token   GitHub PAT (required for write access).
+ * @param files   Array of { path, content } to create/update.
+ * @param branch  Target branch (default: main).
+ * @param message Commit message.
+ */
+export async function pushViaGithubApi(
+  owner: string,
+  repo: string,
+  token: string,
+  files: Array<{ path: string; content: string }>,
+  branch = 'main',
+  message = 'Update from RodSandbox',
+): Promise<void> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github.v3+json',
+    Authorization: `token ${token}`,
+    'Content-Type': 'application/json',
+  };
+
+  for (const file of files) {
+    // Fetch current SHA if file exists (needed for updates)
+    let sha: string | undefined;
+    try {
+      const getRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/contents/${file.path}?ref=${branch}`,
+        { headers },
+      );
+      if (getRes.ok) {
+        const existing = await getRes.json() as { sha?: string };
+        sha = existing.sha;
+      }
+    } catch {
+      // File probably doesn't exist — that's fine for creates.
+    }
+
+    const body: Record<string, string> = {
+      message,
+      content: btoa(unescape(encodeURIComponent(file.content))),
+      branch,
+    };
+    if (sha) body.sha = sha;
+
+    const putRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/${file.path}`,
+      { method: 'PUT', headers, body: JSON.stringify(body) },
+    );
+    if (!putRes.ok) {
+      const msg = await putRes.text().catch(() => putRes.statusText);
+      throw new Error(`GitHub push failed for ${file.path}: ${putRes.status} – ${msg}`);
+    }
+  }
+}

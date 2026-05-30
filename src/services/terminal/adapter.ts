@@ -67,12 +67,12 @@ export interface TerminalAdapter {
  * Returns the best available terminal adapter for the current environment.
  * Tries the node-pty API adapter first; falls back to BrowserShellAdapter.
  */
-export function createTerminalAdapter(workspace?: Workspace): TerminalAdapter {
+export function createTerminalAdapter(workspace?: Workspace, initialHistory?: string[], onHistorySave?: (history: string[]) => void): TerminalAdapter {
   // Prefer node-pty API when running on a Node.js server (not Edge/Vercel).
   if (typeof window !== 'undefined') {
-    return new NodePtyAdapter(workspace);
+    return new NodePtyAdapter(workspace, initialHistory, onHistorySave);
   }
-  return new BrowserShellAdapter(workspace);
+  return new BrowserShellAdapter(workspace, initialHistory, onHistorySave);
 }
 
 // ─── Node PTY adapter ─────────────────────────────────────────────────────────
@@ -96,9 +96,13 @@ export class NodePtyAdapter implements TerminalAdapter {
   private handlers: TerminalHandlers | null = null;
   private fallback: BrowserShellAdapter | null = null;
   private readonly workspace: Workspace | undefined;
+  private readonly initialHistory: string[];
+  private readonly onHistorySave: ((history: string[]) => void) | undefined;
 
-  constructor(workspace?: Workspace) {
+  constructor(workspace?: Workspace, initialHistory?: string[], onHistorySave?: (history: string[]) => void) {
     this.workspace = workspace;
+    this.initialHistory = initialHistory ?? [];
+    this.onHistorySave = onHistorySave;
   }
 
   async connect(handlers: TerminalHandlers): Promise<void> {
@@ -141,7 +145,7 @@ export class NodePtyAdapter implements TerminalAdapter {
       // node-pty API not available — fall back to browser shell.
       (this.info as { kind: string; label: string }).kind = 'browser';
       (this.info as { label: string }).label = 'Browser Shell';
-      const fb = new BrowserShellAdapter(this.workspace);
+      const fb = new BrowserShellAdapter(this.workspace, this.initialHistory, this.onHistorySave);
       this.fallback = fb;
       await fb.connect(handlers);
     }
@@ -207,9 +211,13 @@ export class BrowserShellAdapter implements TerminalAdapter {
 
   private shell: BrowserShell | null = null;
   private workspace: Workspace | undefined;
+  private initialHistory: string[];
+  private onHistorySave: ((history: string[]) => void) | undefined;
 
-  constructor(workspace?: Workspace) {
+  constructor(workspace?: Workspace, initialHistory?: string[], onHistorySave?: (history: string[]) => void) {
     this.workspace = workspace;
+    this.initialHistory = initialHistory ?? [];
+    this.onHistorySave = onHistorySave;
   }
 
   /** Update workspace when files change. */
@@ -219,7 +227,7 @@ export class BrowserShellAdapter implements TerminalAdapter {
   }
 
   async connect(handlers: TerminalHandlers): Promise<void> {
-    const shell = new BrowserShell((data) => handlers.onData(data));
+    const shell = new BrowserShell((data) => handlers.onData(data), this.initialHistory);
     if (this.workspace) shell.setWorkspace(this.workspace);
     this.shell = shell;
     shell.start();
@@ -234,6 +242,9 @@ export class BrowserShellAdapter implements TerminalAdapter {
   }
 
   disconnect(): void {
+    if (this.shell && this.onHistorySave) {
+      this.onHistorySave(this.shell.getHistory());
+    }
     this.shell = null;
   }
 }

@@ -17,7 +17,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GitBranch, GitCommit, GitDiff, GitStatusEntry, Workspace } from '@/types';
-import { GitService, syncWorkspaceToFs } from '@/services/git/gitService';
+import { GitService, syncWorkspaceToFs, cloneViaGithubApi, pushViaGithubApi } from '@/services/git/gitService';
 import GitDiffViewer from './GitDiffViewer';
 import {
   Check,
@@ -33,6 +33,7 @@ import {
   Upload,
   Download,
   Link,
+  GitFork,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -73,6 +74,11 @@ export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
   const [showRemote, setShowRemote] = useState(false);
   const [pushing, setPushing] = useState(false);
   const [pulling, setPulling] = useState(false);
+
+  const [cloneUrl, setCloneUrl] = useState('');
+  const [cloneToken, setCloneToken] = useState('');
+  const [showClone, setShowClone] = useState(false);
+  const [cloning, setCloning] = useState(false);
 
   const [diffs, setDiffs] = useState<GitDiff[]>([]);
   const [showDiff, setShowDiff] = useState(false);
@@ -246,6 +252,58 @@ export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
     }
   }, [remoteUrl, remoteToken, workspace.id, onFilesChanged, refreshAll]);
 
+  /** Parse a GitHub URL like https://github.com/owner/repo into [owner, repo] */
+  const parseGithubUrl = (url: string): [string, string] | null => {
+    const match = url.trim().match(/github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
+    if (!match) return null;
+    return [match[1], match[2]];
+  };
+
+  const handleClone = useCallback(async () => {
+    const parsed = parseGithubUrl(cloneUrl);
+    if (!parsed) {
+      setError('Invalid GitHub URL. Use https://github.com/owner/repo');
+      return;
+    }
+    setCloning(true);
+    setError('');
+    try {
+      const [owner, repo] = parsed;
+      const entries = await cloneViaGithubApi(owner, repo, cloneToken || undefined);
+      onFilesChanged?.(entries);
+      setSuccess(`Cloned ${owner}/${repo} (${entries.length} files).`);
+      setShowClone(false);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setCloning(false);
+    }
+  }, [cloneUrl, cloneToken, onFilesChanged]);
+
+  const handleGithubPush = useCallback(async () => {
+    const parsed = parseGithubUrl(remoteUrl);
+    if (!parsed) {
+      setError('Invalid GitHub URL for push. Use https://github.com/owner/repo');
+      return;
+    }
+    if (!remoteToken) {
+      setError('A GitHub Personal Access Token is required to push.');
+      return;
+    }
+    setPushing(true);
+    setError('');
+    try {
+      const [owner, repo] = parsed;
+      const files = Object.values(workspace.files).map((f) => ({ path: f.path, content: f.content }));
+      await pushViaGithubApi(owner, repo, remoteToken, files);
+      setSuccess(`Pushed ${files.length} files to ${owner}/${repo}.`);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setPushing(false);
+    }
+  }, [remoteUrl, remoteToken, workspace.files]);
+
   const handleShowDiff = useCallback(async () => {
     if (!serviceRef.current) return;
     setError('');
@@ -417,7 +475,46 @@ export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
             </Button>
           </div>
 
-          {/* Remote section */}
+          {/* Clone from GitHub section */}
+          <div className="flex-shrink-0 border-t border-neutral-800">
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 px-3 py-2 text-xs text-neutral-500 hover:text-neutral-300"
+              onClick={() => setShowClone((s) => !s)}
+            >
+              <GitFork className="h-3.5 w-3.5" />
+              <span>Clone from GitHub</span>
+              {showClone ? <ChevronDown className="ml-auto h-3 w-3" /> : <ChevronRight className="ml-auto h-3 w-3" />}
+            </button>
+            {showClone && (
+              <div className="space-y-2 px-3 pb-3">
+                <input
+                  value={cloneUrl}
+                  onChange={(e) => setCloneUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo"
+                  className="w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-sky-500/60 placeholder-neutral-600"
+                />
+                <input
+                  value={cloneToken}
+                  onChange={(e) => setCloneToken(e.target.value)}
+                  type="password"
+                  placeholder="Personal Access Token (private repos)"
+                  className="w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-sky-500/60 placeholder-neutral-600"
+                />
+                <Button
+                  size="sm"
+                  className="w-full gap-1.5 text-xs"
+                  disabled={cloning || !cloneUrl.trim()}
+                  onClick={() => void handleClone()}
+                >
+                  {cloning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  Clone
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Remote / push section */}
           <div className="flex-shrink-0 border-t border-neutral-800">
             <button
               type="button"
@@ -425,7 +522,7 @@ export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
               onClick={() => setShowRemote((s) => !s)}
             >
               <Link className="h-3.5 w-3.5" />
-              <span>Remote</span>
+              <span>Push to GitHub</span>
               {showRemote ? <ChevronDown className="ml-auto h-3 w-3" /> : <ChevronRight className="ml-auto h-3 w-3" />}
             </button>
             {showRemote && (
@@ -433,37 +530,25 @@ export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
                 <input
                   value={remoteUrl}
                   onChange={(e) => setRemoteUrl(e.target.value)}
-                  placeholder="Remote URL (e.g. https://github.com/user/repo)"
+                  placeholder="https://github.com/owner/repo"
                   className="w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-sky-500/60 placeholder-neutral-600"
                 />
                 <input
                   value={remoteToken}
                   onChange={(e) => setRemoteToken(e.target.value)}
                   type="password"
-                  placeholder="Personal Access Token (optional)"
+                  placeholder="Personal Access Token (required)"
                   className="w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-neutral-200 outline-none focus:border-sky-500/60 placeholder-neutral-600"
                 />
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="flex-1 gap-1.5 text-xs"
-                    disabled={pulling}
-                    onClick={() => void handlePull()}
-                  >
-                    {pulling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                    Pull
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="flex-1 gap-1.5 text-xs"
-                    disabled={pushing}
-                    onClick={() => void handlePush()}
-                  >
-                    {pushing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                    Push
-                  </Button>
-                </div>
+                <Button
+                  size="sm"
+                  className="w-full gap-1.5 text-xs"
+                  disabled={pushing || !remoteUrl.trim() || !remoteToken.trim()}
+                  onClick={() => void handleGithubPush()}
+                >
+                  {pushing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  Push via GitHub API
+                </Button>
               </div>
             )}
           </div>

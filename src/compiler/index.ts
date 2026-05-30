@@ -1,2 +1,2 @@
-export { BrowserTypeScriptCompiler } from './tsCompiler';
+export { BrowserTypeScriptCompiler, parseTsConfigCompilerOptions } from './tsCompiler';
 export type { CompilerResult, VirtualCompilerFile } from './tsCompiler';

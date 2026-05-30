@@ -16,6 +16,8 @@ export const WORKSPACE_STORE = 'workspaces';
 export const SETTINGS_STORE = 'settings';
 export const SETTINGS_KEY = 'app-settings';
 export const REPL_HISTORY_KEY = 'repl-history';
+export const TERMINAL_HISTORY_KEY = 'terminal-history';
+export const CONSOLE_LOGS_KEY = 'console-logs';
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 

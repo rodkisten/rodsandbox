@@ -26,6 +26,7 @@ import { exportWorkspaceJson, importWorkspaceJson } from '@/lib/workspaceTransfe
 import { createWorkspaceSnapshot, deleteWorkspaceSnapshot, diffSnapshotAgainstWorkspace, getWorkspaceSnapshot, listWorkspaceSnapshots } from '@/lib/snapshots';
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
 import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constants';
+import { loadConsoleLogs, saveConsoleLogs } from '@/persistence/db';
 import { inferLanguageFromPath, listFiles } from '@/filesystem/virtualFs';
 import { WORKSPACE_TEMPLATES, getTemplateById } from '@/filesystem/templates';
 import { TypeScriptWorkerClient } from '@/compiler/tsWorkerClient';
@@ -127,8 +128,28 @@ export default function Playground({ workspaceId }: { workspaceId?: string }) {
   const workspaceImportInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceBundleImportInputRef = useRef<HTMLInputElement | null>(null);
   const editorCursorRef = useRef<{ fileId: string; position: number } | null>(null);
+  const consoleLogsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isMobilePortrait = useMobilePortrait();
+
+  // Load persisted console logs on mount.
+  useEffect(() => {
+    loadConsoleLogs().then((persisted) => {
+      if (persisted.length > 0) setLogs(persisted);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Save console logs to DB (debounced) whenever they change.
+  useEffect(() => {
+    if (consoleLogsSaveTimer.current) clearTimeout(consoleLogsSaveTimer.current);
+    consoleLogsSaveTimer.current = setTimeout(() => {
+      saveConsoleLogs(logs.slice(-MAX_LOG_ENTRIES)).catch(() => {});
+    }, 1000);
+    return () => {
+      if (consoleLogsSaveTimer.current) clearTimeout(consoleLogsSaveTimer.current);
+    };
+  }, [logs]);
 
   useEffect(() => {
     tsWorkerRef.current = new TypeScriptWorkerClient();
@@ -447,6 +468,20 @@ export default function Playground({ workspaceId }: { workspaceId?: string }) {
     await handleImportWorkspaceJson(file);
   }, [handleImportWorkspaceJson, replaceWorkspaceFiles]);
 
+  /** Add or update a package in the workspace package.json. */
+  const handleAddPackage = useCallback((name: string, version: string) => {
+    const existing = Object.values(workspace.files).find(
+      (f) => f.path === 'package.json' || f.name === 'package.json',
+    );
+    let parsed: { name?: string; version?: string; dependencies?: Record<string, string>; [k: string]: unknown } = {};
+    if (existing) {
+      try { parsed = JSON.parse(existing.content) as typeof parsed; } catch { /* ignore */ }
+    }
+    parsed.dependencies = { ...(parsed.dependencies ?? {}), [name]: `^${version}` };
+    const content = JSON.stringify(parsed, null, 2);
+    upsertFiles([{ path: 'package.json', content, language: 'json' }]);
+  }, [workspace.files, upsertFiles]);
+
   const handleTogglePlugin = useCallback((id: string, nextEnabled: boolean) => {
     if (nextEnabled) pluginRegistryRef.current.enable(id);
     else pluginRegistryRef.current.disable(id);
@@ -616,6 +651,10 @@ export default function Playground({ workspaceId }: { workspaceId?: string }) {
     () => Object.fromEntries(Object.values(workspace.files).map((file) => [file.id, file.name])),
     [workspace.files],
   );
+  const packageJsonContent = useMemo(() => {
+    const f = Object.values(workspace.files).find((file) => file.path === 'package.json' || file.name === 'package.json');
+    return f?.content;
+  }, [workspace.files]);
   const errorCount = diagnostics.filter((diag) => diag.severity === 'error').length;
   const warnCount = diagnostics.filter((diag) => diag.severity === 'warning').length;
 
@@ -892,7 +931,7 @@ export default function Playground({ workspaceId }: { workspaceId?: string }) {
       return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
     }
     if (settings.bottomTab === 'diagnostics') {
-      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>; 
+      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} packageJsonContent={packageJsonContent} onAddPackage={handleAddPackage} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>;
     }
     if (settings.bottomTab === 'terminal' && FEATURE_FLAGS.ENABLE_TERMINAL) {
       return <TerminalPanel workspace={workspace} onDetach={handleDetachTerminal} />;

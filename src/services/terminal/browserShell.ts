@@ -33,8 +33,16 @@ export class BrowserShell {
   // Tracks escape sequence state across multiple onData calls
   private escapeBuffer = '';
 
-  constructor(onOutput: OutputCallback) {
+  constructor(onOutput: OutputCallback, initialHistory?: string[]) {
     this.onOutput = onOutput;
+    if (initialHistory && initialHistory.length > 0) {
+      this.history = initialHistory.slice();
+    }
+  }
+
+  /** Returns a copy of the current command history. */
+  getHistory(): string[] {
+    return this.history.slice();
   }
 
   /** Update the workspace reference (call whenever files change). */
@@ -249,6 +257,9 @@ export class BrowserShell {
       case 'rm':
         this.writeLine(`${YELLOW}Hint:${R} Manage files in the sidebar.`);
         break;
+      case 'npm':
+        this.cmdNpm(args.slice(1));
+        break;
       default:
         this.writeLine(`${RED}${cmd}: command not found${R}  ${DIM}(type "help" for commands)${R}`);
     }
@@ -293,6 +304,7 @@ export class BrowserShell {
       ['grep <pattern> <file>',      'Search for pattern in file'],
       ['find [-name <glob>]',        'Find files by name'],
       ['node <expression>',          'Evaluate a JavaScript expression'],
+      ['npm install [pkg@version]',  'Resolve packages via esm.sh (browser-native)'],
       ['env',                        'Show environment info'],
       ['date',                       'Current date & time'],
       ['whoami',                     'Current user'],
@@ -488,6 +500,47 @@ export class BrowserShell {
     const matches = allFiles.filter((f) => rx.test(f.name) || rx.test(f.path));
     if (!matches.length) this.writeLine(DIM + '(no results)' + R);
     else matches.forEach((f) => this.writeLine('./' + f.path));
+  }
+
+  private cmdNpm(args: string[]) {
+    const sub = args[0]?.toLowerCase();
+    if (sub === 'install' || sub === 'i' || sub === 'add') {
+      // Parse workspace package.json to list current deps
+      const pkgFile = this.files().find((f) => f.path === 'package.json' || f.name === 'package.json');
+      let deps: Record<string, string> = {};
+      if (pkgFile) {
+        try {
+          const parsed = JSON.parse(pkgFile.content) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+          deps = { ...parsed.devDependencies, ...parsed.dependencies };
+        } catch { /* ignore */ }
+      }
+
+      const pkgArgs = args.slice(1).filter((a) => !a.startsWith('-'));
+      if (pkgArgs.length > 0) {
+        this.writeLine(`${CYAN}${BOLD}npm install${R} ${pkgArgs.join(' ')}`);
+        this.writeLine(`${DIM}Packages are resolved via esm.sh at bundle time — no download needed.${R}`);
+        this.writeLine(`${GREEN}✓${R} Add package${pkgArgs.length > 1 ? 's' : ''} to ${CYAN}package.json${R} ${DIM}dependencies${R} to use in your project.`);
+      } else {
+        // npm install with no args — list current deps
+        const names = Object.keys(deps);
+        if (names.length === 0) {
+          this.writeLine(`${DIM}No dependencies in package.json. Add one with ${CYAN}npm install <package>${DIM}.${R}`);
+        } else {
+          this.writeLine(`${CYAN}${BOLD}Dependencies (resolved via esm.sh at bundle time):${R}`);
+          for (const [name, version] of Object.entries(deps)) {
+            this.writeLine(`  ${GREEN}${name}${R}@${YELLOW}${version}${R}`);
+          }
+          this.writeLine(`${GREEN}✓${R} ${names.length} package${names.length !== 1 ? 's' : ''} will be resolved at bundle time.`);
+        }
+      }
+    } else if (sub === 'run') {
+      const script = args[1];
+      this.writeLine(`${YELLOW}npm run${R} is not supported in the browser shell.`);
+      this.writeLine(`${DIM}Scripts: ${script ?? '(none specified)'}. Use the Run button in the editor.${R}`);
+    } else {
+      this.writeLine(`${DIM}Usage: npm install [package[@version]]${R}`);
+      this.writeLine(`${DIM}       npm run <script>${R}`);
+    }
   }
 
   private cmdEnv() {

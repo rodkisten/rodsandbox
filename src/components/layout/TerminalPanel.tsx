@@ -7,6 +7,7 @@ import { TERMINAL_SCROLLBACK_LINES } from '@/constants';
 import { Workspace } from '@/types';
 import { ExternalLink, RefreshCw, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { loadTerminalHistory, saveTerminalHistory } from '@/persistence/db';
 
 const XTermComponent = dynamic(() => import('./XTermInner'), { ssr: false });
 
@@ -17,9 +18,27 @@ interface TerminalPanelProps {
 }
 
 export default function TerminalPanel({ className = '', workspace, onDetach }: TerminalPanelProps) {
-  const [adapter, setAdapter] = useState(() => createTerminalAdapter(workspace));
+  const [adapter, setAdapter] = useState<ReturnType<typeof createTerminalAdapter> | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const adapterRef = useRef(adapter);
+
+  // Load persisted history on mount, then create the adapter.
+  useEffect(() => {
+    let cancelled = false;
+    loadTerminalHistory().then((history) => {
+      if (cancelled) return;
+      const onHistorySave = (h: string[]) => { saveTerminalHistory(h).catch(() => {}); };
+      const next = createTerminalAdapter(workspace, history, onHistorySave);
+      adapterRef.current = next;
+      setAdapter(next);
+    }).catch(() => {
+      const next = createTerminalAdapter(workspace);
+      adapterRef.current = next;
+      setAdapter(next);
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Keep adapter workspace in sync when files change.
   useEffect(() => {
@@ -29,16 +48,26 @@ export default function TerminalPanel({ className = '', workspace, onDetach }: T
   }, [workspace]);
 
   useEffect(() => {
-    return () => { adapter.disconnect(); };
+    return () => { adapter?.disconnect(); };
   }, [adapter]);
 
   const handleReset = useCallback(() => {
-    adapter.disconnect();
-    const next = createTerminalAdapter(workspace);
-    adapterRef.current = next;
-    setAdapter(next);
-    setResetKey((k) => k + 1);
+    adapter?.disconnect();
+    loadTerminalHistory().then((history) => {
+      const onHistorySave = (h: string[]) => { saveTerminalHistory(h).catch(() => {}); };
+      const next = createTerminalAdapter(workspace, history, onHistorySave);
+      adapterRef.current = next;
+      setAdapter(next);
+      setResetKey((k) => k + 1);
+    }).catch(() => {
+      const next = createTerminalAdapter(workspace);
+      adapterRef.current = next;
+      setAdapter(next);
+      setResetKey((k) => k + 1);
+    });
   }, [adapter, workspace]);
+
+  if (!adapter) return null;
 
   return (
     <div className={`flex h-full flex-col overflow-hidden bg-neutral-950 ${className}`}>

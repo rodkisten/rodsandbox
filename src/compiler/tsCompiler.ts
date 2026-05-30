@@ -358,7 +358,8 @@ declare function eval(x: string): unknown;
 
 function createLanguageServiceHost(
   files: Map<string, string>,
-  getVersion: () => number
+  getVersion: () => number,
+  getCompilerOptions: () => ts.CompilerOptions
 ): ts.LanguageServiceHost {
   return {
     getScriptFileNames: () => [VIRTUAL_LIB_NAME, ...Array.from(files.keys())],
@@ -381,7 +382,7 @@ function createLanguageServiceHost(
     readDirectory: () => [],
     getCurrentDirectory: () => '/',
     getCompilationSettings: () => ({
-      ...DEFAULT_COMPILER_OPTIONS,
+      ...getCompilerOptions(),
       noLib: false,
     }),
     getNewLine: () => '\n',
@@ -391,6 +392,91 @@ function createLanguageServiceHost(
 }
 
 /**
+ * Parses a raw tsconfig.json string and maps the `compilerOptions` to a
+ * ts.CompilerOptions object that can be passed to the language service.
+ * Falls back to `DEFAULT_COMPILER_OPTIONS` for any unknown / unsupported key.
+ */
+export function parseTsConfigCompilerOptions(raw: string): ts.CompilerOptions {
+  try {
+    const json = JSON.parse(raw) as { compilerOptions?: Record<string, unknown> };
+    const co = json.compilerOptions ?? {};
+
+    const targetMap: Record<string, ts.ScriptTarget> = {
+      es3: ts.ScriptTarget.ES3, es5: ts.ScriptTarget.ES5,
+      es6: ts.ScriptTarget.ES2015, es2015: ts.ScriptTarget.ES2015,
+      es2016: ts.ScriptTarget.ES2016, es2017: ts.ScriptTarget.ES2017,
+      es2018: ts.ScriptTarget.ES2018, es2019: ts.ScriptTarget.ES2019,
+      es2020: ts.ScriptTarget.ES2020, es2021: ts.ScriptTarget.ES2021,
+      es2022: ts.ScriptTarget.ES2022, esnext: ts.ScriptTarget.ESNext,
+    };
+
+    const moduleMap: Record<string, ts.ModuleKind> = {
+      none: ts.ModuleKind.None, commonjs: ts.ModuleKind.CommonJS,
+      amd: ts.ModuleKind.AMD, umd: ts.ModuleKind.UMD,
+      system: ts.ModuleKind.System, es6: ts.ModuleKind.ES2015,
+      es2015: ts.ModuleKind.ES2015, es2020: ts.ModuleKind.ES2020,
+      es2022: ts.ModuleKind.ES2022, esnext: ts.ModuleKind.ESNext,
+      node16: ts.ModuleKind.Node16, nodenext: ts.ModuleKind.NodeNext,
+    };
+
+    const jsxMap: Record<string, ts.JsxEmit> = {
+      preserve: ts.JsxEmit.Preserve, react: ts.JsxEmit.React,
+      'react-native': ts.JsxEmit.ReactNative,
+      'react-jsx': ts.JsxEmit.ReactJSX, 'react-jsxdev': ts.JsxEmit.ReactJSXDev,
+    };
+
+    const moduleResolutionMap: Record<string, ts.ModuleResolutionKind> = {
+      classic: ts.ModuleResolutionKind.Classic,
+      node: ts.ModuleResolutionKind.Node10, node10: ts.ModuleResolutionKind.Node10,
+      node16: ts.ModuleResolutionKind.Node16,
+      nodenext: ts.ModuleResolutionKind.NodeNext,
+      bundler: ts.ModuleResolutionKind.Bundler,
+    };
+
+    const result: ts.CompilerOptions = { ...DEFAULT_COMPILER_OPTIONS };
+
+    if (typeof co.target === 'string') {
+      const t = targetMap[co.target.toLowerCase()];
+      if (t !== undefined) result.target = t;
+    }
+    if (typeof co.module === 'string') {
+      const m = moduleMap[co.module.toLowerCase()];
+      if (m !== undefined) result.module = m;
+    }
+    if (typeof co.jsx === 'string') {
+      const j = jsxMap[co.jsx.toLowerCase()];
+      if (j !== undefined) result.jsx = j;
+    }
+    if (typeof co.moduleResolution === 'string') {
+      const mr = moduleResolutionMap[co.moduleResolution.toLowerCase()];
+      if (mr !== undefined) result.moduleResolution = mr;
+    }
+    if (typeof co.strict === 'boolean') result.strict = co.strict;
+    if (typeof co.strictNullChecks === 'boolean') result.strictNullChecks = co.strictNullChecks;
+    if (typeof co.strictFunctionTypes === 'boolean') result.strictFunctionTypes = co.strictFunctionTypes;
+    if (typeof co.noImplicitAny === 'boolean') result.noImplicitAny = co.noImplicitAny;
+    if (typeof co.allowJs === 'boolean') result.allowJs = co.allowJs;
+    if (typeof co.checkJs === 'boolean') result.checkJs = co.checkJs;
+    if (typeof co.esModuleInterop === 'boolean') result.esModuleInterop = co.esModuleInterop;
+    if (typeof co.skipLibCheck === 'boolean') result.skipLibCheck = co.skipLibCheck;
+    if (typeof co.noEmitOnError === 'boolean') result.noEmitOnError = co.noEmitOnError;
+    if (typeof co.declaration === 'boolean') result.declaration = co.declaration;
+    if (typeof co.sourceMap === 'boolean') result.sourceMap = co.sourceMap;
+    if (typeof co.experimentalDecorators === 'boolean') result.experimentalDecorators = co.experimentalDecorators;
+    if (typeof co.emitDecoratorMetadata === 'boolean') result.emitDecoratorMetadata = co.emitDecoratorMetadata;
+    if (typeof co.useDefineForClassFields === 'boolean') result.useDefineForClassFields = co.useDefineForClassFields;
+    if (typeof co.noUncheckedIndexedAccess === 'boolean') result.noUncheckedIndexedAccess = co.noUncheckedIndexedAccess;
+    if (typeof co.exactOptionalPropertyTypes === 'boolean') result.exactOptionalPropertyTypes = co.exactOptionalPropertyTypes;
+
+    return result;
+  } catch {
+    return { ...DEFAULT_COMPILER_OPTIONS };
+  }
+}
+
+
+
+/**
  * Compiles a set of virtual TypeScript/JavaScript files using the TypeScript
  * compiler API in the browser. Uses an in-memory LanguageServiceHost backed
  * by a Map of filename → content.
@@ -398,11 +484,21 @@ function createLanguageServiceHost(
 export class BrowserTypeScriptCompiler {
   private files: Map<string, string> = new Map();
   private version = 0;
+  private compilerOptions: ts.CompilerOptions = { ...DEFAULT_COMPILER_OPTIONS };
   private languageService: ts.LanguageService;
 
   constructor() {
-    const host = createLanguageServiceHost(this.files, () => this.version);
+    const host = createLanguageServiceHost(this.files, () => this.version, () => this.compilerOptions);
     this.languageService = ts.createLanguageService(host, ts.createDocumentRegistry());
+  }
+
+  /**
+   * Applies compiler options parsed from the workspace's tsconfig.json.
+   * Increments version so the language service picks up the change.
+   */
+  setCompilerOptions(options: ts.CompilerOptions): void {
+    this.compilerOptions = options;
+    this.version++;
   }
 
   updateFile(path: string, content: string): void {
@@ -428,7 +524,7 @@ export class BrowserTypeScriptCompiler {
 
       // transpileModule is reliable in the browser and doesn't require lib files
       const transpiled = ts.transpileModule(content, {
-        compilerOptions: DEFAULT_COMPILER_OPTIONS,
+        compilerOptions: this.compilerOptions,
         fileName: filePath,
         reportDiagnostics: true,
       });
@@ -484,7 +580,7 @@ export class BrowserTypeScriptCompiler {
     const content = this.files.get(path);
     if (content === undefined) return [];
     const result = ts.transpileModule(content, {
-      compilerOptions: DEFAULT_COMPILER_OPTIONS,
+      compilerOptions: this.compilerOptions,
       fileName: path,
       reportDiagnostics: true,
     });
