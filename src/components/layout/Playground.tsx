@@ -15,6 +15,8 @@ import DiagnosticsPanel from './DiagnosticsPanel';
 import DependencyPanel from './DependencyPanel';
 import PluginManagerPanel from './PluginManagerPanel';
 import ReplPanel from './ReplPanel';
+import TerminalPanel from './TerminalPanel';
+import GitPanel from './GitPanel';
 import CommandPalette, { CommandPaletteCommand } from '@/components/ui/CommandPalette';
 import { buildPreviewHtml } from '@/preview/builder';
 import { downloadFile } from '@/lib/download';
@@ -61,7 +63,7 @@ function ResizeGrip() {
   return <Separator className="relative flex h-3 items-center justify-center bg-neutral-900/70 transition-colors hover:bg-neutral-500/25 data-[resize-handle-active]:bg-neutral-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
 }
 
-export default function Playground() {
+export default function Playground({ workspaceId }: { workspaceId?: string }) {
   const {
     workspace,
     activeFile,
@@ -79,7 +81,7 @@ export default function Playground() {
     upsertFiles,
     replaceWorkspaceFiles,
     saveWorkspace,
-  } = useWorkspace();
+  } = useWorkspace(workspaceId);
   const { settings, loading: settingsLoading, updateSettings } = useAppSettings();
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -847,6 +849,24 @@ export default function Playground() {
     if (settings.bottomTab === 'diagnostics') {
       return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>; 
     }
+    if (settings.bottomTab === 'terminal' && FEATURE_FLAGS.ENABLE_TERMINAL) {
+      return <TerminalPanel />;
+    }
+    if (settings.bottomTab === 'git' && FEATURE_FLAGS.ENABLE_GIT) {
+      return (
+        <GitPanel
+          workspace={workspace}
+          onFilesChanged={(entries) => {
+            for (const entry of entries) {
+              const file = Object.values(workspace.files).find((f) => f.path === entry.path);
+              if (file) {
+                updateFile(file.id, entry.content);
+              }
+            }
+          }}
+        />
+      );
+    }
     if (FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM) {
       return (
         <ReplPanel
@@ -1004,6 +1024,8 @@ export default function Playground() {
                     <TabsTrigger value="console">{t('tabs.console')}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')} {errorCount > 0 ? <span className="ml-1 text-red-400">{errorCount}</span> : null} {warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
                     {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger> : null}
+                    {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}
+                    {FEATURE_FLAGS.ENABLE_GIT ? <TabsTrigger value="git">{t('tabs.git')}</TabsTrigger> : null}
                   </TabsList>
                 </Tabs>
                 <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-bottom', bottomPanelRef)} className="ml-auto mr-1">
@@ -1138,8 +1160,10 @@ export default function Playground() {
                 <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
                   <TabsList className="bg-transparent p-0">
                     <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-neutral-500">{logs.length}</span> : null}</TabsTrigger>
-                    <TabsTrigger value="diagnostics">{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</>
+                    <TabsTrigger value="diagnostics">{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
                     <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger>
+                    {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}
+                    {FEATURE_FLAGS.ENABLE_GIT ? <TabsTrigger value="git">{t('tabs.git')}</TabsTrigger> : null}
                   </TabsList>
                 </Tabs>
                 <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-bottom', bottomPanelRef)} className="ml-auto mr-1">

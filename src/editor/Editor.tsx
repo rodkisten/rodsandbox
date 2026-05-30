@@ -227,7 +227,6 @@ export default function Editor({
           onCursorPositionChange?.(view.state.selection.main.head);
         }}
         value={file.content}
-        viewportMargin={Infinity}
         height="auto"
         extensions={extensions}
         onChange={handleChange}

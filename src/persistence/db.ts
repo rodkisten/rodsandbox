@@ -1,5 +1,5 @@
 import { openDB, IDBPDatabase } from 'idb';
-import { Workspace, AppSettings } from '@/types';
+import { Workspace, AppSettings, WorkspaceSummary } from '@/types';
 import { DB_NAME, DB_VERSION, WORKSPACE_STORE, SETTINGS_STORE, SETTINGS_KEY, REPL_HISTORY_KEY } from '@/constants';
 
 type RodSandboxDB = {
@@ -15,13 +15,16 @@ const LS_REPL_HISTORY_KEY = 'rodsandbox:repl-history';
 export function openDb(): Promise<IDBPDatabase<RodSandboxDB>> {
   if (!dbPromise) {
     dbPromise = openDB<RodSandboxDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains(WORKSPACE_STORE)) {
-          db.createObjectStore(WORKSPACE_STORE, { keyPath: 'id' });
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          if (!db.objectStoreNames.contains(WORKSPACE_STORE)) {
+            db.createObjectStore(WORKSPACE_STORE, { keyPath: 'id' });
+          }
+          if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
+            db.createObjectStore(SETTINGS_STORE);
+          }
         }
-        if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
-          db.createObjectStore(SETTINGS_STORE);
-        }
+        // v2: no schema change — ownerId was added as an optional field
       },
     });
   }
@@ -105,6 +108,27 @@ export async function listWorkspaces(): Promise<Workspace[]> {
       .map((key) => safeLocalStorageGet<Workspace>(key))
       .filter((value): value is Workspace => Boolean(value));
   }
+}
+
+/**
+ * Returns lightweight summaries for all workspaces owned by `ownerId`,
+ * without loading full file contents.
+ *
+ * @param ownerId - User ID to filter by. Pass `undefined` to return all workspaces.
+ */
+export async function listWorkspaceSummaries(ownerId?: string): Promise<WorkspaceSummary[]> {
+  const all = await listWorkspaces();
+  return all
+    .filter((ws) => !ownerId || !ws.ownerId || ws.ownerId === ownerId)
+    .map((ws) => ({
+      id: ws.id,
+      name: ws.name,
+      ownerId: ws.ownerId,
+      fileCount: Object.keys(ws.files).length,
+      createdAt: ws.createdAt,
+      updatedAt: ws.updatedAt,
+    }))
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function deleteWorkspace(id: string): Promise<void> {

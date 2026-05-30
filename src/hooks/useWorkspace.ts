@@ -6,23 +6,32 @@ import * as VirtualFs from '@/filesystem/virtualFs';
 import * as Db from '@/persistence/db';
 import { AUTOSAVE_DEBOUNCE_MS } from '@/constants';
 
-const DEFAULT_WORKSPACE_ID = 'default-workspace';
+/** Legacy constant kept for backward compatibility. */
+const LEGACY_WORKSPACE_ID = 'default-workspace';
 
-export function useWorkspace() {
-  const [workspace, setWorkspace] = useState<Workspace>(() => createDefaultWorkspace(DEFAULT_WORKSPACE_ID));
+/**
+ * Manages a single workspace — loads from IndexedDB, auto-saves, and exposes
+ * all CRUD operations on files and folders.
+ *
+ * @param workspaceId - The workspace to load. Defaults to the legacy single-workspace ID.
+ */
+export function useWorkspace(workspaceId?: string) {
+  const resolvedId = workspaceId || LEGACY_WORKSPACE_ID;
+  const [workspace, setWorkspace] = useState<Workspace>(() => createDefaultWorkspace(resolvedId));
   const [loading, setLoading] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    Db.loadWorkspace(DEFAULT_WORKSPACE_ID).then((saved) => {
+    setLoading(true);
+    Db.loadWorkspace(resolvedId).then((saved) => {
       if (!cancelled && saved) setWorkspace(saved);
       if (!cancelled) setLoading(false);
     }).catch(() => {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [resolvedId]);
 
   const persistWorkspace = useCallback((ws: Workspace) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);

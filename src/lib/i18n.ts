@@ -14,6 +14,8 @@ const translations: Record<Locale, Record<string, string>> = {
     'tabs.console': 'Console',
     'tabs.diagnostics': 'Diagnostics',
     'tabs.repl': 'REPL',
+    'tabs.terminal': 'Terminal',
+    'tabs.git': 'Git',
   },
 };
 
