@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Bug, Command, Download, Menu, MoonStar, Paintbrush, Play, PlayCircle, Save, WandSparkles } from 'lucide-react';
+import { Bug, Command, Download, Layout, Menu, MoonStar, Paintbrush, Play, PlayCircle, Save, WandSparkles } from 'lucide-react';
 import type { EditorTheme } from '@/types';
 
 interface ToolbarProps {
@@ -52,6 +52,8 @@ interface ToolbarProps {
   editorTabSize: number;
   onEditorTabSizeChange: (size: number) => void;
   diagnosticsCount: number;
+  panelVisibility: { files: boolean; preview: boolean; terminal: boolean };
+  onToggleView: (panel: 'files' | 'preview' | 'terminal') => void;
 }
 
 export default function Toolbar({
@@ -88,6 +90,8 @@ export default function Toolbar({
   editorTabSize,
   onEditorTabSizeChange,
   diagnosticsCount,
+  panelVisibility,
+  onToggleView,
 }: ToolbarProps) {
   return (
     <div className="flex items-center gap-1.5 border-b border-neutral-800 bg-neutral-950 px-2 py-1.5 sm:px-3">
@@ -201,6 +205,21 @@ export default function Toolbar({
                 <DropdownMenuRadioItem value="solarized-dark">Solarized Dark</DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="solarized-light">Solarized Light</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger><Layout className="h-4 w-4" /> View</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuCheckboxItem checked={panelVisibility.files} onCheckedChange={() => onToggleView('files')}>
+                Files
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={panelVisibility.preview} onCheckedChange={() => onToggleView('preview')}>
+                Preview
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={panelVisibility.terminal} onCheckedChange={() => onToggleView('terminal')}>
+                Terminal
+              </DropdownMenuCheckboxItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
 

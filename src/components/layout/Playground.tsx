@@ -860,6 +860,33 @@ export default function Playground({ workspaceId }: { workspaceId?: string }) {
     return { display: info.display, documentation: info.documentation };
   }, [activeFile, workspace]);
 
+  const handleDetachTerminal = useCallback(() => {
+    window.open('/detached-terminal', '_blank', 'popup=yes,width=900,height=600');
+  }, []);
+
+  const handleToggleView = useCallback((panel: 'files' | 'preview' | 'terminal') => {
+    if (isMobilePortrait) {
+      const id = panel === 'files' ? 'm-files' : panel === 'preview' ? 'm-preview' : 'm-bottom';
+      const ref = panel === 'files' ? filesPanelRef : panel === 'preview' ? previewPanelRef : bottomPanelRef;
+      if (panel === 'terminal') {
+        updateSettings((prev) => ({ ...prev, bottomTab: 'terminal' as const }));
+        togglePanelCollapse(id, ref);
+      } else {
+        togglePanelCollapse(id, ref);
+      }
+    } else {
+      const id = panel === 'files' ? 'd-files' : panel === 'preview' ? 'd-preview' : 'd-bottom';
+      const ref = panel === 'files' ? filesPanelRef : panel === 'preview' ? previewPanelRef : bottomPanelRef;
+      if (panel === 'terminal') {
+        updateSettings((prev) => ({ ...prev, bottomTab: 'terminal' as const }));
+        const collapsed = settings.collapsedPanels.includes(id);
+        if (collapsed) togglePanelCollapse(id, ref);
+      } else {
+        togglePanelCollapse(id, ref);
+      }
+    }
+  }, [isMobilePortrait, settings.collapsedPanels, togglePanelCollapse, updateSettings]);
+
   const renderBottomPanelContent = () => {
     if (settings.bottomTab === 'console') {
       return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
@@ -868,7 +895,7 @@ export default function Playground({ workspaceId }: { workspaceId?: string }) {
       return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>; 
     }
     if (settings.bottomTab === 'terminal' && FEATURE_FLAGS.ENABLE_TERMINAL) {
-      return <TerminalPanel workspace={workspace} />;
+      return <TerminalPanel workspace={workspace} onDetach={handleDetachTerminal} />;
     }
     if (settings.bottomTab === 'git' && FEATURE_FLAGS.ENABLE_GIT) {
       return (
@@ -938,6 +965,12 @@ export default function Playground({ workspaceId }: { workspaceId?: string }) {
         editorTabSize={settings.editorTabSize}
         onEditorTabSizeChange={(editorTabSize) => updateSettings((prev) => ({ ...prev, editorTabSize }))}
         diagnosticsCount={errorCount}
+        panelVisibility={{
+          files: !settings.collapsedPanels.includes(isMobilePortrait ? 'm-files' : 'd-files'),
+          preview: !settings.collapsedPanels.includes(isMobilePortrait ? 'm-preview' : 'd-preview'),
+          terminal: !settings.collapsedPanels.includes(isMobilePortrait ? 'm-bottom' : 'd-bottom') && settings.bottomTab === 'terminal',
+        }}
+        onToggleView={handleToggleView}
       />
 
       {isMobilePortrait ? (

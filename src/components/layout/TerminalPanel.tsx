@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { BrowserShellAdapter, createTerminalAdapter } from '@/services/terminal/adapter';
 import { TERMINAL_SCROLLBACK_LINES } from '@/constants';
 import { Workspace } from '@/types';
-import { RefreshCw, Terminal } from 'lucide-react';
+import { ExternalLink, RefreshCw, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const XTermComponent = dynamic(() => import('./XTermInner'), { ssr: false });
@@ -13,9 +13,10 @@ const XTermComponent = dynamic(() => import('./XTermInner'), { ssr: false });
 interface TerminalPanelProps {
   className?: string;
   workspace?: Workspace;
+  onDetach?: () => void;
 }
 
-export default function TerminalPanel({ className = '', workspace }: TerminalPanelProps) {
+export default function TerminalPanel({ className = '', workspace, onDetach }: TerminalPanelProps) {
   const [adapter, setAdapter] = useState(() => createTerminalAdapter(workspace));
   const [resetKey, setResetKey] = useState(0);
   const adapterRef = useRef(adapter);
@@ -51,15 +52,28 @@ export default function TerminalPanel({ className = '', workspace }: TerminalPan
             {adapter.info.label}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={handleReset}
-          title="Restart terminal"
-        >
-          <RefreshCw className="h-3 w-3" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {onDetach && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={onDetach}
+              title="Abrir terminal em nova janela"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={handleReset}
+            title="Restart terminal"
+          >
+            <RefreshCw className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
       <div className="flex-1 overflow-hidden">
         <XTermComponent
