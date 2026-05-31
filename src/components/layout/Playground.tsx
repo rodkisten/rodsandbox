@@ -1208,10 +1208,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                       <GitPanel
                         workspace={workspace}
                         onFilesChanged={(entries) => {
-                          for (const entry of entries) {
-                            const file = Object.values(workspace.files).find((f) => f.path === entry.path);
-                            if (file) updateFile(file.id, entry.content);
-                          }
+                          replaceWorkspaceFiles(entries);
                         }}
                       />
                     ) : (
