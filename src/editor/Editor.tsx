@@ -51,13 +51,17 @@ interface EditorProps {
   onCursorPositionChange?: (position: number) => void;
 }
 
+const EMPTY_DIAGNOSTICS: EditorProps['diagnostics'] = [];
+const EMPTY_EXTENSIONS: EditorProps['extraExtensions'] = [];
+const EMPTY_AUTOCOMPLETE_PROVIDERS: EditorProps['extraAutocompleteProviders'] = [];
+
 export default function Editor({
   file,
   onChange,
   onSave,
-  diagnostics = [],
-  extraExtensions = [],
-  extraAutocompleteProviders = [],
+  diagnostics = EMPTY_DIAGNOSTICS,
+  extraExtensions = EMPTY_EXTENSIONS,
+  extraAutocompleteProviders = EMPTY_AUTOCOMPLETE_PROVIDERS,
   theme,
   fontSize,
   fontFamily,
@@ -70,23 +74,24 @@ export default function Editor({
   jumpTo,
   onCursorPositionChange,
 }: EditorProps) {
-  const handleChange = useCallback((value: string) => {
+  const forwardContentChange = useCallback((value: string) => {
     onChange(value);
   }, [onChange]);
 
   const linterSource = useCallback((doc: { length: number; lines: number; line(number: number): { from: number; to: number } }): CMDiagnostic[] => {
     if (!linterEnabled) return [];
-    return diagnostics
-      .filter((d) => d.fileId === file.id)
-      .map((d) => {
-        const { from, to } = getDiagnosticRange(d, doc);
-        return {
-          from,
-          to,
-          severity: (d.severity === 'hint' ? 'info' : d.severity) as CMDiagnostic['severity'],
-          message: d.message,
-        };
+    const result: CMDiagnostic[] = [];
+    for (const d of diagnostics) {
+      if (d.fileId !== file.id) continue;
+      const { from, to } = getDiagnosticRange(d, doc);
+      result.push({
+        from,
+        to,
+        severity: (d.severity === 'hint' ? 'info' : d.severity) as CMDiagnostic['severity'],
+        message: d.message,
       });
+    }
+    return result;
   }, [diagnostics, file.id, linterEnabled]);
 
   const saveKeymap = keymap.of([{
@@ -194,7 +199,7 @@ export default function Editor({
         value={file.content}
         height="auto"
         extensions={extensions}
-        onChange={handleChange}
+        onChange={forwardContentChange}
         theme={selectedTheme}
         basicSetup={{
           lineNumbers,

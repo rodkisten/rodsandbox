@@ -105,10 +105,14 @@ export async function listWorkspaces(): Promise<Workspace[]> {
     return db.getAll(WORKSPACE_STORE);
   } catch {
     if (typeof window === 'undefined') return [];
-    return Object.keys(window.localStorage)
-      .filter((key) => key.startsWith(LS_WORKSPACE_PREFIX))
-      .map((key) => safeLocalStorageGet<Workspace>(key))
-      .filter((value): value is Workspace => Boolean(value));
+    const keys = Object.keys(window.localStorage);
+    const result: Workspace[] = [];
+    for (const key of keys) {
+      if (!key.startsWith(LS_WORKSPACE_PREFIX)) continue;
+      const ws = safeLocalStorageGet<Workspace>(key);
+      if (ws) result.push(ws);
+    }
+    return result;
   }
 }
 

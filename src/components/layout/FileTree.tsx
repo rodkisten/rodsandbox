@@ -135,7 +135,7 @@ function TreeItem({
             type="button"
             className="rounded p-0.5 text-neutral-500 hover:bg-neutral-700 hover:text-neutral-200"
           >
-            {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
           </button>
         ) : (
           <span className="w-4" />
@@ -170,7 +170,7 @@ function TreeItem({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className="rounded p-1 text-neutral-500 opacity-0 transition group-hover:opacity-100 hover:bg-neutral-700 hover:text-neutral-200">
-              <MoreHorizontal className="h-3.5 w-3.5" />
+              <MoreHorizontal className="size-3.5" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -178,12 +178,12 @@ function TreeItem({
               setRenaming(true);
               setRenameValue(node.name);
             }}>
-              <Pencil className="h-4 w-4" /> Renomear
+              <Pencil className="size-4" /> Renomear
             </DropdownMenuItem>
             {node.type === 'file' ? (
               <>
                 <DropdownMenuItem onClick={() => onDuplicateFile(node.id)}>
-                  <Copy className="h-4 w-4" /> Duplicar
+                  <Copy className="size-4" /> Duplicar
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
@@ -192,15 +192,15 @@ function TreeItem({
                     if (nextPath && nextPath !== current) onMoveFile(node.id, nextPath);
                   }}
                 >
-                  <FolderPlus className="h-4 w-4" /> Mover
+                  <FolderPlus className="size-4" /> Mover
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-red-300 focus:text-red-200" onClick={() => onDeleteFile(node.id)}>
-                  <Trash2 className="h-4 w-4" /> Excluir
+                  <Trash2 className="size-4" /> Excluir
                 </DropdownMenuItem>
               </>
             ) : (
               <DropdownMenuItem className="text-red-300 focus:text-red-200" onClick={() => onDeleteFolder(node.path)}>
-                <Trash2 className="h-4 w-4" /> Excluir pasta
+                <Trash2 className="size-4" /> Excluir pasta
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
@@ -245,7 +245,12 @@ export default function FileTree({
   const uploadFileRef = useRef<HTMLInputElement>(null);
   const uploadFolderRef = useRef<HTMLInputElement>(null);
   const uploadZipRef = useRef<HTMLInputElement>(null);
+  const newFileInputRef = useRef<HTMLInputElement>(null);
   const tree = buildFileTree(workspace);
+
+  useEffect(() => {
+    if (creating) newFileInputRef.current?.focus();
+  }, [creating]);
 
   const handleCreate = () => {
     const name = newFileName.trim();
@@ -295,37 +300,37 @@ export default function FileTree({
             onClick={() => setCreating(true)}
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
+            className="size-7"
             title="Novo arquivo"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="size-4" />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7">
-                <MoreHorizontal className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="size-7">
+                <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Ações</DropdownMenuLabel>
               <DropdownMenuItem onClick={() => setCreating(true)}>
-                <Plus className="h-4 w-4" /> Novo arquivo
+                <Plus className="size-4" /> Novo arquivo
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => {
                 const folderPath = window.prompt('Caminho da pasta (ex: src/components)');
                 if (folderPath) onCreateFolder(folderPath);
               }}>
-                <FolderPlus className="h-4 w-4" /> Nova pasta
+                <FolderPlus className="size-4" /> Nova pasta
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => uploadFileRef.current?.click()}>
-                <Upload className="h-4 w-4" /> Upload de arquivos
+                <Upload className="size-4" /> Upload de arquivos
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => uploadFolderRef.current?.click()}>
-                <Upload className="h-4 w-4" /> Upload de pasta
+                <Upload className="size-4" /> Upload de pasta
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => uploadZipRef.current?.click()}>
-                <Upload className="h-4 w-4" /> Importar ZIP
+                <Upload className="size-4" /> Importar ZIP
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -368,7 +373,7 @@ export default function FileTree({
       {creating && (
         <div className="border-b border-neutral-800 px-2 py-1">
           <input
-            autoFocus
+            ref={newFileInputRef}
             value={newFileName}
             onChange={(event) => setNewFileName(event.target.value)}
             onKeyDown={(event) => {

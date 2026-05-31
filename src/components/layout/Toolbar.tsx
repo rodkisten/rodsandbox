@@ -100,10 +100,10 @@ export default function Toolbar({
         onClick={onRun}
         disabled={isRunning}
         size="icon"
-        className="h-8 w-8 rounded-md bg-neutral-900 hover:bg-emerald-500"
+        className="size-8 rounded-md bg-neutral-900 hover:bg-emerald-500"
         title="Play (Ctrl+Enter)"
       >
-        <Play className="h-4 w-4" />
+        <Play className="size-4" />
       </Button>
       <Button
         onClick={onToggleAutoRun}
@@ -112,7 +112,7 @@ export default function Toolbar({
         className={autoRun ? 'bg-purple-700/30 hover:bg-purple-600' : ''}
         title="AutoPlay"
       >
-        <PlayCircle className="h-4 w-4" />
+        <PlayCircle className="size-4" />
       </Button>
       <div className="ml-1 rounded bg-neutral-900 px-1.5 py-0.5 text-[10px] text-neutral-500">
         {diagnosticsCount > 0 ? `${diagnosticsCount} erros` : 'ok'}
@@ -121,25 +121,25 @@ export default function Toolbar({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button size="icon" variant="secondary" className="ml-auto" title="Menu">
-            <Menu className="h-4 w-4" />
+            <Menu className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Ações</DropdownMenuLabel>
           <DropdownMenuItem onClick={onFormat}>
-            <WandSparkles className="h-4 w-4" /> {isFormatting ? 'Formatando...' : 'Formatar'}
+            <WandSparkles className="size-4" /> {isFormatting ? 'Formatando...' : 'Formatar'}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onTypecheck}>
-            <Bug className="h-4 w-4" /> Typecheck
+            <Bug className="size-4" /> Typecheck
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onSave}>
-            <Save className="h-4 w-4" /> Salvar
+            <Save className="size-4" /> Salvar
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onOpenCommands}>
-            <Command className="h-4 w-4" /> Command Palette
+            <Command className="size-4" /> Command Palette
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onOpenEditorDetached}>
-            <MoonStar className="h-4 w-4" /> Detach editor
+            <MoonStar className="size-4" /> Detach editor
           </DropdownMenuItem>
           <DropdownMenuSeparator />
 
@@ -209,7 +209,7 @@ export default function Toolbar({
           </DropdownMenuSub>
 
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger><Layout className="h-4 w-4" /> View</DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger><Layout className="size-4" /> View</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuCheckboxItem checked={panelVisibility.files} onCheckedChange={() => onToggleView('files')}>
                 Files
@@ -227,13 +227,13 @@ export default function Toolbar({
             <DropdownMenuSubTrigger>Arquivos</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuItem onClick={onDownload}>
-                <Download className="h-4 w-4" /> Baixar arquivo atual
+                <Download className="size-4" /> Baixar arquivo atual
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onExportZip}>
-                <Download className="h-4 w-4" /> Exportar ZIP
+                <Download className="size-4" /> Exportar ZIP
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onThemeChange(theme)}>
-                <Paintbrush className="h-4 w-4" /> Aplicar tema atual
+                <Paintbrush className="size-4" /> Aplicar tema atual
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>

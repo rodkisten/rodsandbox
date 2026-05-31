@@ -183,7 +183,7 @@ export function buildFileTree(workspace: Workspace): TreeNode[] {
   const root: TreeNode[] = [];
   const folders: Record<string, TreeNode> = {};
 
-  const sorted = [...files].sort((a, b) => {
+  const sorted = files.toSorted((a, b) => {
     const aParts = a.path.split('/');
     const bParts = b.path.split('/');
     if (aParts.length !== bParts.length) return bParts.length - aParts.length;

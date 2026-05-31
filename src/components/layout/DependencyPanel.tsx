@@ -31,16 +31,16 @@ export default function DependencyPanel({ dependencies, packageJsonContent, onAd
 
   if (dependencies.length === 0 && !onAddPackage) {
     return (
-      <div className="border-b border-gray-800 bg-gray-950/70 px-3 py-2 text-xs text-gray-500">
+      <div className="border-b border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-500">
         No external dependencies detected.
       </div>
     );
   }
 
   return (
-    <div className="border-b border-gray-800 bg-gray-950/70">
+    <div className="border-b border-zinc-800 bg-zinc-950/70">
       <div className="flex items-center justify-between px-3 py-2">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Dependencies</div>
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Dependencies</div>
         {onAddPackage && (
           <Button
             size="icon"
@@ -59,7 +59,7 @@ export default function DependencyPanel({ dependencies, packageJsonContent, onAd
           {dependencies.map((dependency) => {
             const version = pkgVersions[dependency];
             return (
-              <span key={dependency} className="flex items-baseline gap-1 rounded bg-gray-800 px-2 py-0.5 text-xs text-neutral-200">
+              <span key={dependency} className="flex items-baseline gap-1 rounded bg-zinc-800 px-2 py-0.5 text-xs text-neutral-200">
                 <span>{dependency}</span>
                 {version && <span className="text-[10px] text-neutral-500">{version}</span>}
               </span>
@@ -69,11 +69,11 @@ export default function DependencyPanel({ dependencies, packageJsonContent, onAd
       )}
 
       {dependencies.length === 0 && (
-        <div className="px-3 pb-2 text-xs text-gray-500">No external dependencies detected.</div>
+        <div className="px-3 pb-2 text-xs text-zinc-500">No external dependencies detected.</div>
       )}
 
       {searchOpen && onAddPackage && (
-        <div className="border-t border-gray-800">
+        <div className="border-t border-zinc-800">
           <NpmSearchPanel onAddPackage={(name, version) => { onAddPackage(name, version); }} />
         </div>
       )}

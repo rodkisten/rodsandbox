@@ -18,12 +18,17 @@ interface CommandPaletteProps {
 export default function CommandPalette({ open, onClose, commands }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   const filteredCommands = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return commands;
     return commands.filter((command) => command.label.toLowerCase().includes(normalized));
   }, [commands, query]);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -60,11 +65,23 @@ export default function CommandPalette({ open, onClose, commands }: CommandPalet
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-20" onClick={onClose}>
-      <div className="w-full max-w-2xl overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+    <div
+      role="presentation"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-20"
+      onClick={onClose}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        className="w-full max-w-2xl overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
         <div className="border-b border-neutral-800 px-3 py-2">
           <input
-            autoFocus
+            ref={inputRef}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);

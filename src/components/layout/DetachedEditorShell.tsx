@@ -69,7 +69,7 @@ export default function DetachedEditorShell() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  const handleChange = useCallback((newContent: string) => {
+  const syncContentToOpener = useCallback((newContent: string) => {
     setContent(newContent);
     if (!syncPayload) return;
     pendingSave.current = true;
@@ -105,7 +105,7 @@ export default function DetachedEditorShell() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: bg, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderBottom: '1px solid #1e293b', background: '#0b1220', flexShrink: 0 }}>
-        <span style={{ fontSize: 10, border: '1px solid #334155', borderRadius: 999, padding: '2px 6px', color: '#94a3b8', letterSpacing: '0.05em' }}>
+        <span style={{ fontSize: 12, border: '1px solid #334155', borderRadius: 999, padding: '2px 6px', color: '#94a3b8', letterSpacing: '0.05em' }}>
           detached editor
         </span>
         <span style={{ fontSize: 12, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -115,7 +115,7 @@ export default function DetachedEditorShell() {
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <Editor
           file={file}
-          onChange={handleChange}
+          onChange={syncContentToOpener}
           onSave={handleSave}
           diagnostics={syncPayload.diagnostics ?? []}
           theme={theme}

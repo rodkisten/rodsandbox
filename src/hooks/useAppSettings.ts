@@ -64,7 +64,7 @@ function mergeSettings(saved: AppSettings | undefined): AppSettings {
 }
 
 export function useAppSettings() {
-  const [settings, setSettings] = useState<AppSettings>(createDefaultSettings());
+  const [settings, setSettings] = useState<AppSettings>(() => createDefaultSettings());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

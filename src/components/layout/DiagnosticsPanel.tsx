@@ -29,9 +29,11 @@ const SEVERITY_ICON: Record<DiagnosticSeverity, string> = {
   hint:    '◦',
 };
 
+const EMPTY_FILE_NAMES: Record<string, string> = {};
+
 export default function DiagnosticsPanel({
   diagnostics,
-  fileNames = {},
+  fileNames = EMPTY_FILE_NAMES,
   onSelectDiagnostic,
 }: DiagnosticsPanelProps) {
   // Group diagnostics by fileId
@@ -71,7 +73,7 @@ export default function DiagnosticsPanel({
                 {SEVERITY_ICON[diag.severity]}
               </span>
               <span className={`text-xs flex-1 break-all ${SEVERITY_COLORS[diag.severity]}`}>
-                <span className="mr-1 rounded bg-gray-800 px-1 py-0.5 text-[10px] uppercase text-gray-300">{diag.source}</span>
+                <span className="mr-1 rounded bg-zinc-800 px-1 py-0.5 text-[10px] uppercase text-zinc-300">{diag.source}</span>
                 {diag.message}
               </span>
               <span className="flex-shrink-0 text-neutral-600 text-xs tabular-nums">
