@@ -26,8 +26,8 @@
     "@lezer/highlight": "^1.2.3",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-tabs": "^1.1.13",
-    "@uiw/react-codemirror": "^4.25.9",
     "@uiw/codemirror-themes": "^4.25.9",
+    "@uiw/react-codemirror": "^4.25.9",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "idb": "^8.0.3",
@@ -60,5 +60,8 @@
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "vitest": "^4.1.6"
+  },
+  "optionalDependencies": {
+    "node-gyp": "^12.3.0"
   }
 }
