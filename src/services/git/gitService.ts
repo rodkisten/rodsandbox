@@ -75,6 +75,38 @@ export async function syncWorkspaceToFs(workspace: Workspace): Promise<void> {
     // Already exists.
   }
 
+  // Build set of paths that should exist (excluding .git).
+  const workspacePaths = new Set(Object.values(workspace.files).map((f) => f.path));
+
+  // Remove files from FS that are no longer in the workspace.
+  async function removeStale(current: string): Promise<void> {
+    let entries: string[];
+    try {
+      entries = await pfs.readdir(current);
+    } catch {
+      return;
+    }
+    for (const name of entries) {
+      if (name === '.git') continue;
+      const fullPath = `${current}/${name}`;
+      let stat: { isDirectory(): boolean };
+      try {
+        stat = await pfs.stat(fullPath);
+      } catch {
+        continue;
+      }
+      if (stat.isDirectory()) {
+        await removeStale(fullPath);
+      } else {
+        const relativePath = fullPath.slice(dir.length + 1);
+        if (!workspacePaths.has(relativePath)) {
+          try { await pfs.unlink(fullPath); } catch { /* ignore */ }
+        }
+      }
+    }
+  }
+  await removeStale(dir);
+
   for (const file of Object.values(workspace.files)) {
     const fullPath = `${dir}/${file.path}`;
     const parentDir = fullPath.substring(0, fullPath.lastIndexOf('/'));

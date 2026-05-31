@@ -35,5 +35,5 @@ export default function WorkspaceIdePage() {
     );
   }
 
-  return <Playground workspaceId={workspaceId} />;
+  return <Playground workspaceId={workspaceId} userId={user.id} />;
 }

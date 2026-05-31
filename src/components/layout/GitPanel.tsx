@@ -109,7 +109,7 @@ export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
   useEffect(() => {
     if (!serviceRef.current || isRepo === false) return;
     void syncWorkspaceToFs(workspace).catch(() => {});
-  });
+  }, [workspace.files, workspace.id, isRepo]);
 
   const refreshAll = useCallback(async (svc: GitService) => {
     const [statusList, log, branchList, branch] = await Promise.all([

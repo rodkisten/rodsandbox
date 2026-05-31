@@ -3,7 +3,7 @@
 import React, { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { LOGIN_REDIRECT_PATH } from '@/constants';
+import { POST_LOGIN_PATH } from '@/constants';
 import { Code2, Loader2 } from 'lucide-react';
 
 /**
@@ -26,7 +26,7 @@ export default function LoginPage() {
   // If already authenticated, skip to the app.
   useEffect(() => {
     if (!loading && user) {
-      router.replace(LOGIN_REDIRECT_PATH);
+      router.replace(POST_LOGIN_PATH);
     }
   }, [user, loading, router]);
 
@@ -37,7 +37,7 @@ export default function LoginPage() {
     try {
       const result = await signIn(username, password);
       if (result.ok) {
-        router.replace(LOGIN_REDIRECT_PATH);
+        router.replace(POST_LOGIN_PATH);
       } else {
         setError(result.error ?? 'Sign in failed.');
       }

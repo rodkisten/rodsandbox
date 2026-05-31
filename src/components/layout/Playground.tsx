@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import type { Completion, CompletionContext, CompletionSource } from '@codemirror/autocomplete';
 import type { Extension } from '@codemirror/state';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
@@ -71,7 +72,7 @@ function ResizeGrip() {
   return <Separator className="relative flex h-3 items-center justify-center bg-neutral-900/70 transition-colors hover:bg-neutral-500/25 data-[resize-handle-active]:bg-neutral-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
 }
 
-export default function Playground({ workspaceId }: { workspaceId?: string }) {
+export default function Playground({ workspaceId, userId }: { workspaceId?: string; userId?: string }) {
   const {
     workspace,
     activeFile,
@@ -91,6 +92,15 @@ export default function Playground({ workspaceId }: { workspaceId?: string }) {
     saveWorkspace,
   } = useWorkspace(workspaceId);
   const { settings, loading: settingsLoading, updateSettings } = useAppSettings();
+  const router = useRouter();
+
+  // Ownership check: redirect if the loaded workspace belongs to a different user.
+  useEffect(() => {
+    if (loading) return;
+    if (userId && workspace.ownerId && workspace.ownerId !== userId) {
+      router.replace('/workspaces');
+    }
+  }, [loading, workspace.ownerId, userId, router]);
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
@@ -941,12 +951,7 @@ export default function Playground({ workspaceId }: { workspaceId?: string }) {
         <GitPanel
           workspace={workspace}
           onFilesChanged={(entries) => {
-            for (const entry of entries) {
-              const file = Object.values(workspace.files).find((f) => f.path === entry.path);
-              if (file) {
-                updateFile(file.id, entry.content);
-              }
-            }
+            replaceWorkspaceFiles(entries);
           }}
         />
       );

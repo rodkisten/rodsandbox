@@ -22,9 +22,8 @@ export const CONSOLE_LOGS_KEY = 'console-logs';
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export const AUTH_SESSION_LS_KEY = 'rodsandbox:auth-session';
-/** TODO: Replace with real OAuth redirect URL when integrating real auth. */
-export const LOGIN_REDIRECT_PATH = '/workspaces';
-export const LOGOUT_REDIRECT_PATH = '/login';
+export const POST_LOGIN_PATH = '/workspaces';
+export const POST_LOGOUT_PATH = '/login';
 
 // ─── Git ─────────────────────────────────────────────────────────────────────
 

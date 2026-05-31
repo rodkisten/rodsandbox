@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { LOGOUT_REDIRECT_PATH } from '@/constants';
+import { POST_LOGOUT_PATH } from '@/constants';
 
 /**
  * Workspace picker page — lists all workspaces for the current user and
@@ -73,7 +73,7 @@ export default function WorkspacesPage() {
 
   const handleSignOut = useCallback(async () => {
     await signOut();
-    router.replace(LOGOUT_REDIRECT_PATH);
+    router.replace(POST_LOGOUT_PATH);
   }, [signOut, router]);
 
   if (authLoading || loading) {

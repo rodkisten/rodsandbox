@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { LOGIN_REDIRECT_PATH } from '@/constants';
+import { POST_LOGIN_PATH } from '@/constants';
 import { Loader2 } from 'lucide-react';
 
 /**
@@ -16,7 +16,7 @@ export default function RootPage() {
 
   useEffect(() => {
     if (!loading) {
-      router.replace(user ? LOGIN_REDIRECT_PATH : '/login');
+      router.replace(user ? POST_LOGIN_PATH : '/login');
     }
   }, [user, loading, router]);
 

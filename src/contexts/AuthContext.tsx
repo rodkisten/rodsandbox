@@ -11,7 +11,7 @@
  * Wrap the app root with `<AuthProvider>` in `layout.tsx`.
  */
 
-import React, { createContext, useCallback, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
 import * as AuthService from '@/lib/auth';
 import { User } from '@/types';
 
@@ -33,14 +33,15 @@ export const AuthContext = createContext<AuthContextValue | null>(null);
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Lazy initializer reads the session synchronously from localStorage on the
-  // client side, avoiding a setState call inside a useEffect.
-  const [user, setUser] = useState<User | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return AuthService.getSession()?.user ?? null;
-  });
-  // Session reads are synchronous, so no async loading phase is needed.
-  const loading = false;
+  const [user, setUser] = useState<User | null>(null);
+  // Keep loading true until the client effect runs to avoid hydration mismatch.
+  const [loading, setLoading] = useState(true);
+
+  // Hydrate the session on the client after the first render.
+  useEffect(() => {
+    setUser(AuthService.getSession()?.user ?? null);
+    setLoading(false);
+  }, []);
 
   const handleSignIn = useCallback(
     async (username: string, password: string) => {
