@@ -38,15 +38,15 @@ export default function WorkspacesPage() {
     }
   }, [user, authLoading, router]);
 
-  const loadSummaries = useCallback(async () => {
-    if (!user) return;
-    const list = await Db.listWorkspaceSummaries(user.id);
-    setSummaries(list);
-  }, [user]);
-
   useEffect(() => {
-    if (user) void loadSummaries();
-  }, [user, loadSummaries]);
+    if (!user) return;
+    let cancelled = false;
+    Db.listWorkspaceSummaries(user.id).then((list) => {
+      if (!cancelled) setSummaries(list);
+    }).catch(() => {
+      if (!cancelled) setSummaries([]);
+    });
+  }, [user]);
 
   const handleCreate = useCallback(async () => {
     if (!user || creating) return;

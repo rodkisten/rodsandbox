@@ -1,13 +1,18 @@
 /**
  * Shared PTY session store for the terminal API routes.
  * Lives in the Node.js module cache so sessions are shared across route handlers.
+ *
+ * node-pty is intentionally lazy-loaded inside createSession so that the module
+ * can be imported at build time without requiring the native binary to be present.
+ * This is necessary because node-pty is listed in neverBuiltDependencies (no
+ * native addon on Vercel) and the terminal routes are only used in self-hosted
+ * Node.js environments (Railway, Fly.io, etc.).
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pty = require('node-pty') as typeof import('node-pty');
+import type NodePty from 'node-pty';
 
 export interface PtySession {
-  ptyProcess: ReturnType<typeof pty.spawn>;
+  ptyProcess: NodePty.IPty;
   buffer: string[];
   onData: ((data: string) => void) | null;
   cleanup: (() => void) | null;
@@ -23,6 +28,8 @@ function randomId(): string {
 
 /** Spawn a new PTY and register it in the session map. Returns the session ID. */
 export function createSession(cols: number, rows: number): string {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const pty = require('node-pty') as typeof import('node-pty');
   const sid = randomId();
 
   const shell = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL ?? 'bash');

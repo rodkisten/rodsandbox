@@ -2,6 +2,8 @@
 
 A compact Next.js route for loading userscript-friendly bundles from cdnjs, npm/jsDelivr and GitHub Gists.
 
+Version 1.1.0 fixes provider-less package resolution, npm `latest` resolution, scoped package parsing, fragile comment removal and minification failures.
+
 It supports:
 
 - `preset=highlight`, `preset=html`, `preset=utils`, `preset=userscript`
@@ -10,7 +12,7 @@ It supports:
 - `pkg=npm:lucide@0.468.0/dist/umd/lucide.js(n:Lucide)`
 - `pkg=gist:owner/gistId/file.js(namespace:File,minify:false,remove-comments:false)`
 - `minify=true|false|1|0|yes|no|on|off`
-- `remove-comments=true|false`
+- `remove-comments=true|false` defaults to `false` because vendor bundles can contain tricky regex/template syntax
 - `cache=none|short|normal|long|immutable`
 - `format=js|text|json`
 - `bundle=raw|iife`
@@ -48,6 +50,8 @@ app/api/cdn/
 ```
 
 ## Basic usage
+
+Provider-less specs use `auto`: the route tries cdnjs first and falls back to npm/jsDelivr.
 
 ```txt
 /api/cdn?pkg=lodash
@@ -151,6 +155,12 @@ Use text format to inspect the generated bundle directly:
 ```txt
 /api/cdn?preset=userscript&format=text&minify=false&remove-comments=false
 ```
+
+## Runtime resilience
+
+If `minify=true` but esbuild cannot parse one third-party file, the route now returns the unminified bundle with an `X-Rod-CDN-Warnings` header instead of failing the whole request.
+
+If any individual asset has `minify:false`, final bundle minification is skipped to preserve source semantics.
 
 ## Cache behavior
 

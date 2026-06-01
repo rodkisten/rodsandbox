@@ -4,7 +4,9 @@ export type OutputFormat = "js" | "text" | "json";
 
 export type BundleMode = "raw" | "iife";
 
-export type AssetProvider = "cdnjs" | "npm" | "gist";
+export type AssetProvider = "auto" | "cdnjs" | "npm" | "gist";
+
+export type ResolvedProvider = Exclude<AssetProvider, "auto">;
 
 export type SpecOptions = {
   readonly name?: string;
@@ -37,7 +39,7 @@ export type RequestOptions = {
 };
 
 export type ResolvedAsset = {
-  readonly provider: AssetProvider;
+  readonly provider: ResolvedProvider;
   readonly packageName: string;
   readonly version: string;
   readonly file: string;

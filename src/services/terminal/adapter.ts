@@ -65,10 +65,18 @@ export interface TerminalAdapter {
 
 /**
  * Returns the best available terminal adapter for the current environment.
- * Tries the node-pty API adapter first; falls back to BrowserShellAdapter.
+ *
+ * Priority:
+ * 1. Vercel serverless / edge runtime → VercelFallbackAdapter (no process execution).
+ * 2. Browser client → NodePtyAdapter (tries /api/terminal, falls back to BrowserShell).
+ * 3. Server-side Node.js (non-Vercel) → BrowserShellAdapter.
  */
 export function createTerminalAdapter(workspace?: Workspace, initialHistory?: string[], onHistorySave?: (history: string[]) => void): TerminalAdapter {
-  // Prefer node-pty API when running on a Node.js server (not Edge/Vercel).
+  // On Vercel or edge runtimes, native execution is unavailable.
+  if (process.env['VERCEL'] || process.env['NEXT_RUNTIME'] === 'edge' || process.env['NEXT_RUNTIME'] === 'experimental-edge') {
+    return new VercelFallbackAdapter();
+  }
+  // In the browser, try the node-pty API first, then fall back to BrowserShell.
   if (typeof window !== 'undefined') {
     return new NodePtyAdapter(workspace, initialHistory, onHistorySave);
   }
@@ -85,7 +93,7 @@ export function createTerminalAdapter(workspace?: Workspace, initialHistory?: st
 export class NodePtyAdapter implements TerminalAdapter {
   readonly info: TerminalRuntimeInfo = {
     kind: 'node-pty' as TerminalRuntimeKind,
-    label: 'Node PTY',
+    label: 'Local Terminal',
     supportsExecution: true,
   };
 
@@ -138,8 +146,8 @@ export class NodePtyAdapter implements TerminalAdapter {
         handlers.onError('Terminal connection lost');
       };
 
-      // Update the info label to reflect the real adapter.
-      (this.info as { label: string }).label = 'Node PTY';
+      // Update the info label to reflect the confirmed PTY connection.
+      (this.info as { label: string }).label = 'Local Terminal';
 
     } catch {
       // node-pty API not available — fall back to browser shell.
@@ -252,12 +260,12 @@ export class BrowserShellAdapter implements TerminalAdapter {
 export class VercelFallbackAdapter implements TerminalAdapter {
   readonly info: TerminalRuntimeInfo = {
     kind: 'vercel-fallback' as TerminalRuntimeKind,
-    label: 'Browser Shell',
-    supportsExecution: true,
+    label: 'Serverless Terminal',
+    supportsExecution: false,
   };
 
   async connect(handlers: TerminalHandlers): Promise<void> {
-    handlers.onData('\r\n\x1b[33m⚠  Fallback adapter\x1b[0m\r\n');
+    handlers.onData('\r\n\x1b[33m⚠  Terminal execution is not available in serverless environments.\x1b[0m\r\n');
   }
 
   write(_data: string): void {}

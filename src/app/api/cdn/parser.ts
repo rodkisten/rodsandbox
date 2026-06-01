@@ -145,29 +145,21 @@ export function parsePackageVersionAndFile(raw: string): {
   readonly version: string | null;
   readonly file: string | null;
 } {
-  const atIndex = raw.lastIndexOf("@");
-  const slashAfterVersion = atIndex > 0 ? raw.indexOf("/", atIndex) : -1;
+  const match = raw.match(/^(@[^/]+\/[^/@]+|[^/@/]+)(?:@([^/]+))?(?:\/(.+))?$/);
 
-  if (atIndex > 0) {
-    const packageName = raw.slice(0, atIndex);
-    const version = slashAfterVersion === -1 ? raw.slice(atIndex + 1) : raw.slice(atIndex + 1, slashAfterVersion);
-    const file = slashAfterVersion === -1 ? null : raw.slice(slashAfterVersion + 1);
-
-    assertSafePath(packageName, "package");
-    assertSafePath(version, "version");
-    if (file) assertSafePath(file, "file");
-
-    return { packageName, version, file };
+  if (!match) {
+    throw new Error(`Invalid package spec: ${raw}`);
   }
 
-  const slashIndex = raw.indexOf("/");
-  const packageName = slashIndex === -1 ? raw : raw.slice(0, slashIndex);
-  const file = slashIndex === -1 ? null : raw.slice(slashIndex + 1);
+  const packageName = match[1] ?? "";
+  const version = match[2] ?? null;
+  const file = match[3] ?? null;
 
   assertSafePath(packageName, "package");
+  if (version) assertSafePath(version, "version");
   if (file) assertSafePath(file, "file");
 
-  return { packageName, version: null, file };
+  return { packageName, version, file };
 }
 
 /**
@@ -182,9 +174,9 @@ export function parseAssetSpec(rawSpec: string): ParsedAssetSpec {
   const explicitProvider = providerSeparator > 0 ? spec.slice(0, providerSeparator) : null;
   const body = providerSeparator > 0 ? spec.slice(providerSeparator + 1) : spec;
 
-  const provider = (explicitProvider ?? options.provider ?? "cdnjs") as AssetProvider;
+  const provider = (explicitProvider ?? options.provider ?? "auto") as AssetProvider;
 
-  if (!["cdnjs", "npm", "gist"].includes(provider)) {
+  if (!["auto", "cdnjs", "npm", "gist"].includes(provider)) {
     throw new Error(`Unsupported provider: ${provider}`);
   }
 
@@ -251,7 +243,7 @@ export function parseRequestOptions(urlSearchParams: URLSearchParams): RequestOp
     .filter(Boolean);
 
   const minify = parseBoolean(urlSearchParams.get("minify") ?? urlSearchParams.get("min"), true);
-  const removeComments = parseBoolean(urlSearchParams.get("remove-comments") ?? urlSearchParams.get("comments"), true);
+  const removeComments = parseBoolean(urlSearchParams.get("remove-comments") ?? urlSearchParams.get("comments"), false);
 
   return {
     specs,

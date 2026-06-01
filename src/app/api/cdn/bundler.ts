@@ -41,6 +41,23 @@ function prepareAssetSource(asset: ResolvedAsset, source: string, options: Reque
 }
 
 /**
+ * Determines if final minification is safe for the whole bundle.
+ *
+ * @remarks
+ * esbuild minifies the final concatenated file. If any asset says
+ * `minify:false`, the safest option is skipping final minification for the
+ * whole bundle, because minifying only some chunks would change the order and
+ * semantics of userscript-style globals.
+ *
+ * @param options Request options.
+ * @param assets Resolved assets.
+ * @returns Whether the final bundle should be minified.
+ */
+function shouldMinifyBundle(options: RequestOptions, assets: readonly ResolvedAsset[]): boolean {
+  return options.minify && assets.every((asset) => asset.options.minify !== false);
+}
+
+/**
  * Builds and optionally minifies resolved assets into a single response body.
  *
  * @param options Request options.
@@ -48,9 +65,10 @@ function prepareAssetSource(asset: ResolvedAsset, source: string, options: Reque
  * @returns Built bundle with cache metadata.
  */
 export async function buildBundle(options: RequestOptions, assets: readonly ResolvedAsset[]): Promise<BuiltBundle> {
-  const cacheKey = createCacheKey(options, assets);
+  const minify = shouldMinifyBundle(options, assets);
+  const cacheKey = createCacheKey({ ...options, minify }, assets);
   const cached = await readCachedBundle(cacheKey);
-  const warnings = assets.flatMap((asset) => asset.warnings);
+  const warnings = [...assets.flatMap((asset) => asset.warnings)];
 
   if (cached !== null) {
     return {
@@ -75,15 +93,23 @@ export async function buildBundle(options: RequestOptions, assets: readonly Reso
     code = wrapInIife(code);
   }
 
-  if (options.minify) {
-    const result = await transform(code, {
-      loader: "js",
-      minify: true,
-      legalComments: options.removeComments ? "none" : "inline",
-      target: "es2018",
-    });
+  if (!minify && options.minify) {
+    warnings.push("Minification skipped because at least one asset requested minify:false.");
+  }
 
-    code = result.code;
+  if (minify) {
+    try {
+      const result = await transform(code, {
+        loader: "js",
+        minify: true,
+        legalComments: options.removeComments ? "none" : "inline",
+        target: "es2018",
+      });
+
+      code = result.code;
+    } catch (error) {
+      warnings.push(`Minification skipped because esbuild could not parse one asset: ${error instanceof Error ? error.message : "unknown error"}`);
+    }
   }
 
   await writeCachedBundle(cacheKey, code);
