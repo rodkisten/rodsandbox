@@ -43,8 +43,9 @@ export default function WorkspacesPage() {
     let cancelled = false;
     Db.listWorkspaceSummaries(user.id).then((list) => {
       if (!cancelled) setSummaries(list);
-    }).catch(() => {});
-    return () => { cancelled = true; };
+    }).catch(() => {
+      if (!cancelled) setSummaries([]);
+    });
   }, [user]);
 
   const handleCreate = useCallback(async () => {
