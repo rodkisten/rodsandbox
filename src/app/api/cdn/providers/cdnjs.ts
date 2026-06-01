@@ -40,13 +40,17 @@ export async function resolveCdnjs(spec: ParsedAssetSpec): Promise<ResolvedAsset
   let { version } = spec;
   let file = spec.file;
 
-  if (!version || !file) {
+  const needsVersion = !version || version === "latest";
+
+  if (needsVersion || !file) {
     const latest = await resolveCdnjsLatest(spec.packageName);
-    version = version ?? latest.version;
-    file = file ?? latest.filename;
-    if (!spec.version) {
+
+    if (needsVersion) {
+      version = latest.version;
       warnings.push(`cdnjs: resolved latest version for ${spec.packageName}: ${version}`);
     }
+
+    file = file ?? latest.filename;
   }
 
   const url = `${CDNJS_ASSET_BASE}/${spec.packageName}/${version}/${file}`;
