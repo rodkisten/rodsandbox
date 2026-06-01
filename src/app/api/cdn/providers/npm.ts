@@ -1,24 +1,51 @@
 import { JSDELIVR_NPM_BASE, NPM_REGISTRY_BASE } from "../constants";
 import type { ParsedAssetSpec, ResolvedAsset } from "../types";
 
+/***************************************************************************************************
+ * Constants
+ **************************************************************************************************/
+
+const EXPORT_CONDITIONS = [
+  "browser",
+  "import",
+  "require",
+  "node",
+  "production",
+  "development",
+  "default",
+] as const;
+
+const ROOT_EXPORT_KEYS = [".", "./"] as const;
+
+/***************************************************************************************************
+ * Types
+ **************************************************************************************************/
+
 type NpmDistTags = {
   readonly latest?: string;
 };
 
+type NpmExportsCondition = (typeof EXPORT_CONDITIONS)[number];
+
+type NpmKnownExportsCondition = NpmExportsCondition | "types";
+
+type NpmExportsObject = Readonly<Record<string, NpmExportsValue | undefined>> & {
+  readonly browser?: NpmExportsValue;
+  readonly import?: NpmExportsValue;
+  readonly require?: NpmExportsValue;
+  readonly default?: NpmExportsValue;
+  readonly development?: NpmExportsValue;
+  readonly production?: NpmExportsValue;
+  readonly node?: NpmExportsValue;
+  readonly types?: NpmExportsValue;
+};
+
 type NpmExportsValue =
   | string
-  | readonly string[]
-  | {
-      readonly browser?: NpmExportsValue;
-      readonly import?: NpmExportsValue;
-      readonly require?: NpmExportsValue;
-      readonly default?: NpmExportsValue;
-      readonly development?: NpmExportsValue;
-      readonly production?: NpmExportsValue;
-      readonly node?: NpmExportsValue;
-      readonly types?: NpmExportsValue;
-    }
-  | Record<string, unknown>;
+  | null
+  | false
+  | readonly NpmExportsValue[]
+  | NpmExportsObject;
 
 type NpmPackageResponse = {
   readonly name?: string;
@@ -37,12 +64,56 @@ type ResolvedNpmLatest = {
   readonly file: string | null;
 };
 
+/***************************************************************************************************
+ * Type Guards
+ **************************************************************************************************/
+
+/**
+ * Checks whether an npm exports value is an object map that can be safely indexed.
+ *
+ * @param value Candidate npm exports value.
+ * @returns True when the value is a non-null object and not an array.
+ *
+ * @example
+ * ```ts
+ * isNpmExportsObject({ import: "./dist/index.mjs" });
+ * // true
+ *
+ * isNpmExportsObject(["./dist/index.js"]);
+ * // false
+ * ```
+ */
+function isNpmExportsObject(value: NpmExportsValue | undefined): value is NpmExportsObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Checks whether an object owns a specific export key.
+ *
+ * @param value npm exports object.
+ * @param key Export key to check.
+ * @returns True when the key exists directly on the object.
+ *
+ * @example
+ * ```ts
+ * hasOwnExportKey({ ".": "./index.js" }, ".");
+ * // true
+ * ```
+ */
+function hasOwnExportKey(value: NpmExportsObject, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+/***************************************************************************************************
+ * Path Helpers
+ **************************************************************************************************/
+
 /**
  * Encodes an npm package name for registry requests.
  *
  * @remarks
  * npm accepts scoped packages as `@scope%2Fname`. Keeping `@` readable makes
- * logs and error messages easier to inspect while still safely encoding `/`.
+ * logs and errors easier to inspect while still safely encoding `/`.
  *
  * @param packageName npm package name.
  * @returns Registry-safe package name.
@@ -58,45 +129,55 @@ function encodeNpmRegistryPackageName(packageName: string): string {
 }
 
 /**
- * Removes leading slashes from a CDN file path.
+ * Removes leading slashes and package-root prefixes from a CDN file path.
  *
  * @remarks
- * jsDelivr paths are relative to the package root. A leading slash can produce
- * a malformed URL where the package version segment looks correct but the file
- * path is treated inconsistently by downstream tooling.
+ * npm metadata commonly stores paths as `./dist/index.js`, while jsDelivr URLs
+ * should receive `dist/index.js`. This keeps generated URLs clean and stable.
  *
  * @param file Candidate file path.
  * @returns Normalized relative file path.
  *
  * @example
  * ```ts
+ * normalizeCdnFilePath("./dist/index.js");
+ * // "dist/index.js"
+ *
  * normalizeCdnFilePath("/dist/index.js");
  * // "dist/index.js"
  * ```
  */
 function normalizeCdnFilePath(file: string): string {
-  return file.replace(/^\/+/, "");
+  return file.replace(/^\.\/+/, "").replace(/^\/+/, "");
 }
 
+/***************************************************************************************************
+ * npm exports Resolution
+ **************************************************************************************************/
+
 /**
- * Resolves a string-like export target from an npm `exports` value.
+ * Resolves the first string file target from an npm exports value.
  *
  * @remarks
- * This intentionally stays conservative. `exports` can be a complex conditional
- * graph, so this helper only extracts obvious browser/import/default string
- * paths without trying to fully emulate Node resolution.
+ * npm `exports` can be a nested conditional graph. This resolver intentionally
+ * stays conservative: it follows common root exports, browser/import/default
+ * style conditions, arrays, and obvious subpath maps without pretending to fully
+ * reimplement Node resolution.
  *
  * @param value npm exports value.
- * @returns Best-effort file path, or null when no safe path is found.
+ * @returns Best-effort file path, or null when no safe file path is found.
  *
  * @example
  * ```ts
  * resolveExportFile({ import: "./dist/index.mjs" });
  * // "./dist/index.mjs"
+ *
+ * resolveExportFile({ ".": { browser: "./dist/browser.js" } });
+ * // "./dist/browser.js"
  * ```
  */
 function resolveExportFile(value: NpmExportsValue | undefined): string | null {
-  if (!value) {
+  if (value === undefined || value === null || value === false) {
     return null;
   }
 
@@ -106,35 +187,47 @@ function resolveExportFile(value: NpmExportsValue | undefined): string | null {
 
   if (Array.isArray(value)) {
     for (const item of value) {
-      if (typeof item === "string") {
-        return item;
+      const resolved = resolveExportFile(item);
+
+      if (resolved) {
+        return resolved;
       }
     }
 
     return null;
   }
 
-  if (typeof value !== "object") {
+  if (!isNpmExportsObject(value)) {
     return null;
   }
 
-  const preferredKeys = [
-    "browser",
-    "import",
-    "default",
-    "production",
-    "development",
-    "node",
-    "require",
-  ] as const;
-
-  for (const key of preferredKeys) {
-    const nested = value[key];
-
-    if (!nested) {
+  for (const rootKey of ROOT_EXPORT_KEYS) {
+    if (!hasOwnExportKey(value, rootKey)) {
       continue;
     }
 
+    const resolved = resolveExportFile(value[rootKey]);
+
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  for (const condition of EXPORT_CONDITIONS) {
+    const nested = value[condition];
+
+    if (nested === undefined) {
+      continue;
+    }
+
+    const resolved = resolveExportFile(nested);
+
+    if (resolved) {
+      return resolved;
+    }
+  }
+
+  for (const nested of Object.values(value)) {
     const resolved = resolveExportFile(nested);
 
     if (resolved) {
@@ -149,8 +242,8 @@ function resolveExportFile(value: NpmExportsValue | undefined): string | null {
  * Resolves the best-effort default file path from npm package metadata.
  *
  * @remarks
- * The order favors CDN-specific fields first, then browser/module/main fields.
- * If no file is found, the resolver can still let jsDelivr resolve the package
+ * The order favors CDN-specific fields first, then browser/module/exports/main.
+ * If no file is found, the caller can still let jsDelivr resolve the package
  * root automatically.
  *
  * @param data npm package metadata.
@@ -200,16 +293,20 @@ function resolveDefaultNpmFile(data: NpmPackageResponse): string | null {
   return null;
 }
 
+/***************************************************************************************************
+ * Registry Resolution
+ **************************************************************************************************/
+
 /**
  * Resolves the latest published version of an npm package.
  *
  * @remarks
- * The `/latest` registry endpoint returns version metadata, not the full package
- * packument. That means `dist-tags.latest` usually does not exist there. The
- * correct primary source for this endpoint is `version`.
+ * The `/latest` registry endpoint returns version metadata, not the full
+ * package packument. The primary source here is therefore `version`, with
+ * `dist-tags.latest` kept only as a defensive fallback.
  *
  * @param packageName npm package name.
- * @returns Latest version string and best-effort default file path.
+ * @returns Latest version and best-effort default file path.
  *
  * @example
  * ```ts
@@ -243,13 +340,17 @@ async function resolveNpmLatest(packageName: string): Promise<ResolvedNpmLatest>
   };
 }
 
+/***************************************************************************************************
+ * URL Builder
+ **************************************************************************************************/
+
 /**
  * Builds a jsDelivr npm URL from package metadata.
  *
  * @remarks
  * When `file` is null, the URL points to the package root and lets jsDelivr
  * resolve the package entrypoint. This is useful for packages that do not expose
- * a clear `main`, `module`, `browser`, `unpkg`, or `jsdelivr` field.
+ * a clear `main`, `module`, `browser`, `unpkg`, `jsdelivr`, or `exports` path.
  *
  * @param packageName npm package name.
  * @param version Concrete npm version.
@@ -272,10 +373,14 @@ function buildJsdelivrNpmUrl(packageName: string, version: string, file: string 
   return `${baseUrl}/${normalizeCdnFilePath(file)}`;
 }
 
+/***************************************************************************************************
+ * Public API
+ **************************************************************************************************/
+
 /**
  * Resolves an npm asset spec via jsDelivr into a concrete URL and metadata.
  *
- * @param spec Parsed asset spec with provider "npm".
+ * @param spec Parsed asset spec with provider `npm`.
  * @returns Resolved asset ready for download.
  *
  * @example
