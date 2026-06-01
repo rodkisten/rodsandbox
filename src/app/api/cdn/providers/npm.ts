@@ -19,7 +19,7 @@ type NpmPackageResponse = {
  * @returns Latest version string and best-effort default file path.
  */
 async function resolveNpmLatest(packageName: string): Promise<{ readonly version: string; readonly file: string | null }> {
-  const url = `${NPM_REGISTRY_BASE}/${encodeURIComponent(packageName).replace("%40", "@")}/latest`;
+  const url = `${NPM_REGISTRY_BASE}/${encodeURIComponent(packageName).replace(/%40/g, "@")}/latest`;
   const response = await fetch(url, { cache: "force-cache" });
 
   if (!response.ok) {
