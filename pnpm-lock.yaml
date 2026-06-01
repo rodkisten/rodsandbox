@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+neverBuiltDependencies:
+  - node-pty
+
 dependencies:
   '@codemirror/autocomplete':
     specifier: ^6.20.2
@@ -6370,7 +6373,6 @@ packages:
 
   /node-pty@1.1.0:
     resolution: {integrity: sha512-20JqtutY6JPXTUnL0ij1uad7Qe1baT46lyolh2sSENDd4sTzKZ4nmAFkeAARDKwmlLjPx6XKRlwRUxwjOy+lUg==}
-    requiresBuild: true
     dependencies:
       node-addon-api: 7.1.1
     dev: false
