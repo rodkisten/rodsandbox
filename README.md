@@ -1,124 +1,251 @@
-# RodSandbox
+# RodSandbox — Mobile-First Cloud IDE
 
-Offline-first, browser-only code playground inspired by JSFiddle and CodeSandbox.
+A private, login-gated, mobile-first cloud IDE built with Next.js.  
+Inspired by CodeSandbox, StackBlitz, Linear, and Vercel.
 
-## Stack
+---
 
-- Next.js App Router + TypeScript
-- CodeMirror 6 (no Monaco)
-- IndexedDB (`idb`) for workspace persistence
-- In-browser TypeScript compiler API
-- Prettier standalone formatter
-- iframe sandbox preview + postMessage bridge
-- Vitest for core logic tests
+## Features
 
-## Architecture
+| Feature | Status |
+|---|---|
+| Multi-workspace with per-user isolation | ✅ |
+| Placeholder auth (demo/demo) | ✅ |
+| CodeMirror 6 editor with extension system | ✅ |
+| JavaScript & TypeScript support | ✅ |
+| File explorer (create, rename, delete, move, search) | ✅ |
+| Live preview panel (iframe sandbox) | ✅ |
+| Git panel (status, stage, commit, log, branches, diff) | ✅ |
+| xterm.js terminal with runtime adapter | ✅ |
+| Dockable / resizable panels | ✅ |
+| Command palette | ✅ |
+| REPL panel | ✅ |
+| Mobile-first UX (safe-area, iOS zoom fix, touch targets) | ✅ |
+| Dark-first design (Tokyo, OLED, High-Contrast themes) | ✅ |
+| i18n-ready string layer | ✅ |
+| Feature flags for every major feature | ✅ |
+| Plugin registry | ✅ |
+| Offline-capable (IndexedDB persistence) | ✅ |
 
-```text
-src/
-  editor/        CodeMirror setup and extensions
-  compiler/      Browser TypeScript compilation service
-  preview/       iframe HTML builder and sandbox bridge
-  repl/          REPL command manager
-  logs/          Serialization and log presentation
-  filesystem/    Virtual filesystem + tree shaping
-  plugins/       Plugin registry and context APIs
-  diagnostics/   Diagnostic normalization
-  persistence/   IndexedDB helpers
-  components/    UI (layout, panels, command palette)
-  hooks/         App hooks (workspace + resizing)
-  lib/           Utilities (download, i18n, service worker register)
-```
+---
 
-## Plugin API (Phase 3)
-
-Plugins register via `PluginRegistry` and receive a strongly-typed context:
-
-- `context.editor.registerAutocompleteProvider(...)`
-- `context.editor.registerCommand(...)`
-- `context.editor.registerExtension(...)`
-- `context.compiler.addVirtualTypeFile(...)`
-- `context.preview.injectScript(...)`
-- `context.repl.registerCommand(...)`
-- `context.logs.registerFormatter(...)`
-
-Errors are isolated per plugin (`RegisteredPlugin.error`) so one plugin failure does not break initialization.
-
-## REPL
-
-- Bottom panel REPL tab
-- Command history (↑/↓)
-- Built-ins: `.help`, `.commands`, `.clear`
-- Non-dot input is evaluated in the sandboxed iframe only (`REPL_EVAL` postMessage)
-
-## PWA
-
-- `public/manifest.json`
-- `public/sw.js` cache-first for static assets, network-first for navigation
-- Service worker registration in `src/lib/registerSw.ts` and `src/app/sw-register.tsx`
-
-## Local development
+## Quick Start
 
 ```bash
 npm install
-npm run dev
+npm run dev        # http://localhost:3000
 ```
 
-## Validation
+**Demo credentials:** `demo` / `demo`
+
+After login you are taken to the workspace picker (`/workspaces`).  
+Each workspace opens at `/w/[workspaceId]`.
+
+---
+
+## Stack
+
+| Layer | Library |
+|---|---|
+| Framework | Next.js 15 (App Router) |
+| Language | TypeScript (strict) |
+| Editor | CodeMirror 6 (`@uiw/react-codemirror`) |
+| Terminal | xterm.js v5 (`@xterm/xterm`) |
+| Git | isomorphic-git + @isomorphic-git/lightning-fs |
+| Panels | react-resizable-panels v4 |
+| State | React hooks + IndexedDB (idb) |
+| Icons | lucide-react |
+| Styling | Tailwind CSS v4 |
+| Tests | Vitest |
+
+---
+
+## Architecture
+
+```
+src/
+  app/
+    login/            Login page (placeholder auth)
+    workspaces/       Workspace picker
+    w/[workspaceId]/  Protected IDE route
+    api/
+      terminal/       Stub route (node-pty TODO)
+  components/
+    layout/           Playground, panels (Editor, Terminal, Git, Preview…)
+    ui/               Design-system primitives (Button, Tabs, Dropdown)
+  contexts/           AuthContext
+  hooks/              useAuth, useWorkspace, useResizeObserver
+  services/
+    git/              GitService (isomorphic-git)
+    terminal/         TerminalAdapter + implementations
+  editor/             CodeMirror extension system
+  compiler/           Browser TypeScript compilation
+  preview/            iframe sandbox builder
+  repl/               REPL manager
+  plugins/            Plugin registry
+  diagnostics/        Diagnostic normalization
+  persistence/        IndexedDB helpers (db.ts)
+  types/              Central TypeScript types
+  constants/          Named constants + feature flags
+  lib/                auth.ts, i18n.ts, utils, service worker
+  __tests__/          Vitest unit tests
+```
+
+---
+
+## Feature Flags
+
+Defined in `src/constants/index.ts`. All default to `true`.
+
+| Flag | Description |
+|---|---|
+| `ENABLE_AUTH` | Auth guard on IDE routes |
+| `ENABLE_WORKSPACES` | Multi-workspace support |
+| `ENABLE_TERMINAL` | xterm.js terminal panel |
+| `ENABLE_GIT` | Git panel |
+| `ENABLE_PREVIEW` | Live preview panel |
+| `ENABLE_REPL` | REPL panel |
+| `ENABLE_COMMAND_PALETTE` | Command palette (⌘K) |
+| `ENABLE_PLUGINS` | Plugin registry |
+
+---
+
+## Authentication
+
+Auth is a **mock implementation** backed by localStorage.
+
+- Credentials: `demo` / `demo`
+- Session stored under `rodsandbox:auth-session`
+- `src/lib/auth.ts` — signIn / signOut / getSession / isAuthenticated
+- `src/contexts/AuthContext.tsx` — React context + AuthProvider
+- Architected so real auth (NextAuth, Clerk, Supabase) can be dropped in later
+
+**To add real auth:** replace `src/lib/auth.ts` with a real provider. The context and hooks stay the same.
+
+---
+
+## Terminal
+
+The terminal uses **xterm.js** with a runtime-safe adapter pattern.
+
+```
+src/services/terminal/adapter.ts
+  TerminalAdapter          — interface
+  VercelFallbackAdapter    — shown on serverless (no PTY support)
+  LocalTerminalAdapter     — stub for local Node.js dev (node-pty TODO)
+  createTerminalAdapter()  — factory (auto-detects runtime)
+```
+
+**Vercel / serverless:** PTY is not supported. A clear banner is shown with instructions to deploy on a Node.js server (Railway, Fly.io, etc.).
+
+**To enable real terminal execution:** implement `src/app/api/terminal/route.ts` using `node-pty` on a Node.js runtime. See TODO comments in that file.
+
+---
+
+## Git
+
+Git operations run **entirely in the browser** using isomorphic-git + LightningFS (IndexedDB-backed virtual FS).
+
+**Supported:**
+- `init`, `status`, `fileStatus`
+- `stageFile`, `stageAll`, `unstageFile`
+- `commit`, `log`
+- `branches`, `currentBranch`, `createBranch`, `checkout`
+- `remotes`, `addRemote`
+- `diff` (unified diff viewer)
+
+**Not supported (browser limitation):**
+- `push` / `pull` — requires a CORS-enabled git proxy
+- TODO: Add `/api/git-proxy` server route
+
+---
+
+## Running Tests
 
 ```bash
-npm run lint
-npm run build
-npx vitest run
+npx vitest run          # all tests
+npx vitest run --watch  # watch mode
 ```
 
-## Deploy to Vercel
+Tests live in `src/__tests__/`. Coverage:
 
-Deploy directly as a standard Next.js App Router project.
-No custom server is required.
+| Test file | Covers |
+|---|---|
+| `auth.test.ts` | signIn, signOut, getSession, isAuthenticated |
+| `terminal-adapter.test.ts` | adapter factory, Vercel detection, banner |
+| `git-service.test.ts` | syncWorkspaceToFs, readFsToWorkspace |
+| `plugin-registry.test.ts` | plugin enable/disable/error isolation |
+| `repl.test.ts` | REPL command execution |
+| `i18n.test.ts` | t() key lookup |
 
-## Current limits
+---
 
-- Phase 3 started: plugin APIs + REPL + command palette + PWA wiring are in place.
-- Advanced plugin marketplace, shareable compressed URLs, and snapshot features are pending future phases.
+## Lint & Build
 
+```bash
+npm run lint       # ESLint
+npm run build      # Next.js production build
+npx tsc --noEmit  # TypeScript type check
+```
 
+---
 
-## Worker model and memory strategy
+## Deploying
 
-- Heavy operations are isolated in dedicated workers under `src/workers/` to keep React/UI responsive.
-- Bundling is handled by `bundler.worker.ts` and is initialized lazily on first run.
-- Formatting is handled in `formatter.worker.ts` and loaded on demand.
-- TypeScript diagnostics requests are routed through `ts-language.worker.ts` to avoid keeping compiler logic in components.
-- Requests are keyed with IDs so stale responses can be ignored safely.
-- This architecture is optimized for Safari/iOS by minimizing always-hot runtime state and keeping heavy dependencies lazily loaded.
+**Vercel (recommended for frontend):**
+```bash
+vercel deploy
+```
+Terminal execution will be disabled (VercelFallbackAdapter shown). All other features work.
 
-## Roadmap
+**Node.js server (full terminal support):**
+```bash
+npm run build
+npm start
+```
+Implement `src/app/api/terminal/route.ts` with node-pty for full PTY support.
 
-- **V1:** shell UI, file tree, editor, preview, logs, IndexedDB, formatting, export, PWA shell.
-- **V2:** richer TS language-service APIs, diagnostics orchestration, palette/REPL expansion, import/export templates.
-- **V3:** CDN module resolution/cache, dependency panel, plugin manager UI, snapshots/share URLs, mobile Safari polish.
+---
 
+## Design System
 
-## Phase 2/3 implementation checklist
+- Dark-first: `--surface-0` through `--surface-3` CSS variables
+- Accent: `--accent` (sky blue by default)
+- Status colors: `--status-error/warn/ok/info`
+- Safe-area utilities: `.safe-area-full`, `var(--safe-top/bottom/left/right)`
+- Glass surfaces: `.glass` (backdrop-filter blur)
+- iOS zoom fix: `font-size: 16px !important` on all inputs
 
-Current progress based on implemented features in this repository:
+---
 
-- [x] TS language worker diagnostics integration.
-- [x] Editor completions integration.
-- [x] Quick-info/hover integration.
-- [x] Diagnostics panel click-to-editor navigation.
-- [x] Workspace import/export via JSON and ZIP flows.
-- [x] Template application as full workspace replacement.
-- [x] Snapshot save/restore/delete with overwrite confirmation.
-- [x] Bundler dependency extraction + diagnostics-tab dependency visibility.
-- [x] Go-to-definition command wiring with worker-backed definition lookup.
-- [x] Plugin manager panel with enable/disable persistence wiring.
+## Themes
 
-Still pending (next steps):
+Switch via `data-theme` on `<html>`:
 
-- [ ] Keyboard/gesture-first go-to-definition UX polish in editor interactions.
-- [ ] Advanced plugin manager UX (search/filter/grouping + richer metadata).
-- [ ] CDN module resolution + dependency cache flows.
-- [ ] Shareable compressed URL workflows.
-- [ ] Marketplace-grade plugin discovery/install UX.
+| Value | Description |
+|---|---|
+| *(default)* | Midnight (dark navy) |
+| `light` | Light mode |
+| `oled` | True black (OLED) |
+| `tokyo` | Tokyo Night |
+| `high-contrast` | High contrast |
+
+---
+
+## Extending
+
+**Add a new panel:** add a case to `renderBottomPanelContent()` in `Playground.tsx` and a new `BottomTab` value in `src/types/index.ts`.
+
+**Add a CodeMirror extension:** update `src/editor/Editor.tsx` extensions array.
+
+**Add a plugin:** implement the `Plugin` interface from `src/plugins/registry.ts`.
+
+**Add a language:** extend `getLanguageExtension()` in the editor and add a compiler adapter.
+
+---
+
+## Known Limitations
+
+- Git push/pull requires a CORS-enabled proxy (not yet implemented)
+- Terminal PTY requires a Node.js server (not Vercel)
+- TypeScript language server features (hover, go-to-def) are stubbed — full LSP requires a worker

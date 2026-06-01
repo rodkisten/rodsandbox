@@ -84,11 +84,14 @@ function extractHistorySymbols(history: string[]): string[] {
   )).slice(0, 200);
 }
 
+const EMPTY_REPL_ENTRIES: ReplEntry[] = [];
+const EMPTY_COMMAND_REGISTRATIONS: ReplPanelProps['extraCommandRegistrations'] = [];
+
 export default function ReplPanel({
   onEvaluate,
   evaluateSelection,
-  externalEntries = [],
-  extraCommandRegistrations = [],
+  externalEntries = EMPTY_REPL_ENTRIES,
+  extraCommandRegistrations = EMPTY_COMMAND_REGISTRATIONS,
   runtime,
   onRuntimeChange,
   autocompleteEnabled,

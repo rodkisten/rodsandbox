@@ -32,7 +32,7 @@ export function createDefaultSettings(): AppSettings {
     replRuntime: 'auto',
     replAutocomplete: true,
     replHistory: [],
-    editorTheme: 'light',
+    editorTheme: 'github-dark',
     editorFontSize: 13,
     editorFontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
     editorLineNumbers: true,
@@ -43,8 +43,9 @@ export function createDefaultSettings(): AppSettings {
     editorMinimapEnabled: false,
     editorTabSize: 2,
     liveTypecheck: true,
-    collapsedPanels: ['d-files', 'd-bottom', 'm-files', 'm-bottom'],
+    collapsedPanels: [],
     enabledPlugins: [],
+    sidebarView: 'files',
   };
 }
 
@@ -63,7 +64,7 @@ function mergeSettings(saved: AppSettings | undefined): AppSettings {
 }
 
 export function useAppSettings() {
-  const [settings, setSettings] = useState<AppSettings>(createDefaultSettings());
+  const [settings, setSettings] = useState<AppSettings>(() => createDefaultSettings());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

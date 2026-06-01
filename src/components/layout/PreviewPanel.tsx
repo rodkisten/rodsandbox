@@ -1,5 +1,5 @@
 'use client';
-import React, { useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useCallback, useEffect, useRef, useImperativeHandle } from 'react';
 import { PREVIEW_SANDBOX_ATTRS } from '@/constants';
 import { PreviewMessage } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ interface PreviewPanelProps {
   previewHtml: string | null;
   onMessage: (msg: PreviewMessage) => void;
   onDetachedChange?: (detached: boolean) => void;
+  ref?: React.Ref<PreviewPanelHandle>;
 }
 
 export interface PreviewPanelHandle {
@@ -26,9 +27,8 @@ function isPreviewMessage(data: unknown): data is PreviewMessage {
 
 const DETACHED_PREVIEW_PLACEHOLDER = '<html><body style="background:#111;color:#666;font-family:sans-serif;padding:2rem"><p>Run to see preview</p></body></html>';
 
-const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function PreviewPanel(
-  { previewHtml, onMessage, onDetachedChange },
-  ref
+function PreviewPanel(
+  { previewHtml, onMessage, onDetachedChange, ref }: PreviewPanelProps,
 ) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const detachedWindowRef = useRef<Window | null>(null);
@@ -133,9 +133,9 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
           Open in New Window
         </Button>
         <div className="flex gap-1.5 ml-auto">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-          <span className="w-2.5 h-2.5 rounded-full bg-yellow-500" />
-          <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+          <span className="size-2.5 rounded-full bg-red-500" />
+          <span className="size-2.5 rounded-full bg-yellow-500" />
+          <span className="size-2.5 rounded-full bg-green-500" />
         </div>
       </div>
       <iframe
@@ -147,7 +147,7 @@ const PreviewPanel = forwardRef<PreviewPanelHandle, PreviewPanelProps>(function 
       />
     </div>
   );
-});
+}
 
 export default PreviewPanel;
 

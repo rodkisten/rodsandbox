@@ -1,16 +1,18 @@
 /// <reference lib="webworker" />
-import { BrowserTypeScriptCompiler } from '@/compiler';
+import { BrowserTypeScriptCompiler, parseTsConfigCompilerOptions } from '@/compiler';
 import type { Diagnostic } from '@/types';
 import type { TsMessage } from './messages';
 
 const WORKER_IDLE_TIMEOUT_MS = 45_000;
 let compiler: BrowserTypeScriptCompiler | null = null;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
+let lastTsConfigHash: string | null = null;
 
 function refreshIdleTimer() {
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     compiler = null;
+    lastTsConfigHash = null;
   }, WORKER_IDLE_TIMEOUT_MS);
 }
 
@@ -21,6 +23,15 @@ function ensureCompiler(): BrowserTypeScriptCompiler {
 
 function syncFiles(files: Array<{ path: string; content: string }>) {
   const service = ensureCompiler();
+
+  // Detect tsconfig.json and apply compiler options if changed
+  const tsConfig = files.find((f) => f.path === '/tsconfig.json' || f.path === 'tsconfig.json');
+  if (tsConfig && tsConfig.content !== lastTsConfigHash) {
+    lastTsConfigHash = tsConfig.content;
+    const options = parseTsConfigCompilerOptions(tsConfig.content);
+    service.setCompilerOptions(options);
+  }
+
   for (const file of files) service.updateFile(file.path, file.content);
   refreshIdleTimer();
   return service;

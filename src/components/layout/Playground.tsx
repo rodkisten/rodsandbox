@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import type { Completion, CompletionContext, CompletionSource } from '@codemirror/autocomplete';
 import type { Extension } from '@codemirror/state';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
@@ -15,6 +16,9 @@ import DiagnosticsPanel from './DiagnosticsPanel';
 import DependencyPanel from './DependencyPanel';
 import PluginManagerPanel from './PluginManagerPanel';
 import ReplPanel from './ReplPanel';
+import TerminalPanel from './TerminalPanel';
+import GitPanel from './GitPanel';
+import StatusBar from './StatusBar';
 import CommandPalette, { CommandPaletteCommand } from '@/components/ui/CommandPalette';
 import { buildPreviewHtml } from '@/preview/builder';
 import { downloadFile } from '@/lib/download';
@@ -23,6 +27,7 @@ import { exportWorkspaceJson, importWorkspaceJson } from '@/lib/workspaceTransfe
 import { createWorkspaceSnapshot, deleteWorkspaceSnapshot, diffSnapshotAgainstWorkspace, getWorkspaceSnapshot, listWorkspaceSnapshots } from '@/lib/snapshots';
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
 import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constants';
+import { loadConsoleLogs, saveConsoleLogs } from '@/persistence/db';
 import { inferLanguageFromPath, listFiles } from '@/filesystem/virtualFs';
 import { WORKSPACE_TEMPLATES, getTemplateById } from '@/filesystem/templates';
 import { TypeScriptWorkerClient } from '@/compiler/tsWorkerClient';
@@ -31,7 +36,13 @@ import { EsbuildBundlerService } from '@/bundler/esbuildBundler';
 import { PluginRegistry } from '@/plugins/registry';
 import { builtinPlugins } from '@/plugins/builtin';
 import { t } from '@/lib/i18n';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Files,
+  GitBranch as GitBranchIcon,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -61,7 +72,7 @@ function ResizeGrip() {
   return <Separator className="relative flex h-3 items-center justify-center bg-neutral-900/70 transition-colors hover:bg-neutral-500/25 data-[resize-handle-active]:bg-neutral-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
 }
 
-export default function Playground() {
+export default function Playground({ workspaceId, userId }: { workspaceId?: string; userId?: string }) {
   const {
     workspace,
     activeFile,
@@ -79,8 +90,17 @@ export default function Playground() {
     upsertFiles,
     replaceWorkspaceFiles,
     saveWorkspace,
-  } = useWorkspace();
+  } = useWorkspace(workspaceId);
   const { settings, loading: settingsLoading, updateSettings } = useAppSettings();
+  const router = useRouter();
+
+  // Ownership check: redirect if the loaded workspace belongs to a different user.
+  useEffect(() => {
+    if (loading) return;
+    if (userId && workspace.ownerId && workspace.ownerId !== userId) {
+      router.replace('/workspaces');
+    }
+  }, [loading, workspace.ownerId, userId, router]);
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
@@ -118,8 +138,28 @@ export default function Playground() {
   const workspaceImportInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceBundleImportInputRef = useRef<HTMLInputElement | null>(null);
   const editorCursorRef = useRef<{ fileId: string; position: number } | null>(null);
+  const consoleLogsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isMobilePortrait = useMobilePortrait();
+
+  // Load persisted console logs on mount.
+  useEffect(() => {
+    loadConsoleLogs().then((persisted) => {
+      if (persisted.length > 0) setLogs(persisted);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Save console logs to DB (debounced) whenever they change.
+  useEffect(() => {
+    if (consoleLogsSaveTimer.current) clearTimeout(consoleLogsSaveTimer.current);
+    consoleLogsSaveTimer.current = setTimeout(() => {
+      saveConsoleLogs(logs.slice(-MAX_LOG_ENTRIES)).catch(() => {});
+    }, 1000);
+    return () => {
+      if (consoleLogsSaveTimer.current) clearTimeout(consoleLogsSaveTimer.current);
+    };
+  }, [logs]);
 
   useEffect(() => {
     tsWorkerRef.current = new TypeScriptWorkerClient();
@@ -438,6 +478,20 @@ export default function Playground() {
     await handleImportWorkspaceJson(file);
   }, [handleImportWorkspaceJson, replaceWorkspaceFiles]);
 
+  /** Add or update a package in the workspace package.json. */
+  const handleAddPackage = useCallback((name: string, version: string) => {
+    const existing = Object.values(workspace.files).find(
+      (f) => f.path === 'package.json' || f.name === 'package.json',
+    );
+    let parsed: { name?: string; version?: string; dependencies?: Record<string, string>; [k: string]: unknown } = {};
+    if (existing) {
+      try { parsed = JSON.parse(existing.content) as typeof parsed; } catch { /* ignore */ }
+    }
+    parsed.dependencies = { ...(parsed.dependencies ?? {}), [name]: `^${version}` };
+    const content = JSON.stringify(parsed, null, 2);
+    upsertFiles([{ path: 'package.json', content, language: 'json' }]);
+  }, [workspace.files, upsertFiles]);
+
   const handleTogglePlugin = useCallback((id: string, nextEnabled: boolean) => {
     if (nextEnabled) pluginRegistryRef.current.enable(id);
     else pluginRegistryRef.current.disable(id);
@@ -607,8 +661,23 @@ export default function Playground() {
     () => Object.fromEntries(Object.values(workspace.files).map((file) => [file.id, file.name])),
     [workspace.files],
   );
+  const packageJsonContent = useMemo(() => {
+    const f = Object.values(workspace.files).find((file) => file.path === 'package.json' || file.name === 'package.json');
+    return f?.content;
+  }, [workspace.files]);
   const errorCount = diagnostics.filter((diag) => diag.severity === 'error').length;
   const warnCount = diagnostics.filter((diag) => diag.severity === 'warning').length;
+
+  const handleCloseTab = useCallback((fileId: string) => {
+    updateSettings((prev) => {
+      const next = prev.openedFileIds.filter((id) => id !== fileId);
+      const nextActive = prev.activeFileId === fileId
+        ? (next[next.length - 1] ?? null)
+        : prev.activeFileId;
+      if (nextActive && nextActive !== prev.activeFileId) setActiveFile(nextActive);
+      return { ...prev, openedFileIds: next, activeFileId: nextActive };
+    });
+  }, [setActiveFile, updateSettings]);
 
 
 
@@ -840,12 +909,52 @@ export default function Playground() {
     return { display: info.display, documentation: info.documentation };
   }, [activeFile, workspace]);
 
+  const handleDetachTerminal = useCallback(() => {
+    window.open('/detached-terminal', '_blank', 'popup=yes,width=900,height=600');
+  }, []);
+
+  const handleToggleView = useCallback((panel: 'files' | 'preview' | 'terminal') => {
+    if (isMobilePortrait) {
+      const id = panel === 'files' ? 'm-files' : panel === 'preview' ? 'm-preview' : 'm-bottom';
+      const ref = panel === 'files' ? filesPanelRef : panel === 'preview' ? previewPanelRef : bottomPanelRef;
+      if (panel === 'terminal') {
+        updateSettings((prev) => ({ ...prev, bottomTab: 'terminal' as const }));
+        togglePanelCollapse(id, ref);
+      } else {
+        togglePanelCollapse(id, ref);
+      }
+    } else {
+      const id = panel === 'files' ? 'd-files' : panel === 'preview' ? 'd-preview' : 'd-bottom';
+      const ref = panel === 'files' ? filesPanelRef : panel === 'preview' ? previewPanelRef : bottomPanelRef;
+      if (panel === 'terminal') {
+        updateSettings((prev) => ({ ...prev, bottomTab: 'terminal' as const }));
+        const collapsed = settings.collapsedPanels.includes(id);
+        if (collapsed) togglePanelCollapse(id, ref);
+      } else {
+        togglePanelCollapse(id, ref);
+      }
+    }
+  }, [isMobilePortrait, settings.collapsedPanels, togglePanelCollapse, updateSettings]);
+
   const renderBottomPanelContent = () => {
     if (settings.bottomTab === 'console') {
       return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
     }
     if (settings.bottomTab === 'diagnostics') {
-      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>; 
+      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} packageJsonContent={packageJsonContent} onAddPackage={handleAddPackage} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>;
+    }
+    if (settings.bottomTab === 'terminal' && FEATURE_FLAGS.ENABLE_TERMINAL) {
+      return <TerminalPanel workspace={workspace} onDetach={handleDetachTerminal} />;
+    }
+    if (settings.bottomTab === 'git' && FEATURE_FLAGS.ENABLE_GIT) {
+      return (
+        <GitPanel
+          workspace={workspace}
+          onFilesChanged={(entries) => {
+            replaceWorkspaceFiles(entries);
+          }}
+        />
+      );
     }
     if (FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM) {
       return (
@@ -900,6 +1009,12 @@ export default function Playground() {
         editorTabSize={settings.editorTabSize}
         onEditorTabSizeChange={(editorTabSize) => updateSettings((prev) => ({ ...prev, editorTabSize }))}
         diagnosticsCount={errorCount}
+        panelVisibility={{
+          files: !settings.collapsedPanels.includes(isMobilePortrait ? 'm-files' : 'd-files'),
+          preview: !settings.collapsedPanels.includes(isMobilePortrait ? 'm-preview' : 'd-preview'),
+          terminal: !settings.collapsedPanels.includes(isMobilePortrait ? 'm-bottom' : 'd-bottom') && settings.bottomTab === 'terminal',
+        }}
+        onToggleView={handleToggleView}
       />
 
       {isMobilePortrait ? (
@@ -1004,6 +1119,8 @@ export default function Playground() {
                     <TabsTrigger value="console">{t('tabs.console')}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')} {errorCount > 0 ? <span className="ml-1 text-red-400">{errorCount}</span> : null} {warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
                     {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger> : null}
+                    {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}
+                    {FEATURE_FLAGS.ENABLE_GIT ? <TabsTrigger value="git">{t('tabs.git')}</TabsTrigger> : null}
                   </TabsList>
                 </Tabs>
                 <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-bottom', bottomPanelRef)} className="ml-auto mr-1">
@@ -1034,102 +1151,164 @@ export default function Playground() {
           }}
         >
           <Panel id="d-main" defaultSize={100 - settings.layoutSizes.bottomPanelHeight} minSize={30}>
-            <Group
-              orientation="horizontal"
-              defaultLayout={{
-                'd-files': settings.layoutSizes.sidebarWidth,
-                'd-editor': Math.max(20, 100 - settings.layoutSizes.sidebarWidth - settings.layoutSizes.previewWidth),
-                'd-preview': settings.layoutSizes.previewWidth,
-              }}
-              onLayoutChanged={(layout) => {
-                updateSettings((prev) => ({
-                  ...prev,
-                  layoutSizes: {
-                    ...prev.layoutSizes,
-                    sidebarWidth: layout['d-files'] ?? prev.layoutSizes.sidebarWidth,
-                    previewWidth: layout['d-preview'] ?? prev.layoutSizes.previewWidth,
-                  },
-                }));
-              }}
-            >
-              <Panel id="d-files" defaultSize={settings.layoutSizes.sidebarWidth} minSize={12} maxSize={35} collapsible collapsedSize={6} panelRef={filesPanelRef}>
-                <div className="flex h-full flex-col">
-                  <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                    <span>Files</span>
-                    <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-files', filesPanelRef)} className="h-6 w-6">
-                      {isPanelCollapsed('d-files') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                    </Button>
+            <div className="flex h-full flex-row overflow-hidden">
+              {/* Activity bar */}
+              <div className="flex w-10 flex-shrink-0 flex-col items-center gap-1 border-r border-neutral-800 bg-neutral-900 py-2">
+                <button
+                  type="button"
+                  title="Files"
+                  onClick={() => updateSettings((prev) => ({ ...prev, sidebarView: 'files' }))}
+                  className={`flex h-9 w-9 items-center justify-center rounded transition ${settings.sidebarView === 'files' ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+                >
+                  <Files className="h-5 w-5" />
+                </button>
+                {FEATURE_FLAGS.ENABLE_GIT && (
+                  <button
+                    type="button"
+                    title="Source Control"
+                    onClick={() => updateSettings((prev) => ({ ...prev, sidebarView: 'git' }))}
+                    className={`relative flex h-9 w-9 items-center justify-center rounded transition ${settings.sidebarView === 'git' ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
+                  >
+                    <GitBranchIcon className="h-5 w-5" />
+                    {errorCount > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                        {errorCount > 9 ? '9+' : errorCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
+              <Group
+                orientation="horizontal"
+                defaultLayout={{
+                  'd-files': settings.layoutSizes.sidebarWidth,
+                  'd-editor': Math.max(20, 100 - settings.layoutSizes.sidebarWidth - settings.layoutSizes.previewWidth),
+                  'd-preview': settings.layoutSizes.previewWidth,
+                }}
+                onLayoutChanged={(layout) => {
+                  updateSettings((prev) => ({
+                    ...prev,
+                    layoutSizes: {
+                      ...prev.layoutSizes,
+                      sidebarWidth: layout['d-files'] ?? prev.layoutSizes.sidebarWidth,
+                      previewWidth: layout['d-preview'] ?? prev.layoutSizes.previewWidth,
+                    },
+                  }));
+                }}
+              >
+                <Panel id="d-files" defaultSize={settings.layoutSizes.sidebarWidth} minSize={12} maxSize={35} collapsible collapsedSize={6} panelRef={filesPanelRef}>
+                  <div className="flex h-full flex-col">
+                    <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
+                      <span>{settings.sidebarView === 'git' ? 'Source Control' : 'Explorer'}</span>
+                      <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-files', filesPanelRef)} className="h-6 w-6">
+                        {isPanelCollapsed('d-files') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                      </Button>
+                    </div>
+                    {settings.sidebarView === 'git' && FEATURE_FLAGS.ENABLE_GIT ? (
+                      <GitPanel
+                        workspace={workspace}
+                        onFilesChanged={(entries) => {
+                          replaceWorkspaceFiles(entries);
+                        }}
+                      />
+                    ) : (
+                      <FileTree
+                        workspace={workspace}
+                        activeFileId={workspace.activeFileId}
+                        onSelectFile={setActiveFile}
+                        onRenameFile={renameFile}
+                        onDeleteFile={deleteFile}
+                        onCreateFile={createFile}
+                        onDuplicateFile={duplicateFile}
+                        onMoveFile={moveFile}
+                        onCreateFolder={createFolder}
+                        onDeleteFolder={deleteFolder}
+                        onRenameFolder={renameFolder}
+                        onImportEntries={upsertFiles}
+                      />
+                    )}
                   </div>
-                  <FileTree
-                    workspace={workspace}
-                    activeFileId={workspace.activeFileId}
-                    onSelectFile={setActiveFile}
-                    onRenameFile={renameFile}
-                    onDeleteFile={deleteFile}
-                    onCreateFile={createFile}
-                    onDuplicateFile={duplicateFile}
-                    onMoveFile={moveFile}
-                    onCreateFolder={createFolder}
-                    onDeleteFolder={deleteFolder}
-                    onRenameFolder={renameFolder}
-                    onImportEntries={upsertFiles}
-                  />
-                </div>
-              </Panel>
-              <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
-              <Panel id="d-editor" defaultSize={Math.max(20, 100 - settings.layoutSizes.sidebarWidth - settings.layoutSizes.previewWidth)} minSize={30} collapsible collapsedSize={6} panelRef={editorPanelRef}>
-                <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
-                  <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                    <span>Editor</span>
-                    <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-editor', editorPanelRef)} className="h-6 w-6">
-                      {isPanelCollapsed('d-editor') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                    </Button>
+                </Panel>
+                <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
+                <Panel id="d-editor" defaultSize={Math.max(20, 100 - settings.layoutSizes.sidebarWidth - settings.layoutSizes.previewWidth)} minSize={30} collapsible collapsedSize={6} panelRef={editorPanelRef}>
+                  <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
+                    {/* Editor tab bar */}
+                    <div className="flex flex-shrink-0 items-center gap-0 overflow-x-auto border-b border-neutral-800 bg-neutral-900 scrollbar-none">
+                      {settings.openedFileIds.map((fileId) => {
+                        const file = workspace.files[fileId];
+                        if (!file) return null;
+                        const isActive = fileId === settings.activeFileId;
+                        return (
+                          <button
+                            key={fileId}
+                            type="button"
+                            className={`group flex flex-shrink-0 items-center gap-1.5 border-r border-neutral-800 px-3 py-1.5 text-[12px] transition ${
+                              isActive
+                                ? 'border-t-2 border-t-[#007acc] bg-neutral-950 text-white'
+                                : 'text-neutral-500 hover:bg-neutral-800/60 hover:text-neutral-300'
+                            }`}
+                            onClick={() => setActiveFile(fileId)}
+                          >
+                            <span className="max-w-[120px] truncate">{file.name}</span>
+                            <span
+                              className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition hover:bg-neutral-700 group-hover:opacity-100"
+                              onClick={(e) => { e.stopPropagation(); handleCloseTab(fileId); }}
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {activeFile ? (
+                      <Editor
+                        file={activeFile}
+                        onChange={(content: string) => updateFile(activeFile.id, content)}
+                        onCursorPositionChange={(position) => {
+                          editorCursorRef.current = { fileId: activeFile.id, position };
+                        }}
+                        onSave={handleSave}
+                        diagnostics={diagnostics}
+                        extraExtensions={pluginEditorExtensions}
+                        extraAutocompleteProviders={[tsLanguageCompletionSource, localCompletionSource, ...pluginAutocompleteProviders]}
+                        theme={settings.editorTheme}
+                        fontSize={settings.editorFontSize}
+                        fontFamily={settings.editorFontFamily}
+                        lineNumbers={settings.editorLineNumbers}
+                        wordWrap={settings.editorWordWrap}
+                        autocompleteEnabled={settings.editorAutocomplete}
+                        linterEnabled={settings.editorLinterEnabled}
+                        tabSize={settings.editorTabSize}
+                        hoverProvider={tsLanguageHoverProvider}
+                        jumpTo={editorJumpTarget}
+                      />
+                    ) : (
+                      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-neutral-600">
+                        <Files className="h-10 w-10 opacity-20" />
+                        <span className="text-sm">Select a file to edit</span>
+                      </div>
+                    )}
                   </div>
-                  {activeFile ? (
-                    <Editor
-                      file={activeFile}
-                      onChange={(content: string) => updateFile(activeFile.id, content)}
-                      onCursorPositionChange={(position) => {
-                        editorCursorRef.current = { fileId: activeFile.id, position };
-                      }}
-                      onSave={handleSave}
-                      diagnostics={diagnostics}
-                      extraExtensions={pluginEditorExtensions}
-                      extraAutocompleteProviders={[tsLanguageCompletionSource, localCompletionSource, ...pluginAutocompleteProviders]}
-                      theme={settings.editorTheme}
-                      fontSize={settings.editorFontSize}
-                      fontFamily={settings.editorFontFamily}
-                      lineNumbers={settings.editorLineNumbers}
-                      wordWrap={settings.editorWordWrap}
-                      autocompleteEnabled={settings.editorAutocomplete}
-                      linterEnabled={settings.editorLinterEnabled}
-                      tabSize={settings.editorTabSize}
-                  hoverProvider={tsLanguageHoverProvider}
-                  jumpTo={editorJumpTarget}
+                </Panel>
+                <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
+                <Panel id="d-preview" defaultSize={settings.layoutSizes.previewWidth} minSize={20} collapsible collapsedSize={6} panelRef={previewPanelRef}>
+                  <div className="flex h-full flex-col overflow-hidden">
+                    <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
+                      <span>Preview</span>
+                      <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-preview', previewPanelRef)} className="h-6 w-6">
+                        {isPanelCollapsed('d-preview') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                      </Button>
+                    </div>
+                    <PreviewPanel
+                      ref={previewRef}
+                      previewHtml={previewHtml}
+                      onMessage={handleMessage}
+                      onDetachedChange={(detached) => updateSettings((prev) => ({ ...prev, previewDetached: detached }))}
                     />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-neutral-600">Select a file to edit</div>
-                  )}
-                </div>
-              </Panel>
-              <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
-              <Panel id="d-preview" defaultSize={settings.layoutSizes.previewWidth} minSize={20} collapsible collapsedSize={6} panelRef={previewPanelRef}>
-                <div className="flex h-full flex-col overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                    <span>Preview</span>
-                    <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-preview', previewPanelRef)} className="h-6 w-6">
-                      {isPanelCollapsed('d-preview') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                    </Button>
                   </div>
-                  <PreviewPanel
-                    ref={previewRef}
-                    previewHtml={previewHtml}
-                    onMessage={handleMessage}
-                    onDetachedChange={(detached) => updateSettings((prev) => ({ ...prev, previewDetached: detached }))}
-                  />
-                </div>
-              </Panel>
-            </Group>
+                </Panel>
+              </Group>
+            </div>
           </Panel>
           <ResizeGrip />
           <Panel id="d-bottom" defaultSize={settings.layoutSizes.bottomPanelHeight} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
@@ -1138,8 +1317,10 @@ export default function Playground() {
                 <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
                   <TabsList className="bg-transparent p-0">
                     <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-neutral-500">{logs.length}</span> : null}</TabsTrigger>
-                    <TabsTrigger value="diagnostics">{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</>
+                    <TabsTrigger value="diagnostics">{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
                     <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger>
+                    {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}
+                    {FEATURE_FLAGS.ENABLE_GIT ? <TabsTrigger value="git">{t('tabs.git')}</TabsTrigger> : null}
                   </TabsList>
                 </Tabs>
                 <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-bottom', bottomPanelRef)} className="ml-auto mr-1">
@@ -1151,6 +1332,17 @@ export default function Playground() {
           </Panel>
         </Group>
       )}
+
+      <StatusBar
+        branch={null}
+        errorCount={errorCount}
+        warningCount={warnCount}
+        language={activeFile?.language}
+        settings={settings}
+        onToggleTheme={() =>
+          updateSettings((prev) => ({ ...prev, theme: prev.theme === 'light' ? 'midnight' : 'light' }))
+        }
+      />
 
       <input
         ref={workspaceImportInputRef}

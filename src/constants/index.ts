@@ -11,11 +11,45 @@ export const AUTOSAVE_DEBOUNCE_MS = 1000;
 export const MAX_LOG_ENTRIES = 500;
 export const PREVIEW_SANDBOX_ATTRS = 'allow-scripts allow-modals allow-same-origin';
 export const DB_NAME = 'rodsandbox';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 export const WORKSPACE_STORE = 'workspaces';
 export const SETTINGS_STORE = 'settings';
 export const SETTINGS_KEY = 'app-settings';
 export const REPL_HISTORY_KEY = 'repl-history';
+export const TERMINAL_HISTORY_KEY = 'terminal-history';
+export const CONSOLE_LOGS_KEY = 'console-logs';
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+export const AUTH_SESSION_LS_KEY = 'rodsandbox:auth-session';
+export const POST_LOGIN_PATH = '/workspaces';
+export const POST_LOGOUT_PATH = '/login';
+
+// ─── Git ─────────────────────────────────────────────────────────────────────
+
+/** Author name used for commits when no remote auth is configured. */
+export const GIT_DEFAULT_AUTHOR_NAME = 'RodSandbox User';
+/** TODO: Replace with real user email from auth session. */
+export const GIT_DEFAULT_AUTHOR_EMAIL = 'user@rodsandbox.local';
+/** Directory prefix used by lightning-fs for git repos. */
+export const GIT_FS_DIR_PREFIX = '/ws-git/';
+
+// ─── Terminal ─────────────────────────────────────────────────────────────────
+
+/**
+ * URL path for the local Node.js terminal WebSocket/HTTP API.
+ * Only available when running `next dev` on a Node.js server.
+ *
+ * TODO: Implement a real WebSocket-based PTY adapter using `node-pty` or similar.
+ */
+export const TERMINAL_API_PATH = '/api/terminal';
+/**
+ * Maximum number of lines kept in the terminal scroll-back buffer.
+ */
+export const TERMINAL_SCROLLBACK_LINES = 5_000;
+
+// ─── Feature Flags ────────────────────────────────────────────────────────────
+
 export const FEATURE_FLAGS = {
   ENABLE_TYPESCRIPT_COMPILER: true,
   ENABLE_PRETTIER: true,
@@ -23,4 +57,20 @@ export const FEATURE_FLAGS = {
   ENABLE_ANALYTICS: true,
   ENABLE_SHARE_URL: true,
   ENABLE_ZIP_EXPORT: true,
+  /** Placeholder auth gating the IDE. Set false to bypass auth in e2e tests. */
+  ENABLE_AUTH: true,
+  /**
+   * xterm.js terminal panel. Execution requires a Node.js runtime.
+   * On Vercel, the panel shows but execution is disabled.
+   */
+  ENABLE_TERMINAL: true,
+  /**
+   * Git panel backed by isomorphic-git + lightning-fs.
+   * Push/pull to remote require a CORS-enabled Git proxy.
+   * TODO: Add a proxy or use GitHub REST API for remote ops.
+   */
+  ENABLE_GIT: true,
+  /** Multi-workspace support with workspace picker page. */
+  ENABLE_WORKSPACES: true,
 } as const;
+

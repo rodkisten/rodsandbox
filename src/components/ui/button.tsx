@@ -22,12 +22,10 @@ const sizeStyles: Record<ButtonSize, string> = {
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant = 'default', size = 'default', type = 'button', ...props },
-  ref,
-) {
+export function Button({ className, variant = 'default', size = 'default', type = 'button', ref, ...props }: ButtonProps) {
   return (
     <button
       ref={ref}
@@ -41,4 +39,4 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       {...props}
     />
   );
-});
+}

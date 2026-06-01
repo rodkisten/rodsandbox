@@ -27,6 +27,49 @@ let latestRequestId = 0;
 const ESBUILD_VERSION = '0.27.0';
 const ESBUILD_WASM_URL = `https://esm.sh/esbuild-wasm@${ESBUILD_VERSION}/esbuild.wasm`;
 
+// ─── package.json helpers ─────────────────────────────────────────────────────
+
+interface PackageJsonDeps { [pkg: string]: string }
+
+/**
+ * Parses the package.json file (if present) and returns a map of
+ * packageName → version-constraint so the bundler can rewrite bare imports
+ * to versioned esm.sh URLs.
+ */
+function parsePackageJsonDeps(files: WorkerFileInput[]): PackageJsonDeps {
+  const pkgFile = files.find((f) => f.path === 'package.json' || f.path === '/package.json');
+  if (!pkgFile) return {};
+  try {
+    const parsed = JSON.parse(pkgFile.content) as {
+      dependencies?: PackageJsonDeps;
+      devDependencies?: PackageJsonDeps;
+    };
+    return { ...parsed.devDependencies, ...parsed.dependencies };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Builds a versioned esm.sh URL for a package specifier.
+ *
+ * Examples:
+ *   react            + { react: "^18.2.0" }  → https://esm.sh/react@^18.2.0
+ *   react/jsx-runtime + { react: "^18.2.0" } → https://esm.sh/react@^18.2.0/jsx-runtime
+ */
+function toEsmShUrl(specifier: string, deps: PackageJsonDeps): string {
+  // Scoped packages like @scope/pkg
+  const scopedMatch = specifier.match(/^(@[^/]+\/[^/]+)(\/.*)?$/);
+  const simpleMatch = specifier.match(/^([^/]+)(\/.*)?$/);
+  const match = scopedMatch ?? simpleMatch;
+  if (!match) return `https://esm.sh/${specifier}`;
+
+  const pkg = match[1];
+  const subpath = match[2] ?? '';
+  const version = deps[pkg] ? `@${deps[pkg]}` : '';
+  return `https://esm.sh/${pkg}${version}${subpath}`;
+}
+
 function extractDependencies(files: WorkerFileInput[]): string[] {
   const deps = new Set<string>();
   const importRegex = /(?:import\s+(?:[^'";]+?\s+from\s+)?|export\s+[^'";]*?from\s+|import\()\s*['"]([^'"]+)['"]/g;
@@ -83,6 +126,7 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
   const fileLookup = buildFileLookup(req.files);
   const entryFile = normalizeVirtualPath(req.entryFile);
   const dependencies = extractDependencies(req.files);
+  const pkgDeps = parsePackageJsonDeps(req.files);
 
   try {
     if (req.requestId !== latestRequestId) return;
@@ -114,6 +158,14 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
             const withExt = resolveWithKnownExtensions(candidate, (path) => fileLookup.has(path));
 
             if (withExt) return { path: withExt, namespace: 'virtual' };
+
+            // Bare module import not found in virtual FS → resolve via esm.sh.
+            // Skip relative / absolute paths and skip specifiers starting with
+            // a known CDN URL (already fully qualified).
+            const p = args.path;
+            if (!p.startsWith('.') && !p.startsWith('/') && !p.startsWith('https://') && !p.startsWith('http://')) {
+              return { path: toEsmShUrl(p, pkgDeps), external: true };
+            }
             return null;
           });
 

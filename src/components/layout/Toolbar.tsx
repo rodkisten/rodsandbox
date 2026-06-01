@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Bug, Command, Download, Menu, MoonStar, Paintbrush, Play, PlayCircle, Save, WandSparkles } from 'lucide-react';
+import { Bug, Command, Download, Layout, Menu, MoonStar, Paintbrush, Play, PlayCircle, Save, WandSparkles } from 'lucide-react';
 import type { EditorTheme } from '@/types';
 
 interface ToolbarProps {
@@ -52,6 +52,8 @@ interface ToolbarProps {
   editorTabSize: number;
   onEditorTabSizeChange: (size: number) => void;
   diagnosticsCount: number;
+  panelVisibility: { files: boolean; preview: boolean; terminal: boolean };
+  onToggleView: (panel: 'files' | 'preview' | 'terminal') => void;
 }
 
 export default function Toolbar({
@@ -88,6 +90,8 @@ export default function Toolbar({
   editorTabSize,
   onEditorTabSizeChange,
   diagnosticsCount,
+  panelVisibility,
+  onToggleView,
 }: ToolbarProps) {
   return (
     <div className="flex items-center gap-1.5 border-b border-neutral-800 bg-neutral-950 px-2 py-1.5 sm:px-3">
@@ -96,10 +100,10 @@ export default function Toolbar({
         onClick={onRun}
         disabled={isRunning}
         size="icon"
-        className="h-8 w-8 rounded-md bg-neutral-900 hover:bg-emerald-500"
+        className="size-8 rounded-md bg-neutral-900 hover:bg-emerald-500"
         title="Play (Ctrl+Enter)"
       >
-        <Play className="h-4 w-4" />
+        <Play className="size-4" />
       </Button>
       <Button
         onClick={onToggleAutoRun}
@@ -108,7 +112,7 @@ export default function Toolbar({
         className={autoRun ? 'bg-purple-700/30 hover:bg-purple-600' : ''}
         title="AutoPlay"
       >
-        <PlayCircle className="h-4 w-4" />
+        <PlayCircle className="size-4" />
       </Button>
       <div className="ml-1 rounded bg-neutral-900 px-1.5 py-0.5 text-[10px] text-neutral-500">
         {diagnosticsCount > 0 ? `${diagnosticsCount} erros` : 'ok'}
@@ -117,25 +121,25 @@ export default function Toolbar({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button size="icon" variant="secondary" className="ml-auto" title="Menu">
-            <Menu className="h-4 w-4" />
+            <Menu className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Ações</DropdownMenuLabel>
           <DropdownMenuItem onClick={onFormat}>
-            <WandSparkles className="h-4 w-4" /> {isFormatting ? 'Formatando...' : 'Formatar'}
+            <WandSparkles className="size-4" /> {isFormatting ? 'Formatando...' : 'Formatar'}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onTypecheck}>
-            <Bug className="h-4 w-4" /> Typecheck
+            <Bug className="size-4" /> Typecheck
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onSave}>
-            <Save className="h-4 w-4" /> Salvar
+            <Save className="size-4" /> Salvar
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onOpenCommands}>
-            <Command className="h-4 w-4" /> Command Palette
+            <Command className="size-4" /> Command Palette
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onOpenEditorDetached}>
-            <MoonStar className="h-4 w-4" /> Detach editor
+            <MoonStar className="size-4" /> Detach editor
           </DropdownMenuItem>
           <DropdownMenuSeparator />
 
@@ -190,12 +194,32 @@ export default function Toolbar({
               </DropdownMenuRadioGroup>
               <DropdownMenuLabel className="pb-0 pt-1 text-[10px]">Tema do editor</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={editorTheme} onValueChange={(value) => onEditorThemeChange(value as EditorTheme)}>
+                <DropdownMenuRadioItem value="github-dark">GitHub Dark</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="github-light">GitHub Light</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="dracula">Dracula</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="monokai">Monokai</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="nord">Nord</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="one-dark">One Dark</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="tokyo-night">Tokyo Night</DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="midnight">Midnight</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="oled">OLED</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="tokyo">Tokyo</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="high-contrast">High Contrast</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="solarized-dark">Solarized Dark</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="solarized-light">Solarized Light</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger><Layout className="size-4" /> View</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuCheckboxItem checked={panelVisibility.files} onCheckedChange={() => onToggleView('files')}>
+                Files
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={panelVisibility.preview} onCheckedChange={() => onToggleView('preview')}>
+                Preview
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={panelVisibility.terminal} onCheckedChange={() => onToggleView('terminal')}>
+                Terminal
+              </DropdownMenuCheckboxItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
 
@@ -203,13 +227,13 @@ export default function Toolbar({
             <DropdownMenuSubTrigger>Arquivos</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuItem onClick={onDownload}>
-                <Download className="h-4 w-4" /> Baixar arquivo atual
+                <Download className="size-4" /> Baixar arquivo atual
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onExportZip}>
-                <Download className="h-4 w-4" /> Exportar ZIP
+                <Download className="size-4" /> Exportar ZIP
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onThemeChange(theme)}>
-                <Paintbrush className="h-4 w-4" /> Aplicar tema atual
+                <Paintbrush className="size-4" /> Aplicar tema atual
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
