@@ -27,9 +27,27 @@ type NpmDistTags = {
 
 type NpmExportsCondition = (typeof EXPORT_CONDITIONS)[number];
 
-type NpmKnownExportsCondition = NpmExportsCondition | "types";
+/**
+ * Represents any valid npm `exports` value we support.
+ *
+ * @remarks
+ * This must stay as a type alias, while the recursive object shape below stays
+ * as an interface. That avoids TypeScript circular alias errors while still
+ * preserving the real recursive shape of package exports.
+ */
+type NpmExportsValue = string | null | false | readonly NpmExportsValue[] | NpmExportsObject;
 
-type NpmExportsObject = Readonly<Record<string, NpmExportsValue | undefined>> & {
+/**
+ * Represents an object-shaped npm `exports` entry.
+ *
+ * @remarks
+ * This is intentionally an interface instead of a type alias because recursive
+ * object maps like npm `exports` are much safer for TypeScript to model through
+ * interfaces. A type alias with `Record<string, NpmExportsValue>` can trigger
+ * circular reference errors in strict builds.
+ */
+interface NpmExportsObject {
+  readonly [key: string]: NpmExportsValue | undefined;
   readonly browser?: NpmExportsValue;
   readonly import?: NpmExportsValue;
   readonly require?: NpmExportsValue;
@@ -38,14 +56,7 @@ type NpmExportsObject = Readonly<Record<string, NpmExportsValue | undefined>> & 
   readonly production?: NpmExportsValue;
   readonly node?: NpmExportsValue;
   readonly types?: NpmExportsValue;
-};
-
-type NpmExportsValue =
-  | string
-  | null
-  | false
-  | readonly NpmExportsValue[]
-  | NpmExportsObject;
+}
 
 type NpmPackageResponse = {
   readonly name?: string;
