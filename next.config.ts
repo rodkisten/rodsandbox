@@ -20,8 +20,8 @@ const CSP = [
 
 const nextConfig: NextConfig = {
   turbopack: {},
-serverExternalPackages: ["esbuild", "node-pty"],
-  async headers() {
+  serverExternalPackages: ["esbuild", "node-pty"],
+  /**async headers() {
     return [
       {
         source: '/(.*)',
@@ -33,7 +33,7 @@ serverExternalPackages: ["esbuild", "node-pty"],
         ],
       },
     ];
-  },
+  },**/
 };
 
 export default nextConfig;
