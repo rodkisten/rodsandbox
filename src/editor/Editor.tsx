@@ -1,35 +1,22 @@
 'use client';
-import React, { useCallback, useMemo, useRef, useEffect } from 'react';
-import CodeMirror from '@uiw/react-codemirror';
-import { javascript } from '@codemirror/lang-javascript';
-import { html } from '@codemirror/lang-html';
+
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { autocompletion, completionKeymap, type CompletionSource } from '@codemirror/autocomplete';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { css } from '@codemirror/lang-css';
+import { html } from '@codemirror/lang-html';
+import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
-import { keymap, EditorView, hoverTooltip } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
-import { foldGutter, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
-import { lintGutter, linter } from '@codemirror/lint';
-import type { Diagnostic as CMDiagnostic } from '@codemirror/lint';
-import { EditorState, Extension } from '@codemirror/state';
-import type { CompletionSource } from '@codemirror/autocomplete';
-import { VirtualFile, Diagnostic, FileLanguage, EditorTheme } from '@/types';
+import { defaultHighlightStyle, foldGutter, syntaxHighlighting } from '@codemirror/language';
+import { lintGutter, linter, type Diagnostic as CMDiagnostic } from '@codemirror/lint';
+import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
+import { EditorState, type Extension } from '@codemirror/state';
+import { EditorView, hoverTooltip, keymap } from '@codemirror/view';
+import CodeMirror from '@uiw/react-codemirror';
+import type { Diagnostic, EditorTheme, FileLanguage, VirtualFile } from '@/types';
 import { getDiagnosticRange } from './diagnosticRanges';
 import { getEditorTheme, type EditorThemeKey } from './themes';
-
-function getLanguageExtension(language: FileLanguage) {
-  switch (language) {
-    case 'typescript': return javascript({ typescript: true, jsx: false });
-    case 'javascript': return javascript({ jsx: false });
-    case 'html': return html();
-    case 'css': return css();
-    case 'json': return json();
-    case 'markdown': return markdown();
-    default: return javascript();
-  }
-}
 
 interface EditorProps {
   file: VirtualFile;
@@ -51,9 +38,34 @@ interface EditorProps {
   onCursorPositionChange?: (position: number) => void;
 }
 
-const EMPTY_DIAGNOSTICS: EditorProps['diagnostics'] = [];
-const EMPTY_EXTENSIONS: EditorProps['extraExtensions'] = [];
-const EMPTY_AUTOCOMPLETE_PROVIDERS: EditorProps['extraAutocompleteProviders'] = [];
+const EMPTY_DIAGNOSTICS: Diagnostic[] = [];
+const EMPTY_EXTENSIONS: Extension[] = [];
+const EMPTY_AUTOCOMPLETE_PROVIDERS: CompletionSource[] = [];
+
+/**
+ * Returns the CodeMirror language extension for the current virtual file.
+ *
+ * @param language - File language detected by the sandbox.
+ * @returns A CodeMirror language extension.
+ */
+function getLanguageExtension(language: FileLanguage): Extension {
+  switch (language) {
+    case 'typescript':
+      return javascript({ typescript: true, jsx: false });
+    case 'javascript':
+      return javascript({ jsx: false });
+    case 'html':
+      return html();
+    case 'css':
+      return css();
+    case 'json':
+      return json();
+    case 'markdown':
+      return markdown();
+    default:
+      return javascript();
+  }
+}
 
 export default function Editor({
   file,
@@ -74,119 +86,167 @@ export default function Editor({
   jumpTo,
   onCursorPositionChange,
 }: EditorProps) {
-  const forwardContentChange = useCallback((value: string) => {
-    onChange(value);
-  }, [onChange]);
-
-  const linterSource = useCallback((doc: { length: number; lines: number; line(number: number): { from: number; to: number } }): CMDiagnostic[] => {
-    if (!linterEnabled) return [];
-    const result: CMDiagnostic[] = [];
-    for (const d of diagnostics) {
-      if (d.fileId !== file.id) continue;
-      const { from, to } = getDiagnosticRange(d, doc);
-      result.push({
-        from,
-        to,
-        severity: (d.severity === 'hint' ? 'info' : d.severity) as CMDiagnostic['severity'],
-        message: d.message,
-      });
-    }
-    return result;
-  }, [diagnostics, file.id, linterEnabled]);
-
-  const saveKeymap = keymap.of([{
-    key: 'Mod-s',
-    run: () => {
-      onSave?.();
-      return true;
-    },
-  }]);
-
   const editorViewRef = useRef<EditorView | null>(null);
 
+  const safeDiagnostics = diagnostics ?? EMPTY_DIAGNOSTICS;
+  const safeExtraExtensions = extraExtensions ?? EMPTY_EXTENSIONS;
+  const safeAutocompleteProviders = extraAutocompleteProviders ?? EMPTY_AUTOCOMPLETE_PROVIDERS;
+
+  const forwardContentChange = useCallback(
+    (value: string) => {
+      onChange(value);
+    },
+    [onChange],
+  );
+
+  const linterSource = useCallback(
+    (doc: { length: number; lines: number; line(number: number): { from: number; to: number } }): CMDiagnostic[] => {
+      if (!linterEnabled) {
+        return [];
+      }
+
+      const result: CMDiagnostic[] = [];
+
+      for (const diagnostic of safeDiagnostics) {
+        if (diagnostic.fileId !== file.id) {
+          continue;
+        }
+
+        const { from, to } = getDiagnosticRange(diagnostic, doc);
+
+        result.push({
+          from,
+          to,
+          severity: (diagnostic.severity === 'hint' ? 'info' : diagnostic.severity) as CMDiagnostic['severity'],
+          message: diagnostic.message,
+        });
+      }
+
+      return result;
+    },
+    [file.id, linterEnabled, safeDiagnostics],
+  );
+
   useEffect(() => {
-    if (!jumpTo || !editorViewRef.current) return;
+    if (!jumpTo || !editorViewRef.current) {
+      return;
+    }
+
     const view = editorViewRef.current;
     const line = Math.max(1, Math.min(jumpTo.line, view.state.doc.lines));
     const lineInfo = view.state.doc.line(line);
-    const col = Math.max(1, jumpTo.column);
-    const pos = Math.min(lineInfo.to, lineInfo.from + col - 1);
-    view.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+    const column = Math.max(1, jumpTo.column);
+    const position = Math.min(lineInfo.to, lineInfo.from + column - 1);
+
+    view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
     view.focus();
   }, [jumpTo]);
 
   const selectedTheme = getEditorTheme(theme as EditorThemeKey);
 
-  const extensions = useMemo(() => {
+  const extensions = useMemo<Extension[]>(() => {
     const fontExtension = EditorView.theme({
-      '&': { fontSize: `${fontSize}px`, fontFamily },
+      '&': {
+        fontSize: `${fontSize}px`,
+        fontFamily,
+      },
     });
 
+    const saveKeymap = keymap.of([
+      {
+        key: 'Mod-s',
+        run: () => {
+          onSave?.();
+          return true;
+        },
+      },
+    ]);
+
     const hoverExtension = hoverProvider
-      ? hoverTooltip(async (view, pos) => {
-        const info = await hoverProvider(pos);
-        if (!info) return null;
-        return {
-          pos,
-          end: pos,
-          create() {
-            const dom = document.createElement('div');
-            dom.className = 'rounded border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-gray-100 shadow-lg';
-            const title = document.createElement('div');
-            title.className = 'font-semibold text-neutral-200';
-            title.textContent = info.display;
-            dom.appendChild(title);
-            if (info.documentation) {
-              const doc = document.createElement('div');
-              doc.className = 'mt-1 text-gray-300';
-              doc.textContent = info.documentation;
-              dom.appendChild(doc);
+      ? hoverTooltip(
+          async (_view, position) => {
+            const info = await hoverProvider(position);
+
+            if (!info) {
+              return null;
             }
-            return { dom };
+
+            return {
+              pos: position,
+              end: position,
+              create() {
+                const dom = document.createElement('div');
+                dom.className = 'rounded border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-gray-100 shadow-lg';
+
+                const title = document.createElement('div');
+                title.className = 'font-semibold text-neutral-200';
+                title.textContent = info.display;
+                dom.appendChild(title);
+
+                if (info.documentation) {
+                  const documentation = document.createElement('div');
+                  documentation.className = 'mt-1 text-gray-300';
+                  documentation.textContent = info.documentation;
+                  dom.appendChild(documentation);
+                }
+
+                return { dom };
+              },
+            };
           },
-        };
-      }, { hoverTime: 250 })
+          { hoverTime: 250 },
+        )
       : null;
 
-    const completion = autocompleteEnabled
-      ? autocompletion(extraAutocompleteProviders.length > 0 ? { override: extraAutocompleteProviders } : undefined)
-      : [];
+    const completionExtension =
+      autocompleteEnabled && safeAutocompleteProviders.length > 0
+        ? autocompletion({ override: safeAutocompleteProviders })
+        : autocompleteEnabled
+          ? autocompletion()
+          : null;
+
     return [
       getLanguageExtension(file.language),
       fontExtension,
       EditorState.tabSize.of(Math.max(1, Math.min(8, tabSize))),
       history(),
-      keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, ...completionKeymap]),
+      keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+      ...(autocompleteEnabled ? [keymap.of(completionKeymap)] : []),
       saveKeymap,
       highlightSelectionMatches(),
-      ...(Array.isArray(completion) ? [] : [completion]),
+      ...(completionExtension ? [completionExtension] : []),
       foldGutter(),
       ...(linterEnabled ? [lintGutter(), linter((view) => linterSource(view.state.doc))] : []),
       syntaxHighlighting(defaultHighlightStyle),
       ...(wordWrap ? [EditorView.lineWrapping] : []),
       ...(hoverExtension ? [hoverExtension] : []),
       ...(onCursorPositionChange
-        ? [EditorView.updateListener.of((update) => {
-          if (!update.selectionSet && !update.docChanged) return;
-          onCursorPositionChange(update.state.selection.main.head);
-        })]
+        ? [
+            EditorView.updateListener.of((update) => {
+              if (!update.selectionSet && !update.docChanged) {
+                return;
+              }
+
+              onCursorPositionChange(update.state.selection.main.head);
+            }),
+          ]
         : []),
-      ...extraExtensions,
-    ] as Extension[];
+      ...safeExtraExtensions,
+    ];
   }, [
     autocompleteEnabled,
-    extraAutocompleteProviders,
     file.language,
     fontFamily,
     fontSize,
+    hoverProvider,
     linterEnabled,
     linterSource,
-    saveKeymap,
+    onCursorPositionChange,
+    onSave,
+    safeAutocompleteProviders,
+    safeExtraExtensions,
     tabSize,
     wordWrap,
-    extraExtensions,
-    hoverProvider,
-    onCursorPositionChange,
   ]);
 
   return (
@@ -231,4 +291,3 @@ export default function Editor({
     </div>
   );
 }
-
