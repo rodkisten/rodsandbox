@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
-import { transform } from "esbuild";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -443,8 +442,9 @@ async function buildBundle(source: string, shouldMinify: boolean): Promise<strin
   if (!shouldMinify) {
     return source;
   }
-
-  const result = await transform(source, {
+  
+  const esbuild = await import("esbuild");
+  const result = await esbuild.transform(source, {
     loader: "js",
     minify: true,
     legalComments: "none",
