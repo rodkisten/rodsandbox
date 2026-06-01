@@ -38,9 +38,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // Hydrate the session on the client after the first render.
+  // setState calls are deferred to a microtask so they are not synchronous
+  // in the effect body, which avoids cascading renders.
   useEffect(() => {
-    setUser(AuthService.getSession()?.user ?? null);
-    setLoading(false);
+    Promise.resolve(AuthService.getSession()?.user ?? null).then((u) => {
+      setUser(u);
+      setLoading(false);
+    });
   }, []);
 
   const handleSignIn = useCallback(

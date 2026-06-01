@@ -18,17 +18,19 @@ const LEGACY_WORKSPACE_ID = 'default-workspace';
 export function useWorkspace(workspaceId?: string) {
   const resolvedId = workspaceId || LEGACY_WORKSPACE_ID;
   const [workspace, setWorkspace] = useState<Workspace>(() => createDefaultWorkspace(resolvedId));
-  const [loading, setLoading] = useState(true);
+  // Track which ID has finished loading so `loading` can be derived without a
+  // synchronous setState call inside the effect body.
+  const [loadedId, setLoadedId] = useState<string | null>(null);
+  const loading = loadedId !== resolvedId;
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     Db.loadWorkspace(resolvedId).then((saved) => {
       if (!cancelled && saved) setWorkspace(saved);
-      if (!cancelled) setLoading(false);
+      if (!cancelled) setLoadedId(resolvedId);
     }).catch(() => {
-      if (!cancelled) setLoading(false);
+      if (!cancelled) setLoadedId(resolvedId);
     });
     return () => { cancelled = true; };
   }, [resolvedId]);
