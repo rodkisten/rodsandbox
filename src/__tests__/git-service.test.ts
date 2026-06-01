@@ -72,6 +72,7 @@ function makeFile(path: string, content: string): VirtualFile {
     language: 'typescript',
     createdAt: 0,
     updatedAt: 0,
+    dirty: false,
   };
 }
 
@@ -82,6 +83,7 @@ function makeWorkspace(files: VirtualFile[]): Workspace {
     files: Object.fromEntries(files.map((f) => [f.id, f])),
     createdAt: 0,
     updatedAt: 0,
+    activeFileId: null,
   };
 }
 

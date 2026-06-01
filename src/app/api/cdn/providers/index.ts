@@ -19,6 +19,8 @@ export async function resolveAssets(specs: readonly ParsedAssetSpec[]): Promise<
           return resolveNpm(spec);
         case "gist":
           return resolveGist(spec);
+        case "auto":
+          return resolveCdnjs(spec).catch(() => resolveNpm(spec));
         default: {
           const exhaustive: never = spec.provider;
           throw new Error(`Unknown provider: ${exhaustive}`);

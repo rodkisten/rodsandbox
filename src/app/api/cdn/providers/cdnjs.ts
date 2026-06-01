@@ -37,15 +37,13 @@ async function resolveCdnjsLatest(packageName: string): Promise<{ readonly versi
  */
 export async function resolveCdnjs(spec: ParsedAssetSpec): Promise<ResolvedAsset> {
   const warnings: string[] = [];
-  let { version } = spec;
+  let version = spec.version;
   let file = spec.file;
 
-  const needsVersion = !version || version === "latest";
-
-  if (needsVersion || !file) {
+  if (!version || version === "latest" || !file) {
     const latest = await resolveCdnjsLatest(spec.packageName);
 
-    if (needsVersion) {
+    if (!version || version === "latest") {
       version = latest.version;
       warnings.push(`cdnjs: resolved latest version for ${spec.packageName}: ${version}`);
     }

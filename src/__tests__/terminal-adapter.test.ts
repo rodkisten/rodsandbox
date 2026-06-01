@@ -46,7 +46,7 @@ describe('createTerminalAdapter', () => {
     const { createTerminalAdapter } = await import('../services/terminal/adapter');
     const adapter = createTerminalAdapter();
     // connect() requires a handlers object with at least an onData callback.
-    expect(() => adapter.connect({ onData: () => {} })).not.toThrow();
+    expect(() => adapter.connect({ onData: () => {}, onClose: () => {}, onError: () => {} })).not.toThrow();
     expect(() => adapter.disconnect()).not.toThrow();
   });
 
@@ -55,7 +55,7 @@ describe('createTerminalAdapter', () => {
     const { createTerminalAdapter } = await import('../services/terminal/adapter');
     const adapter = createTerminalAdapter();
     const received: string[] = [];
-    adapter.connect({ onData: (d) => received.push(d) });
+    adapter.connect({ onData: (d) => received.push(d), onClose: () => {}, onError: () => {} });
     expect(received.length).toBeGreaterThan(0);
     expect(received.join('')).toMatch(/terminal/i);
   });
