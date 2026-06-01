@@ -27,25 +27,8 @@ type NpmDistTags = {
 
 type NpmExportsCondition = (typeof EXPORT_CONDITIONS)[number];
 
-/**
- * Represents any valid npm `exports` value we support.
- *
- * @remarks
- * This must stay as a type alias, while the recursive object shape below stays
- * as an interface. That avoids TypeScript circular alias errors while still
- * preserving the real recursive shape of package exports.
- */
 type NpmExportsValue = string | null | false | readonly NpmExportsValue[] | NpmExportsObject;
 
-/**
- * Represents an object-shaped npm `exports` entry.
- *
- * @remarks
- * This is intentionally an interface instead of a type alias because recursive
- * object maps like npm `exports` are much safer for TypeScript to model through
- * interfaces. A type alias with `Record<string, NpmExportsValue>` can trigger
- * circular reference errors in strict builds.
- */
 interface NpmExportsObject {
   readonly [key: string]: NpmExportsValue | undefined;
   readonly browser?: NpmExportsValue;
@@ -72,7 +55,7 @@ type NpmPackageResponse = {
 
 type ResolvedNpmLatest = {
   readonly version: string;
-  readonly file: string | null;
+  readonly file: string;
 };
 
 /***************************************************************************************************
@@ -142,10 +125,6 @@ function encodeNpmRegistryPackageName(packageName: string): string {
 /**
  * Removes leading slashes and package-root prefixes from a CDN file path.
  *
- * @remarks
- * npm metadata commonly stores paths as `./dist/index.js`, while jsDelivr URLs
- * should receive `dist/index.js`. This keeps generated URLs clean and stable.
- *
  * @param file Candidate file path.
  * @returns Normalized relative file path.
  *
@@ -169,14 +148,8 @@ function normalizeCdnFilePath(file: string): string {
 /**
  * Resolves the first string file target from an npm exports value.
  *
- * @remarks
- * npm `exports` can be a nested conditional graph. This resolver intentionally
- * stays conservative: it follows common root exports, browser/import/default
- * style conditions, arrays, and obvious subpath maps without pretending to fully
- * reimplement Node resolution.
- *
  * @param value npm exports value.
- * @returns Best-effort file path, or null when no safe file path is found.
+ * @returns Best-effort file path, or an empty string when no safe file path is found.
  *
  * @example
  * ```ts
@@ -187,9 +160,9 @@ function normalizeCdnFilePath(file: string): string {
  * // "./dist/browser.js"
  * ```
  */
-function resolveExportFile(value: NpmExportsValue | undefined): string | null {
+function resolveExportFile(value: NpmExportsValue | undefined): string {
   if (value === undefined || value === null || value === false) {
-    return null;
+    return "";
   }
 
   if (typeof value === "string") {
@@ -205,11 +178,11 @@ function resolveExportFile(value: NpmExportsValue | undefined): string | null {
       }
     }
 
-    return null;
+    return "";
   }
 
   if (!isNpmExportsObject(value)) {
-    return null;
+    return "";
   }
 
   for (const rootKey of ROOT_EXPORT_KEYS) {
@@ -246,19 +219,14 @@ function resolveExportFile(value: NpmExportsValue | undefined): string | null {
     }
   }
 
-  return null;
+  return "";
 }
 
 /**
  * Resolves the best-effort default file path from npm package metadata.
  *
- * @remarks
- * The order favors CDN-specific fields first, then browser/module/exports/main.
- * If no file is found, the caller can still let jsDelivr resolve the package
- * root automatically.
- *
  * @param data npm package metadata.
- * @returns Best-effort file path, or null when the package does not declare one.
+ * @returns Best-effort file path, or an empty string when the package does not declare one.
  *
  * @example
  * ```ts
@@ -266,7 +234,7 @@ function resolveExportFile(value: NpmExportsValue | undefined): string | null {
  * // "./dist/index.mjs"
  * ```
  */
-function resolveDefaultNpmFile(data: NpmPackageResponse): string | null {
+function resolveDefaultNpmFile(data: NpmPackageResponse): string {
   if (data.jsdelivr) {
     return data.jsdelivr;
   }
@@ -301,7 +269,7 @@ function resolveDefaultNpmFile(data: NpmPackageResponse): string | null {
     }
   }
 
-  return null;
+  return "";
 }
 
 /***************************************************************************************************
@@ -359,22 +327,24 @@ async function resolveNpmLatest(packageName: string): Promise<ResolvedNpmLatest>
  * Builds a jsDelivr npm URL from package metadata.
  *
  * @remarks
- * When `file` is null, the URL points to the package root and lets jsDelivr
- * resolve the package entrypoint. This is useful for packages that do not expose
- * a clear `main`, `module`, `browser`, `unpkg`, `jsdelivr`, or `exports` path.
+ * When `file` is an empty string, the URL points to the package root and lets
+ * jsDelivr resolve the package entrypoint.
  *
  * @param packageName npm package name.
  * @param version Concrete npm version.
- * @param file Optional package file path.
+ * @param file Optional package file path. Use an empty string for package root.
  * @returns Concrete jsDelivr URL.
  *
  * @example
  * ```ts
  * buildJsdelivrNpmUrl("es-toolkit", "1.39.3", "dist/index.js");
  * // "https://cdn.jsdelivr.net/npm/es-toolkit@1.39.3/dist/index.js"
+ *
+ * buildJsdelivrNpmUrl("es-toolkit", "1.39.3", "");
+ * // "https://cdn.jsdelivr.net/npm/es-toolkit@1.39.3"
  * ```
  */
-function buildJsdelivrNpmUrl(packageName: string, version: string, file: string | null): string {
+function buildJsdelivrNpmUrl(packageName: string, version: string, file: string): string {
   const baseUrl = `${JSDELIVR_NPM_BASE}/${packageName}@${version}`;
 
   if (!file) {
@@ -400,7 +370,7 @@ function buildJsdelivrNpmUrl(packageName: string, version: string, file: string 
  *   provider: "npm",
  *   packageName: "es-toolkit",
  *   version: "latest",
- *   file: null,
+ *   file: "",
  *   options: {},
  * });
  *
@@ -410,7 +380,7 @@ function buildJsdelivrNpmUrl(packageName: string, version: string, file: string 
 export async function resolveNpm(spec: ParsedAssetSpec): Promise<ResolvedAsset> {
   const warnings: string[] = [];
   let { version } = spec;
-  let file = spec.file;
+  let file = spec.file ?? "";
 
   if (!version || version === "latest" || !file) {
     const latest = await resolveNpmLatest(spec.packageName);
@@ -420,7 +390,7 @@ export async function resolveNpm(spec: ParsedAssetSpec): Promise<ResolvedAsset> 
       warnings.push(`npm: resolved latest version for ${spec.packageName}: ${version}`);
     }
 
-    file = file ?? latest.file;
+    file = file || latest.file;
 
     if (!file) {
       warnings.push(
@@ -433,7 +403,7 @@ export async function resolveNpm(spec: ParsedAssetSpec): Promise<ResolvedAsset> 
     throw new Error(`npm: could not resolve version for ${spec.packageName}`);
   }
 
-  const normalizedFile = file ? normalizeCdnFilePath(file) : null;
+  const normalizedFile = file ? normalizeCdnFilePath(file) : "";
   const url = buildJsdelivrNpmUrl(spec.packageName, version, normalizedFile);
 
   return {
