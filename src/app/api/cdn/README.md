@@ -95,3 +95,53 @@ The route writes cache files to:
 - `.next/cache/rod-cdn` locally.
 
 Disk cache writes are best-effort, so a serverless write failure will not break the request.
+
+## Default global namespace
+
+By default, generated IIFE/module bundles expose modules under a single root namespace:
+
+```txt
+/api/cdn?pkg=shiki@4.2.0&entry=shiki/bundle/web&bundle=iife
+```
+
+Output shape:
+
+```js
+globalThis.RodCDN.Shiki
+```
+
+You can change the root namespace with `global`:
+
+```txt
+/api/cdn?pkg=shiki@4.2.0&entry=shiki/bundle/web&bundle=iife&global=MyCDN
+```
+
+Output shape:
+
+```js
+globalThis.MyCDN.Shiki
+```
+
+You can choose the property name per package:
+
+```txt
+/api/cdn?pkg=lodash(n:GlobalLodash)&global=RodCDN
+```
+
+Output shape:
+
+```js
+globalThis.RodCDN.GlobalLodash
+```
+
+For side-effect-only bundles, disable exposure:
+
+```txt
+/api/cdn?pkg=some-package&bundle=iife&expose=false
+```
+
+or:
+
+```txt
+/api/cdn?pkg=some-package&bundle=iife&global=none
+```

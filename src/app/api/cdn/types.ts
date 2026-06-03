@@ -37,6 +37,7 @@ export type RequestOptions = {
   readonly combine: boolean;
   readonly debug: boolean;
   readonly globalName: string | null;
+  readonly expose: boolean;
   readonly entry: string | null;
   readonly platform: "browser" | "node";
   readonly external: readonly string[];

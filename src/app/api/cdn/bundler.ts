@@ -32,7 +32,7 @@ async function downloadAsset(asset: ResolvedAsset): Promise<string> {
 function prepareAssetSource(asset: ResolvedAsset, source: string, options: RequestOptions): string {
   const shouldRemoveComments = asset.options.removeComments ?? options.removeComments;
   const cleaned = shouldRemoveComments ? removeJavaScriptComments(source) : source;
-  const alias = createGlobalAlias(asset);
+  const alias = createGlobalAlias(options, asset);
 
   return [
     `;\n/* ${asset.provider}:${asset.sourceLabel} */`,

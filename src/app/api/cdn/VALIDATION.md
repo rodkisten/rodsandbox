@@ -1,24 +1,26 @@
 # Validation
 
-Validated in the sandbox with:
+Validated in this package revision:
 
 ```bash
-npx tsc -p tsconfig.validation.json
-npx tsx validation-runtime-local.ts
+cd /mnt/data/cdnwork
+npx tsc --noEmit
 ```
 
-Results:
+Result: passed.
 
-```json
-{
-  "typecheck": "passed",
-  "local_esbuild_bundle_smoke_test": "passed",
-  "local_esbuild_bundle_result": {
-    "codeLength": 539,
-    "hasGlobal": true,
-    "hasAnswer": true
-  }
-}
+A generated IIFE bundle was also built through the `buildModuleBundle` pipeline using a mocked HTTP module and checked with Node:
+
+```bash
+npx tsx validate-output.ts > /tmp/output.js
+node --check /tmp/output.js
 ```
 
-A live Shiki network smoke test was attempted, but the sandbox had transient DNS failure against public hosts. The code path itself was validated with a local HTTP module graph using relative imports.
+Result: passed.
+
+The generated output contained the default namespace assignment:
+
+```js
+globalThis.RodCDN = globalThis.RodCDN ?? {};
+globalThis.RodCDN.virtual = globalThis.RodCDN.virtual ?? o;
+```

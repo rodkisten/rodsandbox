@@ -329,7 +329,12 @@ export function parseRequestOptions(urlSearchParams: URLSearchParams): RequestOp
   const minify = parseBoolean(urlSearchParams.get("minify") ?? urlSearchParams.get("min"), true);
   const removeComments = parseBoolean(urlSearchParams.get("remove-comments") ?? urlSearchParams.get("comments"), false);
 
-  const globalName = urlSearchParams.get("global") ?? urlSearchParams.get("name") ?? null;
+  const rawGlobalName = urlSearchParams.get("global") ?? urlSearchParams.get("name") ?? "RodCDN";
+  const normalizedGlobalName = rawGlobalName.trim().toLowerCase();
+  const globalName = ["false", "0", "no", "off", "none", "null"].includes(normalizedGlobalName)
+    ? null
+    : rawGlobalName;
+  const expose = parseBoolean(urlSearchParams.get("expose"), globalName !== null);
   const entry = urlSearchParams.get("entry") ?? null;
 
   if (globalName) {
@@ -351,6 +356,7 @@ export function parseRequestOptions(urlSearchParams: URLSearchParams): RequestOp
     combine: parseBoolean(urlSearchParams.get("combine"), true),
     debug: parseBoolean(urlSearchParams.get("debug"), false),
     globalName,
+    expose,
     entry,
     platform: parseEnum(urlSearchParams.get("platform"), "browser", ["browser", "node"], "platform"),
     external: parseExternalPackages(urlSearchParams.get("external")),

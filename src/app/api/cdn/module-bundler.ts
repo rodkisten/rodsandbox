@@ -3,6 +3,7 @@ import { build, type Loader, type OnLoadArgs, type OnResolveArgs, type Plugin } 
 import { ESM_SH_BASE, JSDELIVR_NPM_BASE } from "./constants";
 import type { BuiltBundle, BundleMode, RequestOptions, ResolvedAsset } from "./types";
 import { readCachedBundle, writeCachedBundle } from "./cache";
+import { createNamespaceAssignment, createRootNamespaceBootstrap, resolveNamespaceProperty } from "./globals";
 
 /***************************************************************************************************
  * Constants
@@ -40,40 +41,13 @@ function toIdentifierSuffix(value: string): string {
 }
 
 /**
- * Returns true when a value can safely be used as a direct property identifier.
+ * Resolves the property name used for one asset inside the configured CDN namespace.
  *
- * @param value Candidate global name.
- * @returns Whether dot-property access is safe.
- */
-function isSafeIdentifier(value: string): boolean {
-  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(value);
-}
-
-/**
- * Creates a `globalThis` assignment line for IIFE/CJS bundles.
- *
- * @param globalName Public global name.
- * @param localName Local module binding name.
- * @returns JavaScript assignment source.
- */
-function createGlobalAssignment(globalName: string, localName: string): string {
-  if (isSafeIdentifier(globalName)) {
-    return `globalThis.${globalName} = ${localName};`;
-  }
-
-  return `globalThis[${JSON.stringify(globalName)}] = ${localName};`;
-}
-
-/**
- * Resolves the public global name for an asset.
- *
- * @param options Request options.
  * @param asset Resolved asset.
- * @param index Asset index.
- * @returns Global name or null when no assignment should be emitted.
+ * @returns Namespace property key.
  */
-function resolveAssetGlobalName(options: RequestOptions, asset: ResolvedAsset, index: number): string | null {
-  return asset.options.name ?? asset.options.global ?? asset.options.namespace ?? (index === 0 ? options.globalName : null);
+function resolveAssetNamespaceProperty(asset: ResolvedAsset): string {
+  return resolveNamespaceProperty(asset);
 }
 
 /**
@@ -177,19 +151,23 @@ function isJavaScriptLikeUrl(url: string): boolean {
 function createVirtualEntry(options: RequestOptions, assets: readonly ResolvedAsset[]): string {
   const lines: string[] = [];
 
+  if (options.expose && options.globalName && options.bundleMode !== "esm") {
+    lines.push(createRootNamespaceBootstrap(options.globalName));
+  }
+
   assets.forEach((asset, index) => {
     const localName = `__rod_cdn_module_${index}_${toIdentifierSuffix(asset.packageName)}`;
     const importUrl = resolveModuleImportUrl(options, asset, index);
-    const globalName = resolveAssetGlobalName(options, asset, index);
+    const namespaceProperty = resolveAssetNamespaceProperty(asset);
 
     lines.push(`import * as ${localName} from ${JSON.stringify(importUrl)};`);
 
-    if (globalName && options.bundleMode !== "esm") {
-      lines.push(createGlobalAssignment(globalName, localName));
+    if (options.expose && options.globalName && options.bundleMode !== "esm") {
+      lines.push(createNamespaceAssignment(options.globalName, namespaceProperty, localName));
     }
 
     if (options.bundleMode === "esm") {
-      const exportName = toIdentifierSuffix(globalName ?? asset.packageName);
+      const exportName = toIdentifierSuffix(namespaceProperty);
       lines.push(`export { ${localName} as ${exportName} };`);
 
       if (index === 0) {
@@ -363,7 +341,6 @@ export async function buildModuleBundle(options: RequestOptions, assets: readonl
     target: "es2022",
     platform: options.platform,
     format: toEsbuildFormat(options.bundleMode),
-    globalName: options.bundleMode === "iife" && options.globalName ? options.globalName : undefined,
     external: [...options.external],
     plugins: [createVirtualEntryPlugin(virtualEntry), createHttpPlugin(options.external)],
     logLevel: "silent",
