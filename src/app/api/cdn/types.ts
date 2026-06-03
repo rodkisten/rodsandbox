@@ -8,6 +8,8 @@ export type AssetProvider = "auto" | "cdnjs" | "npm" | "gist";
 
 export type ResolvedProvider = Exclude<AssetProvider, "auto">;
 
+export type CssTargetMode = "document" | "manual";
+
 export type SpecOptions = {
   readonly name?: string;
   readonly namespace?: string;
@@ -15,6 +17,8 @@ export type SpecOptions = {
   readonly minify?: boolean;
   readonly removeComments?: boolean;
   readonly provider?: AssetProvider;
+  readonly id?: string;
+  readonly target?: CssTargetMode;
 };
 
 export type ParsedAssetSpec = {
@@ -28,6 +32,7 @@ export type ParsedAssetSpec = {
 
 export type RequestOptions = {
   readonly specs: readonly ParsedAssetSpec[];
+  readonly cssSpecs: readonly ParsedAssetSpec[];
   readonly presets: readonly string[];
   readonly minify: boolean;
   readonly removeComments: boolean;
@@ -42,6 +47,10 @@ export type RequestOptions = {
   readonly platform: "browser" | "node";
   readonly external: readonly string[];
   readonly bundleProvider: "esm.sh" | "jsdelivr";
+  readonly cssInject: boolean;
+  readonly cssTarget: CssTargetMode;
+  readonly cssId: string | null;
+  readonly metadata: boolean;
 };
 
 export type ResolvedAsset = {
@@ -58,6 +67,8 @@ export type ResolvedAsset = {
 export type BuiltBundle = {
   readonly code: string;
   readonly assets: readonly ResolvedAsset[];
+  readonly cssAssets: readonly ResolvedAsset[];
+  readonly cssStyleId: string | null;
   readonly warnings: readonly string[];
   readonly cacheKey: string;
   readonly cacheHit: boolean;

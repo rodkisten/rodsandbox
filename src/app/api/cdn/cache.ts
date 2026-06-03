@@ -146,6 +146,10 @@ export function createCacheKey(options: RequestOptions, assets: readonly Resolve
       minify: options.minify,
       removeComments: options.removeComments,
       bundleMode: options.bundleMode,
+      globalName: options.globalName,
+      cssInject: options.cssInject,
+      cssTarget: options.cssTarget,
+      cssId: options.cssId,
     }),
   );
 }

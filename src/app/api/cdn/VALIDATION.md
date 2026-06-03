@@ -1,26 +1,26 @@
 # Validation
 
-Validated in this package revision:
+Validated in this package revision from `/mnt/data/cdnwork`:
 
 ```bash
-cd /mnt/data/cdnwork
 npx tsc --noEmit
 ```
 
 Result: passed.
 
-A generated IIFE bundle was also built through the `buildModuleBundle` pipeline using a mocked HTTP module and checked with Node:
+A generated CSS-injection JavaScript output was also produced through the real `buildBundle` pipeline using a `data:text/css` CSS asset and checked with Node:
 
 ```bash
-npx tsx validate-output.ts > /tmp/output.js
-node --check /tmp/output.js
+npx tsx validate-output.ts > /tmp/rod-cdn-css-output.js
+node --check /tmp/rod-cdn-css-output.js
 ```
 
 Result: passed.
 
-The generated output contained the default namespace assignment:
+The generated output contains:
 
 ```js
-globalThis.RodCDN = globalThis.RodCDN ?? {};
-globalThis.RodCDN.virtual = globalThis.RodCDN.virtual ?? o;
+globalThis.RodCDN.injectStyles
 ```
+
+and a top metadata banner with CSS asset metadata, cache key, cache hit status, CSS target, and style ID.

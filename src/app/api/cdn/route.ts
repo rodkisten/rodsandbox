@@ -31,12 +31,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const presetSpecs = expandPresets(options.presets);
     const allSpecs = [...presetSpecs, ...options.specs];
 
-    if (allSpecs.length === 0) {
-      throw new Error("Missing assets. Use ?preset=userscript or ?pkg=lodash or ?pkgs=jquery,axios.");
+    if (allSpecs.length === 0 && options.cssSpecs.length === 0) {
+      throw new Error("Missing assets. Use ?preset=userscript, ?pkg=lodash, ?package=axios, ?pkgs=jquery,axios, or ?css=highlight.js/styles/github-dark.min.css.");
     }
 
-    const assets = await resolveAssets(allSpecs);
-    const bundle = await buildBundle(options, assets);
+    const [assets, cssAssets] = await Promise.all([resolveAssets(allSpecs), resolveAssets(options.cssSpecs)]);
+    const bundle = await buildBundle(options, assets, cssAssets);
 
     return createBundleResponse(options, bundle);
   } catch (error) {

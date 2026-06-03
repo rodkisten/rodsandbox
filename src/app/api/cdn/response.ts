@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createCacheHeaders } from "./cache";
 import { listPresets } from "./presets";
+import { attachMetadataBanner } from "./metadata";
 import type { BuiltBundle, RequestOptions } from "./types";
 
 /**
@@ -21,13 +22,14 @@ export function createBundleResponse(options: RequestOptions, bundle: BuiltBundl
         presets: listPresets(),
         warnings: bundle.warnings,
         assets: bundle.assets,
-        code: bundle.code,
+        cssAssets: bundle.cssAssets,
+        code: attachMetadataBanner(options, bundle),
       },
       { headers: cacheHeaders },
     );
   }
 
-  return new NextResponse(bundle.code, {
+  return new NextResponse(attachMetadataBanner(options, bundle), {
     headers: {
       ...cacheHeaders,
       "Content-Type": options.format === "text" ? "text/plain; charset=utf-8" : "application/javascript; charset=utf-8",
@@ -35,6 +37,7 @@ export function createBundleResponse(options: RequestOptions, bundle: BuiltBundl
       "X-Rod-CDN-Cache-Key": bundle.cacheKey,
       "X-Rod-CDN-Warnings": bundle.warnings.join(" | ").slice(0, 500),
       "X-Rod-CDN-Assets": bundle.assets.map((asset) => asset.sourceLabel).join(",").slice(0, 1500),
+      "X-Rod-CDN-CSS-Assets": bundle.cssAssets.map((asset) => asset.sourceLabel).join(",").slice(0, 1500),
     },
   });
 }

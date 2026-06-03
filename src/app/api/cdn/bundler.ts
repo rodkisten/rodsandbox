@@ -3,6 +3,7 @@ import { createCacheKey, readCachedBundle, writeCachedBundle } from "./cache";
 import { buildModuleBundle } from "./module-bundler";
 import { removeJavaScriptComments } from "./comments";
 import { createGlobalAlias } from "./globals";
+import { buildCssPayload, createCssRuntime, resolveStyleId } from "./css";
 import type { BuiltBundle, RequestOptions, ResolvedAsset } from "./types";
 
 /**
@@ -65,20 +66,28 @@ function shouldMinifyBundle(options: RequestOptions, assets: readonly ResolvedAs
  * @param assets Resolved assets.
  * @returns Built bundle with cache metadata.
  */
-export async function buildBundle(options: RequestOptions, assets: readonly ResolvedAsset[]): Promise<BuiltBundle> {
+export async function buildBundle(
+  options: RequestOptions,
+  assets: readonly ResolvedAsset[],
+  cssAssets: readonly ResolvedAsset[] = [],
+): Promise<BuiltBundle> {
   if (options.bundleMode !== "raw") {
-    return buildModuleBundle(options, assets);
+    return buildModuleBundle(options, assets, cssAssets);
   }
 
   const minify = shouldMinifyBundle(options, assets);
-  const cacheKey = createCacheKey({ ...options, minify }, assets);
+  const cssPayload = await buildCssPayload(cssAssets);
+  const cssStyleId = resolveStyleId(options, cssPayload.css);
+  const cacheKey = createCacheKey({ ...options, minify }, [...assets, ...cssAssets]);
   const cached = await readCachedBundle(cacheKey);
-  const warnings = [...assets.flatMap((asset) => asset.warnings)];
+  const warnings = [...assets.flatMap((asset) => asset.warnings), ...cssPayload.warnings];
 
   if (cached !== null) {
     return {
       code: cached,
       assets,
+      cssAssets,
+      cssStyleId,
       warnings,
       cacheKey,
       cacheHit: true,
@@ -92,7 +101,8 @@ export async function buildBundle(options: RequestOptions, assets: readonly Reso
     chunks.push(prepareAssetSource(asset, source, options));
   }
 
-  let code = chunks.join("\n");
+  const cssRuntime = createCssRuntime(options, cssPayload.css, cssAssets);
+  let code = [...chunks, cssRuntime].filter(Boolean).join("\n");
 
 
   if (!minify && options.minify) {
@@ -119,6 +129,8 @@ export async function buildBundle(options: RequestOptions, assets: readonly Reso
   return {
     code,
     assets,
+    cssAssets,
+    cssStyleId,
     warnings,
     cacheKey,
     cacheHit: false,

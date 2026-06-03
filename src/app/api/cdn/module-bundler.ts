@@ -3,6 +3,7 @@ import { build, type Loader, type OnLoadArgs, type OnResolveArgs, type Plugin } 
 import { ESM_SH_BASE, JSDELIVR_NPM_BASE } from "./constants";
 import type { BuiltBundle, BundleMode, RequestOptions, ResolvedAsset } from "./types";
 import { readCachedBundle, writeCachedBundle } from "./cache";
+import { buildCssPayload, createCssRuntime, resolveStyleId } from "./css";
 import { createNamespaceAssignment, createRootNamespaceBootstrap, resolveNamespaceProperty } from "./globals";
 
 /***************************************************************************************************
@@ -299,9 +300,16 @@ function createHttpPlugin(external: readonly string[]): Plugin {
  * // Supports /api/cdn?pkg=shiki@4.2.0&entry=shiki/bundle/web&bundle=iife&global=Shiki
  * ```
  */
-export async function buildModuleBundle(options: RequestOptions, assets: readonly ResolvedAsset[]): Promise<BuiltBundle> {
-  const warnings = [...assets.flatMap((asset) => asset.warnings)];
-  const virtualEntry = createVirtualEntry(options, assets);
+export async function buildModuleBundle(
+  options: RequestOptions,
+  assets: readonly ResolvedAsset[],
+  cssAssets: readonly ResolvedAsset[] = [],
+): Promise<BuiltBundle> {
+  const cssPayload = await buildCssPayload(cssAssets);
+  const cssStyleId = resolveStyleId(options, cssPayload.css);
+  const cssRuntime = createCssRuntime(options, cssPayload.css, cssAssets);
+  const warnings = [...assets.flatMap((asset) => asset.warnings), ...cssPayload.warnings];
+  const virtualEntry = [createVirtualEntry(options, assets), cssRuntime].filter(Boolean).join("\n");
   const cacheKey = crypto
     .createHash("sha256")
     .update(
@@ -314,6 +322,7 @@ export async function buildModuleBundle(options: RequestOptions, assets: readonl
         provider: options.bundleProvider,
         external: options.external,
         assets,
+        cssAssets,
         virtualEntry,
       }),
     )
@@ -325,6 +334,8 @@ export async function buildModuleBundle(options: RequestOptions, assets: readonl
     return {
       code: cached,
       assets,
+      cssAssets,
+      cssStyleId,
       warnings,
       cacheKey,
       cacheHit: true,
@@ -367,6 +378,8 @@ export async function buildModuleBundle(options: RequestOptions, assets: readonl
   return {
     code,
     assets,
+    cssAssets,
+    cssStyleId,
     warnings,
     cacheKey,
     cacheHit: false,

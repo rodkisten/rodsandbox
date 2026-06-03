@@ -1,4 +1,4 @@
-import type { AssetProvider, BundleMode, CacheMode, OutputFormat, ParsedAssetSpec, RequestOptions, SpecOptions } from "./types";
+import type { AssetProvider, BundleMode, CacheMode, CssTargetMode, OutputFormat, ParsedAssetSpec, RequestOptions, SpecOptions } from "./types";
 import { FALSY, TRUTHY } from "./constants";
 
 /**
@@ -95,6 +95,12 @@ export function parseSpecOptions(rawOptions: string | null): SpecOptions {
 
     if (normalizedKey === "minify" || normalizedKey === "removeComments") {
       options[normalizedKey] = parseBoolean(value, true);
+    } else if (normalizedKey === "target") {
+      const normalizedTarget = value.trim().toLowerCase();
+      if (normalizedTarget !== "document" && normalizedTarget !== "manual") {
+        throw new Error(`Invalid target option: ${value}`);
+      }
+      options[normalizedKey] = normalizedTarget;
     } else {
       assertSafePath(value, normalizedKey);
       options[normalizedKey] = value;
@@ -298,6 +304,15 @@ function parseExternalPackages(value: string | null): readonly string[] {
   return splitTopLevel(value).map((item) => item.trim()).filter(Boolean);
 }
 
+/**
+ * Parses a query enum with lowercase normalization.
+ *
+ * @param value Raw query value.
+ * @param fallback Fallback value when missing.
+ * @param allowed Allowed normalized values.
+ * @param label Human-readable error label.
+ * @returns Parsed enum value.
+ */
 function parseEnum<T extends string>(value: string | null, fallback: T, allowed: readonly T[], label: string): T {
   if (!value) return fallback;
   const normalized = value.trim().toLowerCase() as T;
@@ -314,12 +329,20 @@ function parseEnum<T extends string>(value: string | null, fallback: T, allowed:
 export function parseRequestOptions(urlSearchParams: URLSearchParams): RequestOptions {
   const rawPkgValues = [
     ...urlSearchParams.getAll("pkg"),
+    ...urlSearchParams.getAll("package"),
     ...urlSearchParams.getAll("pkgs").flatMap(splitTopLevel),
     ...urlSearchParams.getAll("packages").flatMap(splitTopLevel),
     ...urlSearchParams.getAll("libs").flatMap(splitTopLevel),
   ];
 
+  const rawCssValues = [
+    ...urlSearchParams.getAll("css"),
+    ...urlSearchParams.getAll("style"),
+    ...urlSearchParams.getAll("styles").flatMap(splitTopLevel),
+  ];
+
   const specs = rawPkgValues.filter(Boolean).map(parseAssetSpec);
+  const cssSpecs = rawCssValues.filter(Boolean).flatMap(splitTopLevel).map(parseAssetSpec);
   const presets = urlSearchParams
     .getAll("preset")
     .flatMap(splitTopLevel)
@@ -336,6 +359,7 @@ export function parseRequestOptions(urlSearchParams: URLSearchParams): RequestOp
     : rawGlobalName;
   const expose = parseBoolean(urlSearchParams.get("expose"), globalName !== null);
   const entry = urlSearchParams.get("entry") ?? null;
+  const cssId = urlSearchParams.get("css-id") ?? urlSearchParams.get("style-id") ?? null;
 
   if (globalName) {
     assertSafePath(globalName, "global");
@@ -345,8 +369,13 @@ export function parseRequestOptions(urlSearchParams: URLSearchParams): RequestOp
     assertSafePath(entry, "entry");
   }
 
+  if (cssId) {
+    assertSafePath(cssId, "css-id");
+  }
+
   return {
     specs,
+    cssSpecs,
     presets,
     minify,
     removeComments,
@@ -361,5 +390,9 @@ export function parseRequestOptions(urlSearchParams: URLSearchParams): RequestOp
     platform: parseEnum(urlSearchParams.get("platform"), "browser", ["browser", "node"], "platform"),
     external: parseExternalPackages(urlSearchParams.get("external")),
     bundleProvider: parseEnum(urlSearchParams.get("bundle-provider") ?? urlSearchParams.get("provider"), "esm.sh", ["esm.sh", "jsdelivr"], "bundle-provider"),
+    cssInject: parseBoolean(urlSearchParams.get("css-inject") ?? urlSearchParams.get("style-inject"), true),
+    cssTarget: parseEnum<CssTargetMode>(urlSearchParams.get("css-target") ?? urlSearchParams.get("style-target"), "document", ["document", "manual"], "css-target"),
+    cssId,
+    metadata: parseBoolean(urlSearchParams.get("metadata"), true),
   };
 }
