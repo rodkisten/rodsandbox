@@ -382,25 +382,21 @@ export async function resolveNpm(spec: ParsedAssetSpec): Promise<ResolvedAsset> 
   let { version } = spec;
   let file = spec.file ?? "";
 
-  if (!version || version === "latest" || !file) {
+  if (!version || version === "latest") {
     const latest = await resolveNpmLatest(spec.packageName);
-
-    if (!version || version === "latest") {
-      version = latest.version;
-      warnings.push(`npm: resolved latest version for ${spec.packageName}: ${version}`);
-    }
-
+    version = latest.version;
     file = file || latest.file;
-
-    if (!file) {
-      warnings.push(
-        `npm: no default file found for ${spec.packageName}@${version}; letting jsDelivr resolve the package root.`,
-      );
-    }
+    warnings.push(`npm: resolved latest version for ${spec.packageName}: ${version}`);
   }
 
   if (!version) {
     throw new Error(`npm: could not resolve version for ${spec.packageName}`);
+  }
+
+  if (!file) {
+    warnings.push(
+      `npm: no default file requested for ${spec.packageName}@${version}; letting jsDelivr resolve the package root or esbuild entry override.`,
+    );
   }
 
   const normalizedFile = file ? normalizeCdnFilePath(file) : "";
