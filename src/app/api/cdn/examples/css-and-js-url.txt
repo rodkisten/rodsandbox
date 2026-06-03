@@ -1,0 +1,1 @@
+https://code.migos.club/api/cdn?packages=shiki@4.2.0,lodash(n:Utils)&entry=shiki/bundle/web&bundle=iife&global=RodCDN&css=highlight.js@11.11.1/styles/github-dark.min.css&css-target=manual&css-id=rod-shiki-theme&cache=immutable
