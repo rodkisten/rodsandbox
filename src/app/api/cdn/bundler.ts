@@ -1,7 +1,8 @@
 import { transform } from "esbuild";
 import { createCacheKey, readCachedBundle, writeCachedBundle } from "./cache";
+import { buildModuleBundle } from "./module-bundler";
 import { removeJavaScriptComments } from "./comments";
-import { createGlobalAlias, wrapInIife } from "./globals";
+import { createGlobalAlias } from "./globals";
 import type { BuiltBundle, RequestOptions, ResolvedAsset } from "./types";
 
 /**
@@ -65,6 +66,10 @@ function shouldMinifyBundle(options: RequestOptions, assets: readonly ResolvedAs
  * @returns Built bundle with cache metadata.
  */
 export async function buildBundle(options: RequestOptions, assets: readonly ResolvedAsset[]): Promise<BuiltBundle> {
+  if (options.bundleMode !== "raw") {
+    return buildModuleBundle(options, assets);
+  }
+
   const minify = shouldMinifyBundle(options, assets);
   const cacheKey = createCacheKey({ ...options, minify }, assets);
   const cached = await readCachedBundle(cacheKey);
@@ -89,9 +94,6 @@ export async function buildBundle(options: RequestOptions, assets: readonly Reso
 
   let code = chunks.join("\n");
 
-  if (options.bundleMode === "iife") {
-    code = wrapInIife(code);
-  }
 
   if (!minify && options.minify) {
     warnings.push("Minification skipped because at least one asset requested minify:false.");

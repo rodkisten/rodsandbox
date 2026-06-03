@@ -1,14 +1,16 @@
 # Changelog
 
+## 1.2.0
+
+- Added esbuild module bundling for ESM packages with `bundle=iife`, `bundle=esm` and `bundle=cjs`.
+- Added `entry`, `global`, `external`, `platform` and `bundle-provider` query options.
+- Added support for `format=iife`, `format=esm` and `format=cjs` as convenience aliases.
+- Fixed explicit-version npm packages so `pkg=shiki@4.2.0` does not need the registry latest endpoint.
+- Improved presets for ESM-first packages like Solid, Lit and es-toolkit.
+- Added local runtime validation for HTTP import resolution and IIFE global assignment.
+
 ## 1.1.0
 
-- Fixed provider-less packages such as `pkg=lodash(n:GlobalLodash)` by adding an `auto` provider that tries cdnjs first and falls back to npm.
-- Fixed `@latest` npm resolution for packages such as `es-toolkit` and `solid-js` by resolving latest through jsDelivr package metadata before falling back to the npm registry.
-- Fixed scoped npm package parsing for names like `@scope/package@latest/file.js`.
-- Made `remove-comments` default to `false` to avoid corrupting vendor bundles that contain tricky regex/template syntax.
-- Added safe esbuild fallback: if minification cannot parse a third-party asset, the API now returns the unminified bundle with a warning instead of failing the request.
-- Honored per-asset `minify:false` by skipping final bundle minification when any asset opts out.
-
-## 1.0.0
-
-- Initial `app/api/cdn` route with presets, cdnjs, npm, gist support, cache aliases, format aliases, minification and global aliases.
+- Fixed npm latest resolution for packages whose `/latest` payload does not expose `dist-tags.latest`.
+- Added safer Vercel runtime cache fallback to `/tmp`.
+- Added cdnjs-to-npm fallback for auto provider mode.

@@ -2,7 +2,7 @@ export type CacheMode = "none" | "short" | "normal" | "long" | "immutable";
 
 export type OutputFormat = "js" | "text" | "json";
 
-export type BundleMode = "raw" | "iife";
+export type BundleMode = "raw" | "iife" | "esm" | "cjs";
 
 export type AssetProvider = "auto" | "cdnjs" | "npm" | "gist";
 
@@ -36,6 +36,11 @@ export type RequestOptions = {
   readonly bundleMode: BundleMode;
   readonly combine: boolean;
   readonly debug: boolean;
+  readonly globalName: string | null;
+  readonly entry: string | null;
+  readonly platform: "browser" | "node";
+  readonly external: readonly string[];
+  readonly bundleProvider: "esm.sh" | "jsdelivr";
 };
 
 export type ResolvedAsset = {

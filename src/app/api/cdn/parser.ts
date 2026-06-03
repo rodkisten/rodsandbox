@@ -214,6 +214,90 @@ export function parseAssetSpec(rawSpec: string): ParsedAssetSpec {
   };
 }
 
+
+/**
+ * Parses the bundling mode while accepting friendly aliases used by userscripts.
+ *
+ * @param value Raw query value from `bundle`, `module`, or `bundle-format`.
+ * @returns Normalized bundling mode.
+ */
+function parseBundleMode(value: string | null): BundleMode {
+  if (!value) return "raw";
+
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on") {
+    return "iife";
+  }
+
+  if (normalized === "false" || normalized === "0" || normalized === "no" || normalized === "off") {
+    return "raw";
+  }
+
+  if (["raw", "iife", "esm", "cjs"].includes(normalized)) {
+    return normalized as BundleMode;
+  }
+
+  throw new Error(`Invalid bundle mode: ${value}`);
+}
+
+/**
+ * Parses the response format while allowing `format=iife` as a convenience alias
+ * for users who think about module format rather than HTTP output format.
+ *
+ * @param value Raw query value.
+ * @returns Output format when the value targets the HTTP response body.
+ */
+function parseOutputFormat(value: string | null): OutputFormat {
+  if (!value) return "js";
+
+  const normalized = value.trim().toLowerCase();
+
+  if (["iife", "esm", "cjs"].includes(normalized)) {
+    return "js";
+  }
+
+  if (["js", "text", "json"].includes(normalized)) {
+    return normalized as OutputFormat;
+  }
+
+  throw new Error(`Invalid format: ${value}`);
+}
+
+/**
+ * Parses module format from the dedicated bundle params or from `format=iife`.
+ *
+ * @param params Request search params.
+ * @returns Normalized bundle mode.
+ */
+function parseRequestedBundleMode(params: URLSearchParams): BundleMode {
+  const explicit = params.get("bundle-format") ?? params.get("module");
+
+  if (explicit) {
+    return parseBundleMode(explicit);
+  }
+
+  const format = params.get("format") ?? params.get("as");
+
+  if (format && ["iife", "esm", "cjs"].includes(format.trim().toLowerCase())) {
+    return parseBundleMode(format);
+  }
+
+  return parseBundleMode(params.get("bundle"));
+}
+
+/**
+ * Parses a comma-separated external package list.
+ *
+ * @param value Raw query value.
+ * @returns External package names.
+ */
+function parseExternalPackages(value: string | null): readonly string[] {
+  if (!value) return [];
+
+  return splitTopLevel(value).map((item) => item.trim()).filter(Boolean);
+}
+
 function parseEnum<T extends string>(value: string | null, fallback: T, allowed: readonly T[], label: string): T {
   if (!value) return fallback;
   const normalized = value.trim().toLowerCase() as T;
@@ -245,15 +329,31 @@ export function parseRequestOptions(urlSearchParams: URLSearchParams): RequestOp
   const minify = parseBoolean(urlSearchParams.get("minify") ?? urlSearchParams.get("min"), true);
   const removeComments = parseBoolean(urlSearchParams.get("remove-comments") ?? urlSearchParams.get("comments"), false);
 
+  const globalName = urlSearchParams.get("global") ?? urlSearchParams.get("name") ?? null;
+  const entry = urlSearchParams.get("entry") ?? null;
+
+  if (globalName) {
+    assertSafePath(globalName, "global");
+  }
+
+  if (entry) {
+    assertSafePath(entry, "entry");
+  }
+
   return {
     specs,
     presets,
     minify,
     removeComments,
     cacheMode: parseEnum(urlSearchParams.get("cache"), "immutable", ["none", "short", "normal", "long", "immutable"], "cache") as CacheMode,
-    format: parseEnum(urlSearchParams.get("format") ?? urlSearchParams.get("as"), "js", ["js", "text", "json"], "format") as OutputFormat,
-    bundleMode: parseEnum(urlSearchParams.get("bundle"), "raw", ["raw", "iife"], "bundle") as BundleMode,
+    format: parseOutputFormat(urlSearchParams.get("format") ?? urlSearchParams.get("as")),
+    bundleMode: parseRequestedBundleMode(urlSearchParams),
     combine: parseBoolean(urlSearchParams.get("combine"), true),
     debug: parseBoolean(urlSearchParams.get("debug"), false),
+    globalName,
+    entry,
+    platform: parseEnum(urlSearchParams.get("platform"), "browser", ["browser", "node"], "platform"),
+    external: parseExternalPackages(urlSearchParams.get("external")),
+    bundleProvider: parseEnum(urlSearchParams.get("bundle-provider") ?? urlSearchParams.get("provider"), "esm.sh", ["esm.sh", "jsdelivr"], "bundle-provider"),
   };
 }

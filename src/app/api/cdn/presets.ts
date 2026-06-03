@@ -15,13 +15,13 @@ const PRESETS: Record<string, readonly string[]> = {
   html: [
     "cdnjs:react@18.3.1/umd/react.production.min.js(n:React)",
     "cdnjs:react-dom@18.3.1/umd/react-dom.production.min.js(n:ReactDOM)",
-    "npm:solid-js@latest/dist/solid.js(n:Solid)",
-    "npm:lit-html@latest/lit-html.js(namespace:LitHtml)",
+    "npm:solid-js@latest(n:Solid)",
+    "npm:lit-html@latest(namespace:LitHtml)",
   ],
-  utils: ["npm:es-toolkit@latest/dist/index.global.js(n:esToolkit)"],
+  utils: ["npm:es-toolkit@latest(n:esToolkit)"],
   userscript: [
     "npm:lucide@0.468.0/dist/umd/lucide.js(n:lucide)",
-    "npm:es-toolkit@latest/dist/index.global.js(n:esToolkit)",
+    "npm:es-toolkit@latest(n:esToolkit)",
     "cdnjs:highlight.js@11.11.1/highlight.min.js(n:hljs)",
     "cdnjs:highlight.js@11.11.1/languages/javascript.min.js",
     "cdnjs:highlight.js@11.11.1/languages/css.min.js",

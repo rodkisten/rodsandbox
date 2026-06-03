@@ -1,21 +1,8 @@
 # Rod CDN API
 
-A compact Next.js route for loading userscript-friendly bundles from cdnjs, npm/jsDelivr and GitHub Gists.
+A Next.js `app/api/cdn` route for userscript-friendly CDN bundles.
 
-Version 1.1.0 fixes provider-less package resolution, npm `latest` resolution, scoped package parsing, fragile comment removal and minification failures.
-
-It supports:
-
-- `preset=highlight`, `preset=html`, `preset=utils`, `preset=userscript`
-- `pkg=lodash`, `pkg=lodash@latest`, `pkg=lodash@4.17.21/lodash.min.js`
-- `pkg=cdnjs:highlight.js@11.11.1/highlight.min.js`
-- `pkg=npm:lucide@0.468.0/dist/umd/lucide.js(n:Lucide)`
-- `pkg=gist:owner/gistId/file.js(namespace:File,minify:false,remove-comments:false)`
-- `minify=true|false|1|0|yes|no|on|off`
-- `remove-comments=true|false` defaults to `false` because vendor bundles can contain tricky regex/template syntax
-- `cache=none|short|normal|long|immutable`
-- `format=js|text|json`
-- `bundle=raw|iife`
+It supports plain CDN concatenation, presets, npm packages, cdnjs assets, public/private gists, aggressive cache headers, global aliases and an esbuild pipeline for packages that ship `import` / `export`.
 
 ## Install
 
@@ -23,155 +10,88 @@ It supports:
 npm i esbuild
 ```
 
-## Folder placement
-
-Copy this whole folder into your Next.js App Router project:
-
-```txt
-app/api/cdn/
-  route.ts
-  bundler.ts
-  cache.ts
-  comments.ts
-  constants.ts
-  globals.ts
-  parser.ts
-  presets.ts
-  response.ts
-  types.ts
-  providers/
-    cdnjs.ts
-    gist.ts
-    index.ts
-    npm.ts
-  examples/
-    userscript-require.user.js
-    devtools-require.user.js
-```
-
 ## Basic usage
-
-Provider-less specs use `auto`: the route tries cdnjs first and falls back to npm/jsDelivr.
 
 ```txt
 /api/cdn?pkg=lodash
-/api/cdn?pkg=lodash@4.17.21/lodash.min.js
-/api/cdn?pkgs=jquery,axios@latest
+/api/cdn?pkg=lodash(n:GlobalLodash)
+/api/cdn?pkgs=jquery@3.7.1,axios@latest
+/api/cdn?preset=highlight
 ```
 
-## Multiple `pkg` params
+## ESM packages as IIFE globals
+
+Use this when a package contains ESM imports/exports but you need a userscript-style global.
 
 ```txt
-/api/cdn?pkg=lucide@0.468.0/dist/umd/lucide.js&pkg=lodash(n:GlobalLodash)
+/api/cdn?pkg=shiki@4.2.0&entry=shiki/bundle/web&bundle=iife&global=Shiki&cache=immutable&minify=true
+```
+
+Userscript:
+
+```js
+// @require https://code.migos.club/api/cdn?pkg=shiki@4.2.0&entry=shiki/bundle/web&bundle=iife&global=Shiki&cache=immutable&minify=true
+```
+
+`entry` accepts both `bundle/web` and `shiki/bundle/web`. If the package name is included, the route strips it before generating the provider URL.
+
+## Query params
+
+| Param | Values | Notes |
+|---|---|---|
+| `pkg` | repeated asset spec | Recommended for long lists. |
+| `pkgs` | comma-separated specs | Compact mode. |
+| `preset` | `highlight`, `html`, `utils`, `userscript` | Can be comma-separated or repeated. |
+| `bundle` | `raw`, `iife`, `esm`, `cjs`, `true`, `false` | `true` means `iife`. |
+| `format` | `js`, `text`, `json`, `iife`, `esm`, `cjs` | `iife/esm/cjs` act as bundle-format aliases and still return JS. |
+| `bundle-format` | `iife`, `esm`, `cjs` | Explicit module output format. |
+| `global` | global variable name | Used by the first package in bundled mode. |
+| `entry` | package subpath | Example: `shiki/bundle/web`. |
+| `cache` | `none`, `short`, `normal`, `long`, `immutable` | Controls HTTP cache headers. |
+| `minify` | `true`, `false`, `1`, `0`, `yes`, `no` | Controls esbuild minification. |
+| `remove-comments` | boolean alias | Controls legal comments and raw comment stripping. |
+| `external` | comma list | Leaves packages external in esbuild mode. |
+| `bundle-provider` | `esm.sh`, `jsdelivr` | Provider used for ESM/npm bundling. |
+
+## Asset spec grammar
+
+```txt
+lodash
+lodash@latest
+lodash@4.17.21
+lodash(n:GlobalLodash)
+npm:shiki@4.2.0
+cdnjs:highlight.js@11.11.1/highlight.min.js
+gist:owner/gistId/file.js(namespace:File,minify:false,remove-comments:false)
+```
+
+Option aliases:
+
+```txt
+n:GlobalName
+name:GlobalName
+global:GlobalName
+namespace:GlobalName
+minify:false
+remove-comments:false
+provider:npm
 ```
 
 ## Presets
 
-```txt
-/api/cdn?preset=highlight
-/api/cdn?preset=html
-/api/cdn?preset=utils
-/api/cdn?preset=userscript
-```
+- `highlight`: highlight.js core plus common languages.
+- `html`: React, React DOM, Solid and Lit HTML descriptors.
+- `utils`: es-toolkit.
+- `userscript`: Lucide, es-toolkit and highlight.js basics.
 
-Presets are intentionally normal specs under the hood, so they can be combined with custom packages:
+For ESM-heavy presets like `html` and `utils`, prefer `bundle=iife` when you need classic userscript globals.
 
-```txt
-/api/cdn?preset=userscript&pkg=lodash(n:GlobalLodash)
-```
+## Runtime cache
 
-## Global aliases
+The route writes cache files to:
 
-Use `n`, `name` or `global` to rename a known global after the script loads.
+- `process.env.CDN_CACHE_DIR`, when set.
+- `/tmp/cdn-runtime-cache` on Vercel.
+- `.next/cache/rod-cdn` locally.
 
-```txt
-/api/cdn?pkg=lodash(n:GlobalLodash)
-```
-
-This emits:
-
-```js
-globalThis["GlobalLodash"] = globalThis["GlobalLodash"] ?? globalThis["_"];
-```
-
-Known automatic aliases include:
-
-- `lodash` → `_`
-- `jquery` → `jQuery`
-- `react` → `React`
-- `react-dom` → `ReactDOM`
-- `highlight.js` → `hljs`
-- `lucide` → `lucide`
-- `eruda` → `eruda`
-
-## Gist support
-
-Public gist:
-
-```txt
-/api/cdn?pkg=gist:oirodolfo/GIST_ID/file.js
-```
-
-Private gist:
-
-```bash
-GITHUB_TOKEN=ghp_xxx
-# or
-GIST_TOKEN=ghp_xxx
-```
-
-Then:
-
-```txt
-/api/cdn?pkg=gist:oirodolfo/GIST_ID/file.js(namespace:File,minify:false,remove-comments:false)
-```
-
-The API first tries the GitHub Gist API. If that fails, it falls back to the public raw gist URL.
-
-## Userscript `@require`
-
-```js
-// @require https://your-domain.com/api/cdn?preset=userscript&pkg=lodash(n:GlobalLodash)&cache=immutable&minify=true
-```
-
-## HTML preset caveat
-
-The `html` preset includes React, ReactDOM, Solid and Lit HTML. React and ReactDOM have classic global builds. Some npm packages are ESM-first, especially Lit-related files, and classic userscript `@require` works best with UMD/IIFE/global builds. If a response contains an ESM-first warning, inspect the JSON format first:
-
-```txt
-/api/cdn?preset=html&format=json
-```
-
-## Debugging
-
-Use JSON format:
-
-```txt
-/api/cdn?preset=userscript&format=json
-```
-
-Use text format to inspect the generated bundle directly:
-
-```txt
-/api/cdn?preset=userscript&format=text&minify=false&remove-comments=false
-```
-
-## Runtime resilience
-
-If `minify=true` but esbuild cannot parse one third-party file, the route now returns the unminified bundle with an `X-Rod-CDN-Warnings` header instead of failing the whole request.
-
-If any individual asset has `minify:false`, final bundle minification is skipped to preserve source semantics.
-
-## Cache behavior
-
-The route stores generated bundles in:
-
-```txt
-.next/cache/rod-cdn
-```
-
-In serverless, this filesystem cache may disappear between cold starts. Browser/CDN headers still help a lot. For a heavier production version, replace `cache.ts` with Redis, Vercel KV, R2 or S3.
-
-## Security notes
-
-This route downloads and serves third-party JavaScript. Keep it private or restrict it if you use private gists or internal assets. Never expose a route that can fetch arbitrary full URLs without allowlists.
+Disk cache writes are best-effort, so a serverless write failure will not break the request.

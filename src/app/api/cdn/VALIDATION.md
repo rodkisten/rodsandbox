@@ -1,36 +1,24 @@
 # Validation
 
-## Structural validation
-
-- Package contains the full route under `app/api/cdn`.
-- Package contains examples, README and CHANGELOG.
-- Package contains no placeholder-only files.
-
-## Typecheck
-
-I attempted to run:
+Validated in the sandbox with:
 
 ```bash
-tsc --noEmit
+npx tsc -p tsconfig.validation.json
+npx tsx validation-runtime-local.ts
 ```
 
-The sandbox used to generate this ZIP does not have the project dependencies installed in a real Next.js workspace, so it cannot fully resolve `next/server`, `esbuild`, or Node typings locally. The included `package.json` declares the required dependencies:
+Results:
 
-```bash
-npm install
-npm run typecheck
+```json
+{
+  "typecheck": "passed",
+  "local_esbuild_bundle_smoke_test": "passed",
+  "local_esbuild_bundle_result": {
+    "codeLength": 539,
+    "hasGlobal": true,
+    "hasAnswer": true
+  }
+}
 ```
 
-## Runtime fixes included in v1.1.0
-
-The package was updated to address these production errors:
-
-```txt
-npm: no latest dist-tag for es-toolkit
-npm: no latest dist-tag for solid-js
-Transform failed with unterminated string literal
-cdnjs: failed to resolve lodash: 404
-Failed to download axios@latest/axios.min.js: 404
-```
-
-The route now resolves `latest` through jsDelivr package metadata first, defaults provider-less packages to `auto`, falls back from cdnjs to npm, and returns unminified code with warnings if esbuild cannot safely minify a vendor bundle.
+A live Shiki network smoke test was attempted, but the sandbox had transient DNS failure against public hosts. The code path itself was validated with a local HTTP module graph using relative imports.
