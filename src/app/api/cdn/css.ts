@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { transform } from "esbuild";
-import type { RequestOptions, ResolvedAsset } from "./types";
+import type { AssetFailure, RequestOptions, ResolvedAsset } from "./types";
 import { createRootNamespaceAccess, createRootNamespaceBootstrap } from "./globals";
 
 /***************************************************************************************************
@@ -209,24 +209,40 @@ export function createCssRuntime(options: RequestOptions, css: string, cssAssets
 export async function buildCssPayload(cssAssets: readonly ResolvedAsset[]): Promise<{
   readonly css: string;
   readonly warnings: readonly string[];
+  readonly failures: readonly AssetFailure[];
 }> {
   const warnings = [...cssAssets.flatMap((asset) => asset.warnings)];
+  const failures: AssetFailure[] = [];
 
   if (cssAssets.length === 0) {
-    return { css: "", warnings };
+    return { css: "", warnings, failures };
   }
 
   const chunks: string[] = [];
 
   for (const asset of cssAssets) {
-    const raw = await downloadCssAsset(asset);
-    const minified = await minifyCss(raw);
-    chunks.push(`/* ${asset.sourceLabel} */\n${minified}`);
+    try {
+      const raw = await downloadCssAsset(asset);
+      const minified = await minifyCss(raw);
+      chunks.push(`/* ${asset.sourceLabel} */\n${minified}`);
+    } catch (error) {
+      failures.push({
+        stage: "css",
+        sourceLabel: asset.sourceLabel,
+        provider: asset.provider,
+        packageName: asset.packageName,
+        version: asset.version,
+        file: asset.file,
+        url: asset.url,
+        message: error instanceof Error ? error.message : "Unknown CSS asset failure",
+      });
+    }
   }
 
   return {
     css: chunks.join("\n"),
     warnings,
+    failures,
   };
 }
 

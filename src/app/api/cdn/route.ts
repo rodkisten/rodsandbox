@@ -35,8 +35,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       throw new Error("Missing assets. Use ?preset=userscript, ?pkg=lodash, ?package=axios, ?pkgs=jquery,axios, or ?css=highlight.js/styles/github-dark.min.css.");
     }
 
-    const [assets, cssAssets] = await Promise.all([resolveAssets(allSpecs), resolveAssets(options.cssSpecs)]);
-    const bundle = await buildBundle(options, assets, cssAssets);
+    const [assetResult, cssAssetResult] = await Promise.all([resolveAssets(allSpecs), resolveAssets(options.cssSpecs)]);
+    const bundle = await buildBundle(
+      options,
+      assetResult.assets,
+      cssAssetResult.assets,
+      [...assetResult.failures, ...cssAssetResult.failures],
+    );
 
     return createBundleResponse(options, bundle);
   } catch (error) {

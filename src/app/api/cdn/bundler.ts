@@ -4,7 +4,7 @@ import { buildModuleBundle } from "./module-bundler";
 import { removeJavaScriptComments } from "./comments";
 import { createGlobalAlias } from "./globals";
 import { buildCssPayload, createCssRuntime, resolveStyleId } from "./css";
-import type { BuiltBundle, RequestOptions, ResolvedAsset } from "./types";
+import type { AssetFailure, BuiltBundle, RequestOptions, ResolvedAsset } from "./types";
 
 /**
  * Downloads one resolved asset.
@@ -20,6 +20,27 @@ async function downloadAsset(asset: ResolvedAsset): Promise<string> {
   }
 
   return response.text();
+}
+
+/**
+ * Creates a structured failure for a JavaScript asset that failed after resolution.
+ *
+ * @param stage Failure stage.
+ * @param asset Asset that failed.
+ * @param error Unknown caught error.
+ * @returns Structured asset failure.
+ */
+function createAssetFailure(stage: AssetFailure["stage"], asset: ResolvedAsset, error: unknown): AssetFailure {
+  return {
+    stage,
+    sourceLabel: asset.sourceLabel,
+    provider: asset.provider,
+    packageName: asset.packageName,
+    version: asset.version,
+    file: asset.file,
+    url: asset.url,
+    message: error instanceof Error ? error.message : "Unknown JavaScript asset failure",
+  };
 }
 
 /**
@@ -63,16 +84,19 @@ function shouldMinifyBundle(options: RequestOptions, assets: readonly ResolvedAs
  * Builds and optionally minifies resolved assets into a single response body.
  *
  * @param options Request options.
- * @param assets Resolved assets.
+ * @param assets Resolved JavaScript assets.
+ * @param cssAssets Resolved CSS assets.
+ * @param initialFailures Failures collected before the build phase.
  * @returns Built bundle with cache metadata.
  */
 export async function buildBundle(
   options: RequestOptions,
   assets: readonly ResolvedAsset[],
   cssAssets: readonly ResolvedAsset[] = [],
+  initialFailures: readonly AssetFailure[] = [],
 ): Promise<BuiltBundle> {
   if (options.bundleMode !== "raw") {
-    return buildModuleBundle(options, assets, cssAssets);
+    return buildModuleBundle(options, assets, cssAssets, initialFailures);
   }
 
   const minify = shouldMinifyBundle(options, assets);
@@ -81,6 +105,7 @@ export async function buildBundle(
   const cacheKey = createCacheKey({ ...options, minify }, [...assets, ...cssAssets]);
   const cached = await readCachedBundle(cacheKey);
   const warnings = [...assets.flatMap((asset) => asset.warnings), ...cssPayload.warnings];
+  const failures: AssetFailure[] = [...initialFailures, ...cssPayload.failures];
 
   if (cached !== null) {
     return {
@@ -89,6 +114,7 @@ export async function buildBundle(
       cssAssets,
       cssStyleId,
       warnings,
+      failures,
       cacheKey,
       cacheHit: true,
     };
@@ -97,19 +123,22 @@ export async function buildBundle(
   const chunks: string[] = [];
 
   for (const asset of assets) {
-    const source = await downloadAsset(asset);
-    chunks.push(prepareAssetSource(asset, source, options));
+    try {
+      const source = await downloadAsset(asset);
+      chunks.push(prepareAssetSource(asset, source, options));
+    } catch (error) {
+      failures.push(createAssetFailure("download", asset, error));
+    }
   }
 
   const cssRuntime = createCssRuntime(options, cssPayload.css, cssAssets);
   let code = [...chunks, cssRuntime].filter(Boolean).join("\n");
 
-
   if (!minify && options.minify) {
     warnings.push("Minification skipped because at least one asset requested minify:false.");
   }
 
-  if (minify) {
+  if (minify && code) {
     try {
       const result = await transform(code, {
         loader: "js",
@@ -132,6 +161,7 @@ export async function buildBundle(
     cssAssets,
     cssStyleId,
     warnings,
+    failures,
     cacheKey,
     cacheHit: false,
   };

@@ -64,12 +64,31 @@ export type ResolvedAsset = {
   readonly warnings: readonly string[];
 };
 
+export type AssetFailureStage = "resolve" | "download" | "minify" | "bundle" | "css";
+
+export type AssetFailure = {
+  readonly stage: AssetFailureStage;
+  readonly sourceLabel: string;
+  readonly message: string;
+  readonly provider?: AssetProvider | ResolvedProvider;
+  readonly packageName?: string;
+  readonly version?: string | null;
+  readonly file?: string | null;
+  readonly url?: string;
+};
+
+export type AssetResolutionResult = {
+  readonly assets: readonly ResolvedAsset[];
+  readonly failures: readonly AssetFailure[];
+};
+
 export type BuiltBundle = {
   readonly code: string;
   readonly assets: readonly ResolvedAsset[];
   readonly cssAssets: readonly ResolvedAsset[];
   readonly cssStyleId: string | null;
   readonly warnings: readonly string[];
+  readonly failures: readonly AssetFailure[];
   readonly cacheKey: string;
   readonly cacheHit: boolean;
 };

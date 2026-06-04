@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { build, type Loader, type OnLoadArgs, type OnResolveArgs, type Plugin } from "esbuild";
 import { ESM_SH_BASE, JSDELIVR_NPM_BASE } from "./constants";
-import type { BuiltBundle, BundleMode, RequestOptions, ResolvedAsset } from "./types";
+import type { AssetFailure, BuiltBundle, BundleMode, RequestOptions, ResolvedAsset } from "./types";
 import { readCachedBundle, writeCachedBundle } from "./cache";
 import { buildCssPayload, createCssRuntime, resolveStyleId } from "./css";
 import { createNamespaceAssignment, createRootNamespaceBootstrap, resolveNamespaceProperty } from "./globals";
@@ -214,7 +214,7 @@ function createVirtualEntryPlugin(contents: string): Plugin {
  * @param external Package names that should remain external.
  * @returns esbuild plugin.
  */
-function createHttpPlugin(external: readonly string[]): Plugin {
+function createHttpPlugin(external: readonly string[], failures: AssetFailure[]): Plugin {
   const externalPackages = new Set(external);
   const memoryCache = new Map<string, string>();
 
@@ -268,7 +268,17 @@ function createHttpPlugin(external: readonly string[]): Plugin {
         const response = await fetch(args.path, { cache: "force-cache" });
 
         if (!response.ok) {
-          throw new Error(`esbuild: failed to fetch ${args.path}: ${response.status}`);
+          failures.push({
+            stage: "bundle",
+            sourceLabel: args.path,
+            url: args.path,
+            message: `esbuild: failed to fetch ${args.path}: ${response.status}`,
+          });
+
+          return {
+            contents: "export default {};",
+            loader: "js",
+          };
         }
 
         const contents = await response.text();
@@ -304,11 +314,13 @@ export async function buildModuleBundle(
   options: RequestOptions,
   assets: readonly ResolvedAsset[],
   cssAssets: readonly ResolvedAsset[] = [],
+  initialFailures: readonly AssetFailure[] = [],
 ): Promise<BuiltBundle> {
   const cssPayload = await buildCssPayload(cssAssets);
   const cssStyleId = resolveStyleId(options, cssPayload.css);
   const cssRuntime = createCssRuntime(options, cssPayload.css, cssAssets);
   const warnings = [...assets.flatMap((asset) => asset.warnings), ...cssPayload.warnings];
+  const failures: AssetFailure[] = [...initialFailures, ...cssPayload.failures];
   const virtualEntry = [createVirtualEntry(options, assets), cssRuntime].filter(Boolean).join("\n");
   const cacheKey = crypto
     .createHash("sha256")
@@ -337,12 +349,16 @@ export async function buildModuleBundle(
       cssAssets,
       cssStyleId,
       warnings,
+      failures,
       cacheKey,
       cacheHit: true,
     };
   }
 
-  const result = await build({
+  let code = "";
+
+  try {
+    const result = await build({
     entryPoints: [VIRTUAL_ENTRY_PATH],
     bundle: true,
     write: false,
@@ -353,20 +369,29 @@ export async function buildModuleBundle(
     platform: options.platform,
     format: toEsbuildFormat(options.bundleMode),
     external: [...options.external],
-    plugins: [createVirtualEntryPlugin(virtualEntry), createHttpPlugin(options.external)],
+    plugins: [createVirtualEntryPlugin(virtualEntry), createHttpPlugin(options.external, failures)],
     logLevel: "silent",
-  });
+    });
 
-  const output = result.outputFiles[0];
+    const output = result.outputFiles[0];
 
-  if (!output) {
-    throw new Error("esbuild did not produce an output file.");
-  }
+    if (!output) {
+      throw new Error("esbuild did not produce an output file.");
+    }
 
-  let code = output.text;
+    code = output.text;
 
-  if (options.debug) {
-    code = [`/* Virtual entry:\n${virtualEntry}\n*/`, code].join("\n");
+    if (options.debug) {
+      code = [`/* Virtual entry:\n${virtualEntry}\n*/`, code].join("\n");
+    }
+  } catch (error) {
+    failures.push({
+      stage: "bundle",
+      sourceLabel: "esbuild bundle",
+      message: error instanceof Error ? error.message : "Unknown esbuild bundling failure",
+    });
+
+    code = cssRuntime;
   }
 
   if (!assets.every((asset, index) => isJavaScriptLikeUrl(resolveModuleImportUrl(options, asset, index)))) {
@@ -381,6 +406,7 @@ export async function buildModuleBundle(
     cssAssets,
     cssStyleId,
     warnings,
+    failures,
     cacheKey,
     cacheHit: false,
   };
