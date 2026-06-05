@@ -13,11 +13,15 @@ const PRESETS: Record<string, string[]> = {
     "cdnjs:highlight.js@11.11.1/languages/typescript.min.js",
   ],
   lit: [
-    "npm:lit-html@latest(namespace:LitHtml)",
+    "npm:lit-html@3.3.3(namespace:LitHtml)",
+    "npm:lit-html@3.3.3/directives/unsafe-html.js",
+    "npm:lit-html@3.3.3/directives/cache.js",
+    "npm:lit-html@3.3.3/directives/repeat.js",
   ],
+  
   react: [
-    "cdnjs:react@18.3.1/umd/react.production.min.js(n:React)",
-    "cdnjs:react-dom@18.3.1/umd/react-dom.production.min.js(n:ReactDOM)",
+    "cdnjs:react@19.2.7/umd/react.production.min.js(n:React)",
+    "cdnjs:react-dom@19.2.7/umd/react-dom.production.min.js(n:ReactDOM)",
   ],
   solid: [
     "npm:solid-js@latest(n:Solid)",
