@@ -1,10 +1,29 @@
 import crypto from "node:crypto";
-import { build, type Loader, type OnLoadArgs, type OnResolveArgs, type Plugin } from "esbuild";
+import {
+  build,
+  type Loader,
+  type OnLoadArgs,
+  type OnResolveArgs,
+  type Plugin,
+} from "esbuild";
 import { ESM_SH_BASE, JSDELIVR_NPM_BASE } from "./constants";
-import type { AssetFailure, BuiltBundle, BundleMode, RequestOptions, ResolvedAsset } from "./types";
+import type {
+  AssetFailure,
+  BuiltBundle,
+  BundleMode,
+  RequestOptions,
+  ResolvedAsset,
+} from "./types";
 import { readCachedBundle, writeCachedBundle } from "./cache";
 import { buildCssPayload, createCssRuntime, resolveStyleId } from "./css";
-import { createNamespaceAssignment, createRootNamespaceBootstrap, resolveNamespaceProperty } from "./globals";
+import {
+  createGlobalBridgePostlude,
+  createGlobalBridgePrelude,
+  createNamespaceAssignmentWithFallback,
+  createRootNamespaceBootstrap,
+  resolveGlobalSourceName,
+  resolveNamespaceProperty,
+} from "./globals";
 
 /***************************************************************************************************
  * Constants
@@ -13,7 +32,14 @@ import { createNamespaceAssignment, createRootNamespaceBootstrap, resolveNamespa
 const HTTP_NAMESPACE = "rod-http";
 const VIRTUAL_NAMESPACE = "rod-virtual";
 const VIRTUAL_ENTRY_PATH = "rod-cdn-entry.ts";
-const JAVASCRIPT_LOADER_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx"]);
+const JAVASCRIPT_LOADER_EXTENSIONS = new Set([
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".jsx",
+  ".ts",
+  ".tsx",
+]);
 
 /***************************************************************************************************
  * Small Helpers
@@ -64,7 +90,11 @@ function resolveAssetNamespaceProperty(asset: ResolvedAsset): string {
  * @param index Asset index.
  * @returns Import URL to place in the virtual entrypoint.
  */
-function resolveModuleImportUrl(options: RequestOptions, asset: ResolvedAsset, index: number): string {
+function resolveModuleImportUrl(
+  options: RequestOptions,
+  asset: ResolvedAsset,
+  index: number,
+): string {
   const requestedEntry = index === 0 ? options.entry : null;
 
   if (asset.provider !== "npm") {
@@ -75,17 +105,23 @@ function resolveModuleImportUrl(options: RequestOptions, asset: ResolvedAsset, i
   const entryWithoutPackage = entry.startsWith(`${asset.packageName}/`)
     ? entry.slice(asset.packageName.length + 1)
     : entry;
-  const normalizedEntry = entryWithoutPackage.replace(/^\.\/+/, "").replace(/^\/+/, "");
+  const normalizedEntry = entryWithoutPackage
+    .replace(/^\.\/+/, "")
+    .replace(/^\/+/, "");
 
   if (options.bundleProvider === "jsdelivr") {
     const jsdelivrBase = `${JSDELIVR_NPM_BASE}/${asset.packageName}@${asset.version}`;
-    const jsdelivrPath = normalizedEntry ? `${jsdelivrBase}/${normalizedEntry}` : jsdelivrBase;
+    const jsdelivrPath = normalizedEntry
+      ? `${jsdelivrBase}/${normalizedEntry}`
+      : jsdelivrBase;
 
     return `${jsdelivrPath}/+esm`;
   }
 
   const packageBase = `${ESM_SH_BASE}/${asset.packageName}@${asset.version}`;
-  const packagePath = normalizedEntry ? `${packageBase}/${normalizedEntry}` : packageBase;
+  const packagePath = normalizedEntry
+    ? `${packageBase}/${normalizedEntry}`
+    : packageBase;
   const params = new URLSearchParams({
     bundle: "",
     target: "es2022",
@@ -149,7 +185,10 @@ function isJavaScriptLikeUrl(url: string): boolean {
  * @param assets Ordered assets.
  * @returns Virtual TypeScript module source.
  */
-function createVirtualEntry(options: RequestOptions, assets: readonly ResolvedAsset[]): string {
+function createVirtualEntry(
+  options: RequestOptions,
+  assets: readonly ResolvedAsset[],
+): string {
   const lines: string[] = [];
 
   if (options.expose && options.globalName && options.bundleMode !== "esm") {
@@ -164,7 +203,14 @@ function createVirtualEntry(options: RequestOptions, assets: readonly ResolvedAs
     lines.push(`import * as ${localName} from ${JSON.stringify(importUrl)};`);
 
     if (options.expose && options.globalName && options.bundleMode !== "esm") {
-      lines.push(createNamespaceAssignment(options.globalName, namespaceProperty, localName));
+      lines.push(
+        createNamespaceAssignmentWithFallback(
+          options.globalName,
+          namespaceProperty,
+          localName,
+          resolveGlobalSourceName(asset),
+        ),
+      );
     }
 
     if (options.bundleMode === "esm") {
@@ -190,7 +236,9 @@ function createVirtualEntry(options: RequestOptions, assets: readonly ResolvedAs
  * @param url Remote URL.
  * @returns Fetch headers.
  */
-function createHttpFetchHeaders(url: string): Record<string, string> | undefined {
+function createHttpFetchHeaders(
+  url: string,
+): Record<string, string> | undefined {
   const token = process.env["GITHUB_TOKEN"] ?? process.env["GIST_TOKEN"];
 
   if (!token || !url.includes("raw.githubusercontent.com")) {
@@ -230,9 +278,23 @@ function createVirtualEntryPlugin(contents: string): Plugin {
  * @param external Package names that should remain external.
  * @returns esbuild plugin.
  */
-function createHttpPlugin(external: readonly string[], failures: AssetFailure[]): Plugin {
+function createHttpPlugin(
+  external: readonly string[],
+  failures: AssetFailure[],
+  options: RequestOptions,
+  assets: readonly ResolvedAsset[],
+): Plugin {
   const externalPackages = new Set(external);
   const memoryCache = new Map<string, string>();
+  const assetByUrl = new Map<string, ResolvedAsset>();
+  const globalBridgePrelude = createGlobalBridgePrelude(
+    options.globalName,
+    assets,
+  );
+
+  assets.forEach((asset, index) => {
+    assetByUrl.set(resolveModuleImportUrl(options, asset, index), asset);
+  });
 
   return {
     name: "rod-cdn-http-loader",
@@ -242,72 +304,100 @@ function createHttpPlugin(external: readonly string[], failures: AssetFailure[])
         namespace: HTTP_NAMESPACE,
       }));
 
-      api.onResolve({ filter: /^\//, namespace: HTTP_NAMESPACE }, (args: OnResolveArgs) => {
-        const importer = new URL(args.importer);
-        const resolved = new URL(args.path, `${importer.protocol}//${importer.host}`).toString();
+      api.onResolve(
+        { filter: /^\//, namespace: HTTP_NAMESPACE },
+        (args: OnResolveArgs) => {
+          const importer = new URL(args.importer);
+          const resolved = new URL(
+            args.path,
+            `${importer.protocol}//${importer.host}`,
+          ).toString();
 
-        return {
-          path: resolved,
-          namespace: HTTP_NAMESPACE,
-        };
-      });
-
-      api.onResolve({ filter: /^\.\.?\//, namespace: HTTP_NAMESPACE }, (args: OnResolveArgs) => ({
-        path: new URL(args.path, args.importer).toString(),
-        namespace: HTTP_NAMESPACE,
-      }));
-
-      api.onResolve({ filter: /^[^./][^:]*$/, namespace: HTTP_NAMESPACE }, (args: OnResolveArgs) => {
-        if (externalPackages.has(args.path)) {
           return {
-            path: args.path,
-            external: true,
+            path: resolved,
+            namespace: HTTP_NAMESPACE,
           };
-        }
+        },
+      );
 
-        return {
-          path: `${ESM_SH_BASE}/${args.path}?bundle&target=es2022&no_dts`,
+      api.onResolve(
+        { filter: /^\.\.?\//, namespace: HTTP_NAMESPACE },
+        (args: OnResolveArgs) => ({
+          path: new URL(args.path, args.importer).toString(),
           namespace: HTTP_NAMESPACE,
-        };
-      });
+        }),
+      );
 
-      api.onLoad({ filter: /.*/, namespace: HTTP_NAMESPACE }, async (args: OnLoadArgs) => {
-        const cached = memoryCache.get(args.path);
+      api.onResolve(
+        { filter: /^[^./][^:]*$/, namespace: HTTP_NAMESPACE },
+        (args: OnResolveArgs) => {
+          if (externalPackages.has(args.path)) {
+            return {
+              path: args.path,
+              external: true,
+            };
+          }
 
-        if (cached !== undefined) {
           return {
-            contents: cached,
-            loader: guessLoader(new URL(args.path).pathname),
+            path: `${ESM_SH_BASE}/${args.path}?bundle&target=es2022&no_dts`,
+            namespace: HTTP_NAMESPACE,
           };
-        }
+        },
+      );
 
-        const response = await fetch(args.path, {
-          cache: "force-cache",
-          headers: createHttpFetchHeaders(args.path),
-        });
+      api.onLoad(
+        { filter: /.*/, namespace: HTTP_NAMESPACE },
+        async (args: OnLoadArgs) => {
+          const cached = memoryCache.get(args.path);
 
-        if (!response.ok) {
-          failures.push({
-            stage: "bundle",
-            sourceLabel: args.path,
-            url: args.path,
-            message: `esbuild: failed to fetch ${args.path}: ${response.status}`,
+          if (cached !== undefined) {
+            return {
+              contents: cached,
+              loader: guessLoader(new URL(args.path).pathname),
+            };
+          }
+
+          const response = await fetch(args.path, {
+            cache: "force-cache",
+            headers: createHttpFetchHeaders(args.path),
           });
 
+          if (!response.ok) {
+            failures.push({
+              stage: "bundle",
+              sourceLabel: args.path,
+              url: args.path,
+              message: `esbuild: failed to fetch ${args.path}: ${response.status}`,
+            });
+
+            return {
+              contents: "export default {};",
+              loader: "js",
+            };
+          }
+
+          const contents = await response.text();
+          const loader = guessLoader(new URL(args.path).pathname);
+          const matchingAsset = assetByUrl.get(args.path);
+          const bridgedContents =
+            loader === "js" && matchingAsset
+              ? [
+                  globalBridgePrelude,
+                  contents,
+                  createGlobalBridgePostlude(options.globalName, matchingAsset),
+                ]
+                  .filter(Boolean)
+                  .join("\n")
+              : contents;
+
+          memoryCache.set(args.path, bridgedContents);
+
           return {
-            contents: "export default {};",
-            loader: "js",
+            contents: bridgedContents,
+            loader,
           };
-        }
-
-        const contents = await response.text();
-        memoryCache.set(args.path, contents);
-
-        return {
-          contents,
-          loader: guessLoader(new URL(args.path).pathname),
-        };
-      });
+        },
+      );
     },
   };
 }
@@ -338,9 +428,14 @@ export async function buildModuleBundle(
   const cssPayload = await buildCssPayload(cssAssets);
   const cssStyleId = resolveStyleId(options, cssPayload.css);
   const cssRuntime = createCssRuntime(options, cssPayload.css, cssAssets);
-  const warnings = [...assets.flatMap((asset) => asset.warnings), ...cssPayload.warnings];
+  const warnings = [
+    ...assets.flatMap((asset) => asset.warnings),
+    ...cssPayload.warnings,
+  ];
   const failures: AssetFailure[] = [...initialFailures, ...cssPayload.failures];
-  const virtualEntry = [createVirtualEntry(options, assets), cssRuntime].filter(Boolean).join("\n");
+  const virtualEntry = [createVirtualEntry(options, assets), cssRuntime]
+    .filter(Boolean)
+    .join("\n");
   const cacheKey = crypto
     .createHash("sha256")
     .update(
@@ -378,18 +473,21 @@ export async function buildModuleBundle(
 
   try {
     const result = await build({
-    entryPoints: [VIRTUAL_ENTRY_PATH],
-    bundle: true,
-    write: false,
-    minify: options.minify,
-    sourcemap: false,
-    legalComments: options.removeComments ? "none" : "inline",
-    target: "es2022",
-    platform: options.platform,
-    format: toEsbuildFormat(options.bundleMode),
-    external: [...options.external],
-    plugins: [createVirtualEntryPlugin(virtualEntry), createHttpPlugin(options.external, failures)],
-    logLevel: "silent",
+      entryPoints: [VIRTUAL_ENTRY_PATH],
+      bundle: true,
+      write: false,
+      minify: options.minify,
+      sourcemap: false,
+      legalComments: options.removeComments ? "none" : "inline",
+      target: "es2022",
+      platform: options.platform,
+      format: toEsbuildFormat(options.bundleMode),
+      external: [...options.external],
+      plugins: [
+        createVirtualEntryPlugin(virtualEntry),
+        createHttpPlugin(options.external, failures, options, assets),
+      ],
+      logLevel: "silent",
     });
 
     const output = (result.outputFiles ?? [])[0];
@@ -407,14 +505,23 @@ export async function buildModuleBundle(
     failures.push({
       stage: "bundle",
       sourceLabel: "esbuild bundle",
-      message: error instanceof Error ? error.message : "Unknown esbuild bundling failure",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Unknown esbuild bundling failure",
     });
 
     code = cssRuntime;
   }
 
-  if (!assets.every((asset, index) => isJavaScriptLikeUrl(resolveModuleImportUrl(options, asset, index)))) {
-    warnings.push("Some bundled assets were not JavaScript-like URLs; esbuild loaded them with fallback loaders.");
+  if (
+    !assets.every((asset, index) =>
+      isJavaScriptLikeUrl(resolveModuleImportUrl(options, asset, index)),
+    )
+  ) {
+    warnings.push(
+      "Some bundled assets were not JavaScript-like URLs; esbuild loaded them with fallback loaders.",
+    );
   }
 
   await writeCachedBundle(cacheKey, code);
