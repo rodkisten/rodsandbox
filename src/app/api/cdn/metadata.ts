@@ -2,6 +2,13 @@ import { resolveNamespaceProperty } from "./globals";
 import type { AssetFailure, BuiltBundle, RequestOptions, ResolvedAsset } from "./types";
 
 /***************************************************************************************************
+ * Constants
+ **************************************************************************************************/
+
+const ASCII_PANEL_WIDTH = 80;
+const ASCII_PANEL_INNER_WIDTH = ASCII_PANEL_WIDTH - 4;
+
+/***************************************************************************************************
  * Banner Helpers
  **************************************************************************************************/
 
@@ -16,6 +23,128 @@ function yesNo(value: boolean): string {
 }
 
 /**
+ * Safely truncates text for compact one-line metadata rows.
+ *
+ * @param value Raw value.
+ * @param maxLength Maximum visible length.
+ * @returns Truncated value.
+ */
+function truncate(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  if (maxLength <= 1) {
+    return "…";
+  }
+
+  return `${value.slice(0, maxLength - 1)}…`;
+}
+
+/**
+ * Pads a string on the right side.
+ *
+ * @param value Raw value.
+ * @param width Desired width.
+ * @returns Padded value.
+ */
+function padRight(value: string, width: number): string {
+  return value.length >= width ? value : `${value}${" ".repeat(width - value.length)}`;
+}
+
+/**
+ * Wraps text into lines that fit inside the ASCII panel.
+ *
+ * @param value Raw value.
+ * @param width Maximum line width.
+ * @returns Wrapped lines.
+ */
+function wrapText(value: string, width: number): string[] {
+  const normalized = value.replace(/\s+/g, " ").trim();
+
+  if (!normalized) {
+    return [""];
+  }
+
+  const words = normalized.split(" ");
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    if (word.length > width) {
+      if (current) {
+        lines.push(current);
+        current = "";
+      }
+
+      for (let index = 0; index < word.length; index += width) {
+        lines.push(word.slice(index, index + width));
+      }
+
+      continue;
+    }
+
+    const next = current ? `${current} ${word}` : word;
+
+    if (next.length > width) {
+      lines.push(current);
+      current = word;
+      continue;
+    }
+
+    current = next;
+  }
+
+  if (current) {
+    lines.push(current);
+  }
+
+  return lines.length > 0 ? lines : [""];
+}
+
+/**
+ * Creates one ASCII panel line.
+ *
+ * @param value Text for the line.
+ * @returns Comment-prefixed panel line.
+ */
+function panelLine(value = ""): string {
+  return ` * │ ${padRight(value, ASCII_PANEL_INNER_WIDTH)} │`;
+}
+
+/**
+ * Creates a horizontal ASCII panel border.
+ *
+ * @param left Left border glyph.
+ * @param fill Fill glyph.
+ * @param right Right border glyph.
+ * @returns Comment-prefixed border.
+ */
+function panelBorder(left: string, fill: string, right: string): string {
+  return ` * ${left}${fill.repeat(ASCII_PANEL_WIDTH - 2)}${right}`;
+}
+
+/**
+ * Creates wrapped key/value lines for the ASCII panel.
+ *
+ * @param label Field label.
+ * @param value Field value.
+ * @returns Comment-prefixed panel lines.
+ */
+function panelField(label: string, value: string): string[] {
+  const prefix = `${label}: `;
+  const firstWidth = ASCII_PANEL_INNER_WIDTH - prefix.length;
+  const wrapped = wrapText(value, Math.max(12, firstWidth));
+  const lines = [panelLine(`${prefix}${wrapped[0] ?? ""}`)];
+
+  for (const extraLine of wrapped.slice(1)) {
+    lines.push(panelLine(`${" ".repeat(prefix.length)}${extraLine}`));
+  }
+
+  return lines;
+}
+
+/**
  * Formats one successful asset line for the generated bundle banner.
  *
  * @param asset Successful asset metadata.
@@ -23,21 +152,49 @@ function yesNo(value: boolean): string {
  */
 function formatSuccessfulAssetLine(asset: ResolvedAsset): string {
   const property = resolveNamespaceProperty(asset);
+  const label = truncate(asset.sourceLabel, 44);
+  const url = truncate(asset.url, 72);
 
-  return ` * - ${asset.sourceLabel} via ${asset.provider}; namespace key: ${property}; url: ${asset.url}`;
+  return ` * - ${label} via ${asset.provider}; namespace key: ${property}; url: ${url}`;
 }
 
 /**
- * Formats one failed asset line for the generated bundle banner.
+ * Builds a compact and readable ASCII panel for failed assets.
  *
- * @param failure Failed asset metadata.
- * @returns Banner line.
+ * @param failures Failed asset metadata.
+ * @returns Banner lines.
  */
-function formatFailedAssetLine(failure: AssetFailure): string {
-  const provider = failure.provider ? ` via ${failure.provider}` : "";
-  const url = failure.url ? `; url: ${failure.url}` : "";
+function createFailurePanel(failures: AssetFailure[]): string[] {
+  if (failures.length === 0) {
+    return [];
+  }
 
-  return ` * - [${failure.stage}] ${failure.sourceLabel}${provider}; reason: ${failure.message}${url}`;
+  const lines = [
+    " *",
+    panelBorder("┌", "─", "┐"),
+    panelLine("FAILED ASSETS / PARTIAL LOAD REPORT"),
+    panelBorder("├", "─", "┤"),
+    panelLine(`Total failures: ${failures.length}`),
+  ];
+
+  failures.forEach((failure, index) => {
+    const provider = failure.provider ?? "unknown";
+    const url = failure.url ?? "none";
+
+    lines.push(panelBorder("├", "─", "┤"));
+    lines.push(panelLine(`#${index + 1}`));
+    lines.push(...panelField("stage", failure.stage));
+    lines.push(...panelField("asset", failure.sourceLabel));
+    lines.push(...panelField("provider", provider));
+    lines.push(...panelField("reason", failure.message));
+    lines.push(...panelField("url", url));
+  });
+
+  lines.push(panelBorder("├", "─", "┤"));
+  lines.push(...wrapText("Rod CDN returned every asset that succeeded instead of failing the entire response.", ASCII_PANEL_INNER_WIDTH).map(panelLine));
+  lines.push(panelBorder("└", "─", "┘"));
+
+  return lines;
 }
 
 /**
@@ -53,7 +210,7 @@ function createLoadedConsoleRuntime(options: RequestOptions, bundle: BuiltBundle
   }
 
   const globalName = options.globalName ?? "RodCDN";
-  const expectedGlobals = bundle.assets.map(resolveNamespaceProperty);
+  const expectedGlobals = Array.from(new Set(bundle.assets.map(resolveNamespaceProperty)));
   const cssIds = bundle.cssStyleId ? [bundle.cssStyleId] : [];
   const failedLabels = bundle.failures.map((failure) => `[${failure.stage}] ${failure.sourceLabel}: ${failure.message}`);
 
@@ -103,6 +260,8 @@ function createLoadedConsoleRuntime(options: RequestOptions, bundle: BuiltBundle
  */
 export function createMetadataBanner(options: RequestOptions, bundle: BuiltBundle): string {
   const styleId = bundle.cssStyleId;
+  const failurePanel = createFailurePanel(bundle.failures);
+
   const lines = [
     "/*!",
     " * ============================================================================",
@@ -129,14 +288,7 @@ export function createMetadataBanner(options: RequestOptions, bundle: BuiltBundl
     " *",
     " * Warnings:",
     ...(bundle.warnings.length > 0 ? bundle.warnings.map((warning) => ` * - ${warning}`) : [" * - none"]),
-    " *",
-    " * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
-    " * FAILED ASSETS / PARTIAL LOAD REPORT",
-    " * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
-    ...(bundle.failures.length > 0 ? bundle.failures.map(formatFailedAssetLine) : [" * - none"]),
-    " * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!",
-    " * If this bundle still executed, Rod CDN intentionally returned every asset",
-    " * that succeeded instead of failing the entire response.",
+    ...failurePanel,
     " * ============================================================================",
     " */",
   ];
