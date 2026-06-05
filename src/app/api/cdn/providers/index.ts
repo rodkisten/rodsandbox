@@ -1,6 +1,9 @@
 import { resolveCdnjs } from "./cdnjs";
 import { resolveGist } from "./gist";
+import { resolveGitHub } from "./github";
+import { resolveJsdelivr } from "./jsdelivr";
 import { resolveNpm } from "./npm";
+import { resolveUrl } from "./url";
 import type { AssetFailure, AssetResolutionResult, ParsedAssetSpec, ResolvedAsset } from "../types";
 
 /**
@@ -39,25 +42,57 @@ function createResolveFailure(spec: ParsedAssetSpec, error: unknown): AssetFailu
 }
 
 /**
- * Resolves one parsed asset spec into a concrete download-ready asset.
+ * Normalizes provider results into a flat asset list.
+ *
+ * @param value Provider result.
+ * @returns Flat resolved asset list.
+ */
+function flattenResolvedAssets(value: ResolvedAsset | readonly ResolvedAsset[]): readonly ResolvedAsset[] {
+  if (Array.isArray(value)) {
+    return value as readonly ResolvedAsset[];
+  }
+
+  return [value as ResolvedAsset];
+}
+
+/**
+ * Resolves one parsed asset spec into concrete download-ready assets.
  *
  * @remarks
- * `auto` still tries cdnjs first and falls back to npm, preserving the existing behavior.
- * The caller decides whether a failure should abort the whole response or be reported as partial.
+ * `auto` tries cdnjs first, then jsDelivr, then the npm resolver. jsDelivr and npm both use the
+ * npm registry for latest-version resolution, but keeping both in the chain gives the metadata banner
+ * an honest provider trail and leaves room for npm-specific resolver behavior later.
  *
  * @param spec Parsed asset spec from the request.
- * @returns Resolved asset.
+ * @returns One or more resolved assets.
  */
-async function resolveAsset(spec: ParsedAssetSpec): Promise<ResolvedAsset> {
+async function resolveAsset(spec: ParsedAssetSpec): Promise<readonly ResolvedAsset[]> {
   switch (spec.provider) {
     case "cdnjs":
-      return resolveCdnjs(spec);
+      return flattenResolvedAssets(await resolveCdnjs(spec));
+    case "jsdelivr":
+      return flattenResolvedAssets(await resolveJsdelivr(spec));
     case "npm":
-      return resolveNpm(spec);
+      return flattenResolvedAssets(await resolveNpm(spec));
     case "gist":
-      return resolveGist(spec);
-    case "auto":
-      return resolveCdnjs(spec).catch(() => resolveNpm(spec));
+      return flattenResolvedAssets(await resolveGist(spec));
+    case "github":
+      return flattenResolvedAssets(await resolveGitHub(spec));
+    case "url":
+      return flattenResolvedAssets(await resolveUrl(spec));
+    case "auto": {
+      const errors: string[] = [];
+
+      for (const resolver of [resolveCdnjs, resolveJsdelivr, resolveNpm] as const) {
+        try {
+          return flattenResolvedAssets(await resolver(spec));
+        } catch (error) {
+          errors.push(stringifyError(error));
+        }
+      }
+
+      throw new Error(`All automatic providers failed for ${spec.raw}: ${errors.join(" | ")}`);
+    }
     default: {
       const exhaustive: never = spec.provider;
       throw new Error(`Unknown provider: ${exhaustive}`);
@@ -82,7 +117,7 @@ export async function resolveAssets(specs: readonly ParsedAssetSpec[]): Promise<
 
   settled.forEach((result, index) => {
     if (result.status === "fulfilled") {
-      assets.push(result.value);
+      assets.push(...result.value);
       return;
     }
 
