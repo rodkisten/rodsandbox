@@ -7,13 +7,36 @@ import { buildCssPayload, createCssRuntime, resolveStyleId } from "./css";
 import type { AssetFailure, BuiltBundle, RequestOptions, ResolvedAsset } from "./types";
 
 /**
+ * Creates headers for direct raw GitHub downloads when a token is configured.
+ *
+ * @param asset Concrete asset URL and metadata.
+ * @returns Fetch headers.
+ */
+function createAssetFetchHeaders(asset: ResolvedAsset): Record<string, string> | undefined {
+  if (asset.provider !== "github") {
+    return undefined;
+  }
+
+  const token = process.env["GITHUB_TOKEN"] ?? process.env["GIST_TOKEN"];
+
+  if (!token || !asset.url.includes("raw.githubusercontent.com")) {
+    return undefined;
+  }
+
+  return { Authorization: `Bearer ${token}` };
+}
+
+/**
  * Downloads one resolved asset.
  *
  * @param asset Concrete asset URL and metadata.
  * @returns JavaScript source.
  */
 async function downloadAsset(asset: ResolvedAsset): Promise<string> {
-  const response = await fetch(asset.url, { cache: "force-cache" });
+  const response = await fetch(asset.url, {
+    cache: "force-cache",
+    headers: createAssetFetchHeaders(asset),
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to download ${asset.sourceLabel}: ${response.status}`);

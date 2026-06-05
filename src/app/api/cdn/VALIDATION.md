@@ -1,26 +1,19 @@
 # Validation
 
-Validated in this package revision from `/mnt/data/cdnwork`:
+Validated locally in the sandbox after the v1.6.0 changes.
+
+## Commands
 
 ```bash
-npx tsc --noEmit
+npx tsc -p tsconfig.validation.json
+npx tsx /mnt/data/cdn_work/validate-parser.ts
+npx tsx /mnt/data/cdn_work/validate-output.ts > /mnt/data/cdn_work/output.js
+node --check /mnt/data/cdn_work/output.js
 ```
 
-Result: passed.
+## Notes
 
-A generated CSS-injection JavaScript output was also produced through the real `buildBundle` pipeline using a `data:text/css` CSS asset and checked with Node:
-
-```bash
-npx tsx validate-output.ts > /tmp/rod-cdn-css-output.js
-node --check /tmp/rod-cdn-css-output.js
-```
-
-Result: passed.
-
-The generated output contains:
-
-```js
-globalThis.RodCDN.injectStyles
-```
-
-and a top metadata banner with CSS asset metadata, cache key, cache hit status, CSS target, and style ID.
+- The sandbox does not include the consuming Next.js app dependencies, so `tsconfig.validation.json` used temporary local declaration stubs for `next/server`, Node built-ins and `esbuild`.
+- Temporary validation files were not included in the final ZIP.
+- The parser validation confirmed `package`, `packages`, GitHub URL specs and the new default `bundle=iife` behavior.
+- The output validation generated a metadata-bearing JavaScript response and checked it with `node --check`.

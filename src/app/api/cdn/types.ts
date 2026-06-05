@@ -4,7 +4,7 @@ export type OutputFormat = "js" | "text" | "json";
 
 export type BundleMode = "raw" | "iife" | "esm" | "cjs";
 
-export type AssetProvider = "auto" | "cdnjs" | "npm" | "gist";
+export type AssetProvider = "auto" | "cdnjs" | "jsdelivr" | "npm" | "gist" | "github" | "url";
 
 export type ResolvedProvider = Exclude<AssetProvider, "auto">;
 
@@ -19,6 +19,8 @@ export type SpecOptions = {
   readonly provider?: AssetProvider;
   readonly id?: string;
   readonly target?: CssTargetMode;
+  readonly ref?: string;
+  readonly ext?: string;
 };
 
 export type ParsedAssetSpec = {
@@ -94,5 +96,5 @@ export type BuiltBundle = {
 };
 
 export type ProviderResolver = {
-  readonly resolve: (spec: ParsedAssetSpec) => Promise<ResolvedAsset>;
+  readonly resolve: (spec: ParsedAssetSpec) => Promise<ResolvedAsset | readonly ResolvedAsset[]>;
 };

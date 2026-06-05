@@ -50,6 +50,36 @@ export function assertSafePath(value: string, label: string): void {
 }
 
 /**
+ * Checks whether a spec is a direct HTTP(S) URL.
+ *
+ * @param value Candidate spec.
+ * @returns True when the spec starts with http:// or https://.
+ */
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+/**
+ * Validates and normalizes a direct URL spec.
+ *
+ * @param value Candidate URL.
+ * @returns Parsed URL.
+ */
+function parseSafeUrl(value: string): URL {
+  const url = new URL(value);
+
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new Error(`Invalid URL protocol: ${url.protocol}`);
+  }
+
+  if (!url.hostname) {
+    throw new Error(`Invalid URL: ${value}`);
+  }
+
+  return url;
+}
+
+/**
  * Parses query boolean aliases.
  *
  * @param value Raw query value.
@@ -176,14 +206,41 @@ export function parsePackageVersionAndFile(raw: string): {
  */
 export function parseAssetSpec(rawSpec: string): ParsedAssetSpec {
   const { spec, options } = peelOptions(rawSpec);
+
+  if (isHttpUrl(spec)) {
+    const url = parseSafeUrl(spec);
+
+    return {
+      raw: rawSpec,
+      provider: url.hostname === "github.com" || url.hostname === "raw.githubusercontent.com" ? "github" : "url",
+      packageName: url.toString(),
+      version: "latest",
+      file: null,
+      options,
+    };
+  }
+
   const providerSeparator = spec.indexOf(":");
   const explicitProvider = providerSeparator > 0 ? spec.slice(0, providerSeparator) : null;
   const body = providerSeparator > 0 ? spec.slice(providerSeparator + 1) : spec;
 
   const provider = (explicitProvider ?? options.provider ?? "auto") as AssetProvider;
 
-  if (!["auto", "cdnjs", "npm", "gist"].includes(provider)) {
+  if (!["auto", "cdnjs", "jsdelivr", "npm", "gist", "github", "url"].includes(provider)) {
     throw new Error(`Unsupported provider: ${provider}`);
+  }
+
+  if (provider === "url") {
+    const url = parseSafeUrl(body);
+
+    return {
+      raw: rawSpec,
+      provider,
+      packageName: url.toString(),
+      version: "latest",
+      file: null,
+      options,
+    };
   }
 
   if (provider === "gist") {
@@ -203,6 +260,33 @@ export function parseAssetSpec(rawSpec: string): ParsedAssetSpec {
       provider,
       packageName: `${owner}/${gistId}`,
       version: "latest",
+      file,
+      options,
+    };
+  }
+
+  if (provider === "github") {
+    const parts = body.split("/").filter(Boolean);
+    if (parts.length < 2) {
+      throw new Error(`Invalid GitHub spec: ${rawSpec}. Expected github:owner/repo[/path] or github:owner/repo@ref/path`);
+    }
+
+    const [owner, repoAndMaybeRef, ...fileParts] = parts;
+    const atIndex = repoAndMaybeRef.lastIndexOf("@");
+    const repo = atIndex > 0 ? repoAndMaybeRef.slice(0, atIndex) : repoAndMaybeRef;
+    const ref = atIndex > 0 ? repoAndMaybeRef.slice(atIndex + 1) : options.ref ?? "main";
+    const file = fileParts.join("/") || null;
+
+    assertSafePath(owner, "GitHub owner");
+    assertSafePath(repo, "GitHub repo");
+    assertSafePath(ref, "GitHub ref");
+    if (file) assertSafePath(file, "GitHub file");
+
+    return {
+      raw: rawSpec,
+      provider,
+      packageName: `${owner}/${repo}`,
+      version: ref,
       file,
       options,
     };
@@ -228,7 +312,7 @@ export function parseAssetSpec(rawSpec: string): ParsedAssetSpec {
  * @returns Normalized bundling mode.
  */
 function parseBundleMode(value: string | null): BundleMode {
-  if (!value) return "raw";
+  if (!value) return "iife";
 
   const normalized = value.trim().toLowerCase();
 

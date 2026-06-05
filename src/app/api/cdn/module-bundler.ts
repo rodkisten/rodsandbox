@@ -185,6 +185,22 @@ function createVirtualEntry(options: RequestOptions, assets: readonly ResolvedAs
  **************************************************************************************************/
 
 /**
+ * Creates fetch headers for HTTP module loads that need GitHub authentication.
+ *
+ * @param url Remote URL.
+ * @returns Fetch headers.
+ */
+function createHttpFetchHeaders(url: string): Record<string, string> | undefined {
+  const token = process.env["GITHUB_TOKEN"] ?? process.env["GIST_TOKEN"];
+
+  if (!token || !url.includes("raw.githubusercontent.com")) {
+    return undefined;
+  }
+
+  return { Authorization: `Bearer ${token}` };
+}
+
+/**
  * Creates a virtual-entry plugin that feeds esbuild from memory.
  *
  * @param contents Virtual entry contents.
@@ -265,7 +281,10 @@ function createHttpPlugin(external: readonly string[], failures: AssetFailure[])
           };
         }
 
-        const response = await fetch(args.path, { cache: "force-cache" });
+        const response = await fetch(args.path, {
+          cache: "force-cache",
+          headers: createHttpFetchHeaders(args.path),
+        });
 
         if (!response.ok) {
           failures.push({
@@ -373,7 +392,7 @@ export async function buildModuleBundle(
     logLevel: "silent",
     });
 
-    const output = result.outputFiles[0];
+    const output = (result.outputFiles ?? [])[0];
 
     if (!output) {
       throw new Error("esbuild did not produce an output file.");

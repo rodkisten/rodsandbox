@@ -16,6 +16,26 @@ const DEFAULT_STYLE_ID_PREFIX = "rod-cdn-style";
  **************************************************************************************************/
 
 /**
+ * Creates headers for direct raw GitHub CSS downloads when a token is configured.
+ *
+ * @param asset Concrete CSS asset.
+ * @returns Fetch headers.
+ */
+function createCssFetchHeaders(asset: ResolvedAsset): Record<string, string> | undefined {
+  if (asset.provider !== "github") {
+    return undefined;
+  }
+
+  const token = process.env["GITHUB_TOKEN"] ?? process.env["GIST_TOKEN"];
+
+  if (!token || !asset.url.includes("raw.githubusercontent.com")) {
+    return undefined;
+  }
+
+  return { Authorization: `Bearer ${token}` };
+}
+
+/**
  * Downloads a resolved CSS asset as plain text.
  *
  * @param asset Resolved CSS asset.
@@ -28,7 +48,10 @@ const DEFAULT_STYLE_ID_PREFIX = "rod-cdn-style";
  * ```
  */
 async function downloadCssAsset(asset: ResolvedAsset): Promise<string> {
-  const response = await fetch(asset.url, { cache: "force-cache" });
+  const response = await fetch(asset.url, {
+    cache: "force-cache",
+    headers: createCssFetchHeaders(asset),
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to download CSS ${asset.sourceLabel}: ${response.status}`);
