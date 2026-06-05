@@ -1,7 +1,7 @@
 import { parseAssetSpec } from "./parser";
 import type { ParsedAssetSpec } from "./types";
 
-const PRESETS: Record<string, readonly string[]> = {
+const PRESETS: Record<string, string[]> = {
   highlight: [
     "cdnjs:highlight.js@11.11.1/highlight.min.js(n:hljs)",
     "cdnjs:highlight.js@11.11.1/languages/javascript.min.js",
@@ -12,11 +12,15 @@ const PRESETS: Record<string, readonly string[]> = {
     "cdnjs:highlight.js@11.11.1/languages/rust.min.js",
     "cdnjs:highlight.js@11.11.1/languages/typescript.min.js",
   ],
-  html: [
+  lit: [
+    "npm:lit-html@latest(namespace:LitHtml)",
+  ],
+  react: [
     "cdnjs:react@18.3.1/umd/react.production.min.js(n:React)",
     "cdnjs:react-dom@18.3.1/umd/react-dom.production.min.js(n:ReactDOM)",
+  ],
+  solid: [
     "npm:solid-js@latest(n:Solid)",
-    "npm:lit-html@latest(namespace:LitHtml)",
   ],
   utils: ["npm:es-toolkit@latest(n:esToolkit)"],
   userscript: [
@@ -30,6 +34,8 @@ const PRESETS: Record<string, readonly string[]> = {
     "cdnjs:highlight.js@11.11.1/languages/typescript.min.js",
   ],
 };
+
+PRESETS.html = PRESETS.lit;
 
 /**
  * Expands preset names into regular parsed asset specs.
