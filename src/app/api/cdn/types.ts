@@ -11,88 +11,88 @@ export type ResolvedProvider = Exclude<AssetProvider, "auto">;
 export type CssTargetMode = "document" | "manual";
 
 export type SpecOptions = {
-  readonly name?: string;
-  readonly namespace?: string;
-  readonly global?: string;
-  readonly minify?: boolean;
-  readonly removeComments?: boolean;
-  readonly provider?: AssetProvider;
-  readonly id?: string;
-  readonly target?: CssTargetMode;
-  readonly ref?: string;
-  readonly ext?: string;
+   name?: string;
+   namespace?: string;
+   global?: string;
+   minify?: boolean;
+   removeComments?: boolean;
+   provider?: AssetProvider;
+   id?: string;
+   target?: CssTargetMode;
+   ref?: string;
+   ext?: string;
 };
 
 export type ParsedAssetSpec = {
-  readonly raw: string;
-  readonly provider: AssetProvider;
-  readonly packageName: string;
-  readonly version: string | null;
-  readonly file: string | null;
-  readonly options: SpecOptions;
+   raw: string;
+   provider: AssetProvider;
+   packageName: string;
+   version: string | null;
+   file: string | null;
+   options: SpecOptions;
 };
 
 export type RequestOptions = {
-  readonly specs: readonly ParsedAssetSpec[];
-  readonly cssSpecs: readonly ParsedAssetSpec[];
-  readonly presets: readonly string[];
-  readonly minify: boolean;
-  readonly removeComments: boolean;
-  readonly cacheMode: CacheMode;
-  readonly format: OutputFormat;
-  readonly bundleMode: BundleMode;
-  readonly combine: boolean;
-  readonly debug: boolean;
-  readonly globalName: string | null;
-  readonly expose: boolean;
-  readonly entry: string | null;
-  readonly platform: "browser" | "node";
-  readonly external: readonly string[];
-  readonly bundleProvider: "esm.sh" | "jsdelivr";
-  readonly cssInject: boolean;
-  readonly cssTarget: CssTargetMode;
-  readonly cssId: string | null;
-  readonly metadata: boolean;
+   specs: ParsedAssetSpec[];
+   cssSpecs: ParsedAssetSpec[];
+   presets: string[];
+   minify: boolean;
+   removeComments: boolean;
+   cacheMode: CacheMode;
+   format: OutputFormat;
+   bundleMode: BundleMode;
+   combine: boolean;
+   debug: boolean;
+   globalName: string | null;
+   expose: boolean;
+   entry: string | null;
+   platform: "browser" | "node";
+   external: string[];
+   bundleProvider: "esm.sh" | "jsdelivr";
+   cssInject: boolean;
+   cssTarget: CssTargetMode;
+   cssId: string | null;
+   metadata: boolean;
 };
 
 export type ResolvedAsset = {
-  readonly provider: ResolvedProvider;
-  readonly packageName: string;
-  readonly version: string;
-  readonly file: string;
-  readonly url: string;
-  readonly sourceLabel: string;
-  readonly options: SpecOptions;
-  readonly warnings: readonly string[];
+   provider: ResolvedProvider;
+   packageName: string;
+   version: string;
+   file: string;
+   url: string;
+   sourceLabel: string;
+   options: SpecOptions;
+   warnings: readonly string[];
 };
 
 export type AssetFailureStage = "resolve" | "download" | "minify" | "bundle" | "css";
 
 export type AssetFailure = {
-  readonly stage: AssetFailureStage;
-  readonly sourceLabel: string;
-  readonly message: string;
-  readonly provider?: AssetProvider | ResolvedProvider;
-  readonly packageName?: string;
-  readonly version?: string | null;
-  readonly file?: string | null;
-  readonly url?: string;
+   stage: AssetFailureStage;
+   sourceLabel: string;
+   message: string;
+   provider?: AssetProvider | ResolvedProvider;
+   packageName?: string;
+   version?: string | null;
+   file?: string | null;
+   url?: string;
 };
 
 export type AssetResolutionResult = {
-  readonly assets: readonly ResolvedAsset[];
-  readonly failures: readonly AssetFailure[];
+   assets:  ResolvedAsset[];
+   failures:  AssetFailure[];
 };
 
 export type BuiltBundle = {
-  readonly code: string;
-  readonly assets: readonly ResolvedAsset[];
-  readonly cssAssets: readonly ResolvedAsset[];
-  readonly cssStyleId: string | null;
-  readonly warnings: readonly string[];
-  readonly failures: readonly AssetFailure[];
-  readonly cacheKey: string;
-  readonly cacheHit: boolean;
+   code: string;
+   assets:  ResolvedAsset[];
+   cssAssets:  ResolvedAsset[];
+   cssStyleId: string | null;
+   warnings: readonly string[];
+   failures: AssetFailure[];
+   cacheKey: string;
+   cacheHit: boolean;
 };
 
 export type ProviderResolver = {
