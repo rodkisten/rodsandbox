@@ -99,7 +99,7 @@ function prepareAssetSource(asset: ResolvedAsset, source: string, options: Reque
  * @param assets Resolved assets.
  * @returns Whether the final bundle should be minified.
  */
-function shouldMinifyBundle(options: RequestOptions, assets: readonly ResolvedAsset[]): boolean {
+function shouldMinifyBundle(options: RequestOptions, assets: ResolvedAsset[]): boolean {
   return options.minify && assets.every((asset) => asset.options.minify !== false);
 }
 
@@ -114,9 +114,9 @@ function shouldMinifyBundle(options: RequestOptions, assets: readonly ResolvedAs
  */
 export async function buildBundle(
   options: RequestOptions,
-  assets: readonly ResolvedAsset[],
-  cssAssets: readonly ResolvedAsset[] = [],
-  initialFailures: readonly AssetFailure[] = [],
+  assets: ResolvedAsset[],
+  cssAssets: ResolvedAsset[] = [],
+  initialFailures: AssetFailure[] = [],
 ): Promise<BuiltBundle> {
   if (options.bundleMode !== "raw") {
     return buildModuleBundle(options, assets, cssAssets, initialFailures);

@@ -4,7 +4,9 @@
   },
   "packageManager": "pnpm@8.15.9",
   "pnpm": {
-    "neverBuiltDependencies": ["node-pty"]
+    "neverBuiltDependencies": [
+      "node-pty"
+    ]
   },
   "name": "rodsandbox",
   "version": "0.1.0",
@@ -48,7 +50,8 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-resizable-panels": "^4.11.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "esbuild": "^0.28.0"
   },
   "devDependencies": {
     "@lezer/highlight": "latest",
@@ -61,7 +64,6 @@
     "@uiw/codemirror-extensions-basic-setup": "latest",
     "@uiw/codemirror-themes": "latest",
     "@vitest/ui": "^4.1.6",
-    "esbuild": "^0.28.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "jsdom": "^29.1.1",

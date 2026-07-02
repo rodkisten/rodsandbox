@@ -68,6 +68,9 @@ dependencies:
   '@xterm/xterm':
     specifier: ^5.5.0
     version: 5.5.0
+  esbuild:
+    specifier: ^0.28.0
+    version: 0.28.0
   idb:
     specifier: ^8.0.3
     version: 8.0.3
@@ -135,9 +138,6 @@ devDependencies:
   '@vitest/ui':
     specifier: ^4.1.6
     version: 4.1.7(vitest@4.1.7)
-  esbuild:
-    specifier: ^0.28.0
-    version: 0.28.0
   eslint:
     specifier: ^9
     version: 9.39.4

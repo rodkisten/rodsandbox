@@ -13,21 +13,21 @@ const DEFAULT_FOLDER_EXTENSIONS = new Set([".js", ".mjs", ".cjs"]);
  **************************************************************************************************/
 
 type GitHubLocation = {
-  readonly owner: string;
-  readonly repo: string;
-  readonly ref: string;
-  readonly path: string;
-  readonly isFolder: boolean;
+  owner: string;
+  repo: string;
+  ref: string;
+  path: string;
+  isFolder: boolean;
 };
 
 type GitHubTreeItem = {
-  readonly path?: string;
-  readonly type?: string;
+  path?: string;
+  type?: string;
 };
 
 type GitHubTreeResponse = {
-  readonly tree?: readonly GitHubTreeItem[];
-  readonly truncated?: boolean;
+  tree?: GitHubTreeItem[];
+  truncated?: boolean;
 };
 
 /***************************************************************************************************
@@ -235,7 +235,7 @@ function parseGitHubLocation(spec: ParsedAssetSpec): GitHubLocation {
  * @param location GitHub repository location.
  * @returns GitHub tree items.
  */
-async function readGitHubTree(location: GitHubLocation): Promise<readonly GitHubTreeItem[]> {
+async function readGitHubTree(location: GitHubLocation): Promise<GitHubTreeItem[]> {
   const url = `${GITHUB_API_BASE}/repos/${encodeURIComponent(location.owner)}/${encodeURIComponent(location.repo)}/git/trees/${encodeURIComponent(location.ref)}?recursive=1`;
   const response = await fetch(url, {
     headers: createGitHubHeaders(),
@@ -258,7 +258,7 @@ async function readGitHubTree(location: GitHubLocation): Promise<readonly GitHub
  * @param location Folder location.
  * @returns Resolved file assets inside the folder.
  */
-async function resolveGitHubFolder(spec: ParsedAssetSpec, location: GitHubLocation): Promise<readonly ResolvedAsset[]> {
+async function resolveGitHubFolder(spec: ParsedAssetSpec, location: GitHubLocation): Promise<ResolvedAsset[]> {
   const tree = await readGitHubTree(location);
   const prefix = location.path ? `${location.path.replace(/\/+$/, "")}/` : "";
   const extensions = parseExtensionFilter(spec.options.ext);
@@ -310,7 +310,7 @@ async function resolveGitHubFolder(spec: ParsedAssetSpec, location: GitHubLocati
  * @param spec Parsed GitHub spec.
  * @returns One resolved file asset or many assets when the spec points to a folder.
  */
-export async function resolveGitHub(spec: ParsedAssetSpec): Promise<ResolvedAsset | readonly ResolvedAsset[]> {
+export async function resolveGitHub(spec: ParsedAssetSpec): Promise<ResolvedAsset | ResolvedAsset[]> {
   try {
     const location = parseGitHubLocation(spec);
 

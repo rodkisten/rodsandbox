@@ -47,9 +47,9 @@ function createResolveFailure(spec: ParsedAssetSpec, error: unknown): AssetFailu
  * @param value Provider result.
  * @returns Flat resolved asset list.
  */
-function flattenResolvedAssets(value: ResolvedAsset | readonly ResolvedAsset[]): readonly ResolvedAsset[] {
+function flattenResolvedAssets(value: ResolvedAsset | ResolvedAsset[]): ResolvedAsset[] {
   if (Array.isArray(value)) {
-    return value as readonly ResolvedAsset[];
+    return value as ResolvedAsset[];
   }
 
   return [value as ResolvedAsset];
@@ -110,7 +110,7 @@ async function resolveAsset(spec: ParsedAssetSpec): Promise<readonly ResolvedAss
  * @param specs Parsed asset specs from the request.
  * @returns Successful assets plus structured failures.
  */
-export async function resolveAssets(specs: readonly ParsedAssetSpec[]): Promise<AssetResolutionResult> {
+export async function resolveAssets(specs:  ParsedAssetSpec[]): Promise<AssetResolutionResult> {
   const settled = await Promise.allSettled(specs.map(resolveAsset));
   const assets: ResolvedAsset[] = [];
   const failures: AssetFailure[] = [];

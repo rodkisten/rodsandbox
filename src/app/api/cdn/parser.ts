@@ -146,7 +146,7 @@ export function parseSpecOptions(rawOptions: string | null): SpecOptions {
  * @param rawSpec Raw asset spec.
  * @returns Spec without options plus parsed options.
  */
-export function peelOptions(rawSpec: string): { readonly spec: string; readonly options: SpecOptions } {
+export function peelOptions(rawSpec: string): { spec: string; options: SpecOptions } {
   const trimmed = rawSpec.trim();
 
   if (!trimmed.endsWith(")")) {
@@ -177,9 +177,9 @@ export function peelOptions(rawSpec: string): { readonly spec: string; readonly 
  * @returns Package name, optional version and optional file path.
  */
 export function parsePackageVersionAndFile(raw: string): {
-  readonly packageName: string;
-  readonly version: string | null;
-  readonly file: string | null;
+  packageName: string;
+  version: string | null;
+  file: string | null;
 } {
   const match = raw.match(/^(@[^/]+\/[^/@]+|[^/@/]+)(?:@([^/]+))?(?:\/(.+))?$/);
 
@@ -382,7 +382,7 @@ function parseRequestedBundleMode(params: URLSearchParams): BundleMode {
  * @param value Raw query value.
  * @returns External package names.
  */
-function parseExternalPackages(value: string | null): readonly string[] {
+function parseExternalPackages(value: string | null): string[] {
   if (!value) return [];
 
   return splitTopLevel(value).map((item) => item.trim()).filter(Boolean);
@@ -397,7 +397,7 @@ function parseExternalPackages(value: string | null): readonly string[] {
  * @param label Human-readable error label.
  * @returns Parsed enum value.
  */
-function parseEnum<T extends string>(value: string | null, fallback: T, allowed: readonly T[], label: string): T {
+function parseEnum<T extends string>(value: string | null, fallback: T, allowed: T[], label: string): T {
   if (!value) return fallback;
   const normalized = value.trim().toLowerCase() as T;
   if (allowed.includes(normalized)) return normalized;

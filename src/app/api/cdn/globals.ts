@@ -193,7 +193,7 @@ export function createNamespaceAssignmentWithFallback(
  */
 export function createGlobalBridgePrelude(
   globalName: string | null,
-  assets: readonly ResolvedAsset[],
+  assets: ResolvedAsset[],
 ): string {
   const globalSources = Array.from(
     new Set(
