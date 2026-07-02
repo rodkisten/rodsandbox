@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function BundlePage() {
   return (
-    <main className="min-h-screen bg-neutral-950 px-4 py-8 text-neutral-100">
+    <main className="min-h-screen bg-neutral-950 px-4 py-8 text-neutral-100 overflow-scroll">
       <section className="mx-auto flex max-w-2xl flex-col gap-6 rounded-3xl border border-neutral-800 bg-neutral-900/70 p-5 shadow-2xl sm:p-8">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-400">RodSandbox</p>
@@ -19,7 +19,7 @@ export default function BundlePage() {
           </p>
         </div>
 
-        <form action="/api/bundle" method="post" encType="multipart/form-data" className="flex flex-col gap-4">
+        <form action="/api/bundler" method="post" encType="multipart/form-data" className="flex flex-col gap-4">
           <label className="flex flex-col gap-2 text-sm font-medium text-neutral-300">
             Arquivo ou ZIP
             <input
