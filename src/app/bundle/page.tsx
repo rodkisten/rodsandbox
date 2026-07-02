@@ -40,9 +40,9 @@ export default function BundlePage() {
               className="rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-3 text-sm text-neutral-100 outline-none transition focus:border-sky-500/70 focus:ring-2 focus:ring-sky-500/20"
             />
           </label>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            { /* <label className="flex flex-col gap-2 text-sm font-medium text-neutral-300">
+2">
+            { /*
+          <div className="grid gap-4 sm:grid-cols- <label className="flex flex-col gap-2 text-sm font-medium text-neutral-300">
               Formato
               <select name="format" defaultValue="iife" className="rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-3 text-sm text-neutral-100">
                 <option value="iife">IIFE</option>
