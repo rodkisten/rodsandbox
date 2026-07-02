@@ -132,7 +132,7 @@ function buildCacheFilePath(cacheKey: string): string {
  * // 64
  * ```
  */
-export function createCacheKey(options: RequestOptions, assets: readonly ResolvedAsset[]): string {
+export function createCacheKey(options: RequestOptions, assets: ResolvedAsset[]): string {
   return createSha256Hash(
     JSON.stringify({
       assets: assets.map((asset) => ({
