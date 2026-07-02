@@ -42,7 +42,7 @@ export default function BundlePage() {
           </label>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm font-medium text-neutral-300">
+            <!-- <label className="flex flex-col gap-2 text-sm font-medium text-neutral-300">
               Formato
               <select name="format" defaultValue="iife" className="rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-3 text-sm text-neutral-100">
                 <option value="iife">IIFE</option>
@@ -69,7 +69,7 @@ export default function BundlePage() {
                 <option value="neutral">Neutral</option>
               </select>
             </label>
-
+           
             <label className="flex flex-col gap-2 text-sm font-medium text-neutral-300">
               Target
               <input
@@ -80,6 +80,8 @@ export default function BundlePage() {
               />
             </label>
           </div>
+
+          -->
 
           <label className="flex flex-col gap-2 text-sm font-medium text-neutral-300">
             External opcional, separado por vírgula
