@@ -141,7 +141,7 @@ function createStyleId(options: RequestOptions, css: string): string {
  * // Defines injectStyles and optionally calls it for document.head.
  * ```
  */
-export function createCssRuntime(options: RequestOptions, css: string, cssAssets: readonly ResolvedAsset[]): string {
+export function createCssRuntime(options: RequestOptions, css: string, cssAssets:  ResolvedAsset[]): string {
   if (!css || !options.cssInject) {
     return "";
   }
@@ -229,10 +229,10 @@ export function createCssRuntime(options: RequestOptions, css: string, cssAssets
  * console.log(result.css.length);
  * ```
  */
-export async function buildCssPayload(cssAssets: readonly ResolvedAsset[]): Promise<{
+export async function buildCssPayload(cssAssets:  ResolvedAsset[]): Promise<{
   readonly css: string;
-  readonly warnings: readonly string[];
-  readonly failures: readonly AssetFailure[];
+  readonly warnings: string[];
+  readonly failures: AssetFailure[];
 }> {
   const warnings = [...cssAssets.flatMap((asset) => asset.warnings)];
   const failures: AssetFailure[] = [];
