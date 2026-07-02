@@ -187,7 +187,7 @@ function isJavaScriptLikeUrl(url: string): boolean {
  */
 function createVirtualEntry(
   options: RequestOptions,
-  assets: readonly ResolvedAsset[],
+  assets: ResolvedAsset[],
 ): string {
   const lines: string[] = [];
 
@@ -282,7 +282,7 @@ function createHttpPlugin(
   external: readonly string[],
   failures: AssetFailure[],
   options: RequestOptions,
-  assets: readonly ResolvedAsset[],
+  assets: ResolvedAsset[],
 ): Plugin {
   const externalPackages = new Set(external);
   const memoryCache = new Map<string, string>();
@@ -421,9 +421,9 @@ function createHttpPlugin(
  */
 export async function buildModuleBundle(
   options: RequestOptions,
-  assets: readonly ResolvedAsset[],
-  cssAssets: readonly ResolvedAsset[] = [],
-  initialFailures: readonly AssetFailure[] = [],
+  assets: ResolvedAsset[],
+  cssAssets: ResolvedAsset[] = [],
+  initialFailures: AssetFailure[] = [],
 ): Promise<BuiltBundle> {
   const cssPayload = await buildCssPayload(cssAssets);
   const cssStyleId = resolveStyleId(options, cssPayload.css);
