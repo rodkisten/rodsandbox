@@ -502,13 +502,13 @@ export class BrowserTypeScriptCompiler {
   }
 
   updateFile(path: string, content: string): void {
+    if (this.files.get(path) === content) return;
     this.files.set(path, content);
     this.version++;
   }
 
   removeFile(path: string): void {
-    this.files.delete(path);
-    this.version++;
+    if (this.files.delete(path)) this.version++;
   }
 
   /**

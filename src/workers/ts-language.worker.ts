@@ -7,12 +7,14 @@ const WORKER_IDLE_TIMEOUT_MS = 45_000;
 let compiler: BrowserTypeScriptCompiler | null = null;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let lastTsConfigHash: string | null = null;
+let previousPaths = new Set<string>();
 
 function refreshIdleTimer() {
   if (idleTimer) clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     compiler = null;
     lastTsConfigHash = null;
+    previousPaths.clear();
   }, WORKER_IDLE_TIMEOUT_MS);
 }
 
@@ -26,13 +28,16 @@ function syncFiles(files: Array<{ path: string; content: string }>) {
 
   // Detect tsconfig.json and apply compiler options if changed
   const tsConfig = files.find((f) => f.path === '/tsconfig.json' || f.path === 'tsconfig.json');
-  if (tsConfig && tsConfig.content !== lastTsConfigHash) {
-    lastTsConfigHash = tsConfig.content;
-    const options = parseTsConfigCompilerOptions(tsConfig.content);
+  if ((tsConfig?.content ?? null) !== lastTsConfigHash) {
+    lastTsConfigHash = tsConfig?.content ?? null;
+    const options = parseTsConfigCompilerOptions(tsConfig?.content ?? '{}');
     service.setCompilerOptions(options);
   }
 
+  const nextPaths = new Set(files.map((file) => file.path));
+  for (const path of previousPaths) if (!nextPaths.has(path)) service.removeFile(path);
   for (const file of files) service.updateFile(file.path, file.content);
+  previousPaths = nextPaths;
   refreshIdleTimer();
   return service;
 }
