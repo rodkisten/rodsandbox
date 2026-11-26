@@ -2,6 +2,7 @@
 import { BrowserTypeScriptCompiler, parseTsConfigCompilerOptions } from '@/compiler';
 import type { Diagnostic } from '@/types';
 import type { TsMessage } from './messages';
+import { acquireWorkspaceTypes } from '@/compiler/typeAcquisition';
 
 let libraryPromise: Promise<Record<string, string>> | undefined;
 function loadLibraries() {
@@ -27,7 +28,9 @@ async function ensureCompiler(): Promise<BrowserTypeScriptCompiler> {
 }
 
 async function syncFiles(files: Array<{ path: string; content: string }>) {
+  const dependencies = await acquireWorkspaceTypes(files);
   const service = await ensureCompiler();
+  service.setDependencyFiles(dependencies);
 
   // Detect tsconfig.json and apply compiler options if changed
   const tsConfig = files.find((f) => f.path === '/tsconfig.json' || f.path === 'tsconfig.json');
@@ -56,7 +59,7 @@ function createWorkerFailureDiagnostic(fileId: string, error: unknown): Diagnost
   };
 }
 
-self.onmessage = async (event: MessageEvent<TsMessage>) => {
+async function handleMessage(event: MessageEvent<TsMessage>) {
   const msg = event.data;
 
   if (msg.type === 'TS_DIAGNOSTICS') {
@@ -105,4 +108,9 @@ self.onmessage = async (event: MessageEvent<TsMessage>) => {
       self.postMessage({ type: 'TS_DEFINITION_RESULT', requestId: msg.requestId, location: null });
     }
   }
+}
+
+let queue = Promise.resolve();
+self.onmessage = (event: MessageEvent<TsMessage>) => {
+  queue = queue.then(() => handleMessage(event)).catch(() => undefined);
 };
