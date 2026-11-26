@@ -77,6 +77,9 @@ dependencies:
   esbuild:
     specifier: ^0.28.0
     version: 0.28.0
+  esbuild-wasm:
+    specifier: 0.28.0
+    version: 0.28.0
   idb:
     specifier: ^8.0.3
     version: 8.0.3
@@ -4837,6 +4840,12 @@ packages:
       is-callable: 1.2.7
       is-date-object: 1.1.0
       is-symbol: 1.1.1
+
+  /esbuild-wasm@0.28.0:
+    resolution: {integrity: sha512-5TRVKExcEmeMkccIZMzUq+Az6X2RoMAJyfl6SMMO1dMVhmvt0I2mx7gAb6zYi42n4d1ETcatFXazGKzA+aW7fg==}
+    engines: {node: '>=18'}
+    hasBin: true
+    dev: false
 
   /esbuild@0.28.0:
     resolution: {integrity: sha512-sNR9MHpXSUV/XB4zmsFKN+QgVG82Cc7+/aaxJ8Adi8hyOac+EXptIp45QBPaVyX3N70664wRbTcLTOemCAnyqw==}
