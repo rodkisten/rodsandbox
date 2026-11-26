@@ -12,7 +12,7 @@ function packages(files: Source[]): Map<string, string> {
     const data = JSON.parse(manifest.content);
     for (const section of ['dependencies', 'devDependencies']) {
       for (const [name, version] of Object.entries(data[section] ?? {})) {
-        if (typeof version === 'string' && /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(version)) versions.set(name, version);
+        if (typeof version === 'string' && /^(?:[~^]?\d+(?:\.\d+){0,2}(?:-[\w.-]+)?|latest|\*)$/.test(version)) versions.set(name, version);
       }
     }
   } catch { /* Invalid manifest while editing. */ }
@@ -31,7 +31,7 @@ async function acquire(name: string, version: string): Promise<Map<string, strin
   const key = name + '@' + version;
   const cached = await readDeclarations(key);
   if (cached) return cached;
-  const root = 'https://cdn.jsdelivr.net/npm/' + key + '/';
+  const root = 'https://cdn.jsdelivr.net/npm/' + name + '@' + encodeURIComponent(version) + '/';
   const files = new Map<string, string>();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
@@ -44,10 +44,34 @@ async function acquire(name: string, version: string): Promise<Map<string, strin
     if (typeof entry !== 'string') return files;
     const path = entry.replace(/^\.\//, '');
     if (!/^[\w./-]+\.d\.[cm]?ts$/.test(path) || path.split('/').includes('..')) return files;
-    const declaration = await fetch(root + path, { signal: controller.signal });
-    if (!declaration.ok) return files;
+    const visited = new Set<string>();
+    const visit = async (relative: string): Promise<void> => {
+      if (visited.size >= 64 || visited.has(relative)) return;
+      if (!/^[\w./-]+\.d\.[cm]?ts$/.test(relative) || relative.split('/').includes('..')) return;
+      visited.add(relative);
+      const declaration = await fetch(root + relative, { signal: controller.signal });
+      if (!declaration.ok) return;
+      const source = await declaration.text();
+      files.set('/node_modules/' + name + '/' + relative, source);
+      const refs = ts.preProcessFile(source, true, true);
+      const children = [...refs.importedFiles, ...refs.referencedFiles].map(ref => ref.fileName);
+      await Promise.all(children.filter(ref => ref.startsWith('.')).map(async ref => {
+        const parts = relative.split('/').slice(0, -1);
+        for (const part of ref.split('/')) {
+          if (part === '..') { if (!parts.length) return; parts.pop(); }
+          else if (part !== '.') parts.push(part);
+        }
+        const target = parts.join('/');
+        if (/\.d\.[cm]?ts$/.test(target)) await visit(target);
+        else {
+          await visit(target.replace(/\.[cm]?js$/, '') + '.d.ts');
+          await visit(target + '/index.d.ts');
+        }
+      }));
+    };
+    await visit(path);
+    if (!files.size) return files;
     files.set('/node_modules/' + name + '/package.json', manifest);
-    files.set('/node_modules/' + name + '/' + path, await declaration.text());
     await writeDeclarations(key, files);
   } catch { /* Offline or unavailable package. */ }
   finally { clearTimeout(timer); }
@@ -59,7 +83,11 @@ export async function acquireWorkspaceTypes(files: Source[]): Promise<Map<string
     const key = name + '@' + version;
     let task = pending.get(key);
     if (!task) {
-      task = acquire(name, version).finally(() => pending.delete(key));
+      task = acquire(name, version).then(async result => {
+        if (result.size || name.startsWith('@types/')) return result;
+        const fallback = '@types/' + name.replace(/^@/, '').replace('/', '__');
+        return acquire(fallback, 'latest');
+      }).finally(() => pending.delete(key));
       pending.set(key, task);
     }
     return task;
