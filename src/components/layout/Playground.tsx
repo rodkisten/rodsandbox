@@ -242,7 +242,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     }));
   }, [activeFile?.id, updateSettings]);
 
-  const compileWorkspace = useCallback(async (): Promise<{ files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string; dependencies: string[] }> => {
+  const compileWorkspace = useCallback(async (): Promise<{ files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string; dependencies: string[]; importMap?: Record<string, string> }> => {
     const files = listFiles(workspace);
     const fileIdByPath = new Map(files.map((file) => [file.path, file.id]));
     let hasRunnableSource = false;
@@ -302,7 +302,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       [`${entryFile.replace(/\.tsx?$/, '').replace(/\.jsx?$/, '')}.js`]: bundleResult.code,
     };
 
-    return { files: compiledFiles, diagnosticsCount: allDiagnostics.length, bundledCode: bundleResult.code, bundledCssText: bundleResult.cssText, dependencies: bundleResult.dependencies };
+    return { files: compiledFiles, diagnosticsCount: allDiagnostics.length, bundledCode: bundleResult.code, bundledCssText: bundleResult.cssText, dependencies: bundleResult.dependencies, importMap: bundleResult.importMap };
   }, [workspace]);
 
 
@@ -350,6 +350,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         injectedScripts: pluginPreviewScriptsRef.current,
         bundledCode: result.bundledCode,
         bundledCssText: result.bundledCssText,
+        importMap: result.importMap,
       }));
       if (result.diagnosticsCount > 0) {
         updateSettings((prev) => ({ ...prev, bottomTab: 'diagnostics' }));

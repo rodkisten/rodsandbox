@@ -2,7 +2,7 @@ import type { Diagnostic, FileLanguage } from '@/types';
 import type { TsCompletionItem, TsDefinitionLocation, TsQuickInfo } from '@/types/tsLanguage';
 export interface WorkerFileInput { path: string; content: string; language: FileLanguage; }
 export interface BundlerBuildRequest { type: 'BUNDLE_BUILD'; requestId: number; files: WorkerFileInput[]; entryFile: string; }
-export interface BundlerBuildSuccess { type: 'BUNDLE_RESULT'; requestId: number; success: true; code: string; cssText: string; dependencies: string[]; }
+export interface BundlerBuildSuccess { type: 'BUNDLE_RESULT'; requestId: number; success: true; code: string; cssText: string; dependencies: string[]; importMap?: Record<string, string>; }
 export interface BundlerBuildFailure { type: 'BUNDLE_RESULT'; requestId: number; success: false; errors: Diagnostic[]; }
 export type BundlerMessage = BundlerBuildRequest | BundlerBuildSuccess | BundlerBuildFailure;
 export interface FormatterRequest { type: 'FORMAT_FILE'; requestId: number; language: FileLanguage; content: string; }

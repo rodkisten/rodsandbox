@@ -87,6 +87,7 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
   const entryFile = normalizeVirtualPath(req.entryFile);
   const dependencies = extractDependencies(req.files);
   const pkgDeps = manifestVersions(req.files);
+  const importMap: Record<string, string> = Object.create(null);
 
   try {
     if (req.requestId !== latestRequestId) return;
@@ -125,7 +126,7 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
             const p = args.path;
             if (!p.startsWith('.') && !p.startsWith('/') && !p.startsWith('https://') && !p.startsWith('http://')) {
               const url = moduleUrl(p, pkgDeps);
-              if (url) return { path: url, external: true };
+              if (url) { importMap[p] = url; return { path: p, external: true }; }
             }
             if (/^https:\/\//.test(p)) return { path: p, external: true };
             return null;
@@ -143,7 +144,7 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
     if (req.requestId === latestRequestId) {
       const code = result.outputFiles?.find((file) => file.path.endsWith('.js'))?.text ?? '';
       const cssText = result.outputFiles?.find((file) => file.path.endsWith('.css'))?.text ?? '';
-      self.postMessage({ type: 'BUNDLE_RESULT', requestId: req.requestId, success: true, code, cssText, dependencies });
+      self.postMessage({ type: 'BUNDLE_RESULT', requestId: req.requestId, success: true, code, cssText, dependencies, importMap });
     }
   } catch (error) {
     if (req.requestId === latestRequestId) {

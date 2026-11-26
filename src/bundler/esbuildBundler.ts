@@ -1,6 +1,6 @@
 import type { Diagnostic } from '@/types';
 import type { WorkerFileInput, BundlerMessage } from '@/workers/messages';
-export interface BundleResult { code: string; cssText: string; dependencies: string[]; diagnostics: Diagnostic[]; }
+export interface BundleResult { code: string; cssText: string; dependencies: string[]; importMap?: Record<string, string>; diagnostics: Diagnostic[]; }
 const WORKER_REQUEST_TIMEOUT_MS = 20_000;
 
 function createBundlerFailureDiagnostic(fileId: string, message: string): Diagnostic {
@@ -51,7 +51,7 @@ export class EsbuildBundlerService {
         const msg = event.data;
         if (msg.type !== 'BUNDLE_RESULT' || msg.requestId !== id) return;
         settle(msg.success
-          ? { code: msg.code, cssText: msg.cssText, dependencies: msg.dependencies, diagnostics: [] }
+          ? { code: msg.code, cssText: msg.cssText, dependencies: msg.dependencies, importMap: msg.importMap, diagnostics: [] }
           : { code: '', cssText: '', dependencies: [], diagnostics: msg.errors });
       };
       const onError = (event: ErrorEvent) => fail(event.message || 'Bundler worker failed', true);

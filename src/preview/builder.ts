@@ -11,6 +11,7 @@ export interface PreviewBuildInput {
   bundledCode?: string;
   /** Optional bundled CSS emitted by esbuild */
   bundledCssText?: string;
+  importMap?: Record<string, string>;
 }
 
 function sanitizeInlineScriptContent(scriptContent: string): string {
@@ -234,10 +235,14 @@ export function buildPreviewHtml(input: PreviewBuildInput): string {
     </script>`
     : '';
 
+  const importMapTag = input.importMap && Object.keys(input.importMap).length
+    ? '<script type="importmap">' + JSON.stringify({ imports: input.importMap }).replace(/</g, '\\u003c') + '</script>'
+    : '';
   return [
     doctype,
     '<html lang="en">',
     '<head>',
+    importMapTag,
     headContent,
     styleTag,
     '</head>',
