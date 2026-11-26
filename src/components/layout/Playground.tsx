@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
-import { useRouter } from 'next/navigation';
 import type { Completion, CompletionContext, CompletionSource } from '@codemirror/autocomplete';
 import type { Extension } from '@codemirror/state';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
@@ -46,7 +44,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-const Editor = dynamic(() => import('@/editor/Editor'), { ssr: false });
+const LazyEditor = React.lazy(() => import('@/editor/Editor'));
+function Editor(props: React.ComponentProps<typeof LazyEditor>) {
+  return <React.Suspense fallback={<div role="status" className="p-3 text-sm text-neutral-400">Loading editor…</div>}><LazyEditor {...props} /></React.Suspense>;
+}
 
 function generateId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
@@ -92,15 +93,14 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     saveWorkspace,
   } = useWorkspace(workspaceId);
   const { settings, loading: settingsLoading, updateSettings } = useAppSettings();
-  const router = useRouter();
 
   // Ownership check: redirect if the loaded workspace belongs to a different user.
   useEffect(() => {
     if (loading) return;
     if (userId && workspace.ownerId && workspace.ownerId !== userId) {
-      router.replace('/workspaces');
+      window.location.replace('/workspaces');
     }
-  }, [loading, workspace.ownerId, userId, router]);
+  }, [loading, workspace.ownerId, userId]);
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
