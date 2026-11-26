@@ -1,0 +1,63 @@
+name: 📦 SB · Dependencies
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [add, update, remove, lockfile]
+        required: true
+      packages:
+        type: string
+        default: ''
+      dev:
+        type: boolean
+        default: false
+      latest:
+        type: boolean
+        default: false
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: dependencies-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Update dependencies
+        env:
+          OP: ${{ inputs.operation }}
+          PACKAGES: ${{ inputs.packages }}
+          DEV: ${{ inputs.dev }}
+          LATEST: ${{ inputs.latest }}
+        run: |
+          set -euo pipefail
+          read -r -a packages <<< "$PACKAGES"
+          for p in "${packages[@]}"; do [[ "$p" != -* ]] || exit 1; done
+          args=()
+          case "$OP" in
+            add) (("${#packages[@]}")) || exit 1; if [[ "$DEV" == true ]]; then args+=(-D); fi; pnpm add "${args[@]}" "${packages[@]}" ;;
+            update) if [[ "$LATEST" == true ]]; then args+=(--latest); fi; pnpm update "${args[@]}" "${packages[@]}" ;;
+            remove) (("${#packages[@]}")) || exit 1; pnpm remove "${packages[@]}" ;;
+            lockfile) pnpm install --lockfile-only --no-frozen-lockfile ;;
+          esac
+          pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit
+      - name: Commit
+        env:
+          OP: ${{ inputs.operation }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json pnpm-lock.yaml
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore(deps): $OP dependencies"
+          git push
+          gh workflow run checks.yml --ref "$GITHUB_REF_NAME" || echo 'Checks dispatch unavailable'
