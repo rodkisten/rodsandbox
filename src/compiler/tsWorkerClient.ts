@@ -37,7 +37,7 @@ export class TypeScriptWorkerClient {
         worker.removeEventListener('message', onMessage);
         worker.removeEventListener('error', onError);
         worker.removeEventListener('messageerror', onMessageError);
-        if (shouldResetWorker) this.resetWorker();
+        if (shouldResetWorker && this.worker === worker) this.resetWorker();
         resolve(value);
       };
 

@@ -359,25 +359,32 @@ declare function eval(x: string): unknown;
 function createLanguageServiceHost(
   files: Map<string, string>,
   getVersion: () => number,
-  getCompilerOptions: () => ts.CompilerOptions
+  getCompilerOptions: () => ts.CompilerOptions,
+  libraries: Map<string, string>,
+  dependencies: Map<string, string>
 ): ts.LanguageServiceHost {
+  const allPaths = () => [...files.keys(), ...libraries.keys(), ...dependencies.keys()];
+  const lookup = (name: string) => files.get(name) ?? files.get(name.replace(/^\//, '')) ?? libraries.get(name) ?? dependencies.get(name);
+  const directoryPrefix = (name: string) => name.replace(/\/$/, '') + '/';
   return {
-    getScriptFileNames: () => [VIRTUAL_LIB_NAME, ...Array.from(files.keys())],
+    directoryExists: (name) => name === '/' || allPaths().some(path => ('/' + path.replace(/^\//, '')).startsWith(directoryPrefix(name))),
+    getDirectories: (name) => [...new Set(allPaths().map(path => '/' + path.replace(/^\//, '')).filter(path => path.startsWith(directoryPrefix(name))).map(path => path.slice(directoryPrefix(name).length)).filter(path => path.includes('/')).map(path => path.split('/')[0]))],
+    getScriptFileNames: () => [...(libraries.size ? [] : [VIRTUAL_LIB_NAME]), ...Array.from(files.keys())],
     getScriptVersion: () => String(getVersion()),
     getScriptSnapshot: (fileName) => {
       if (fileName === VIRTUAL_LIB_NAME) {
         return ts.ScriptSnapshot.fromString(MINIMAL_LIB_D_TS);
       }
-      const content = files.get(fileName);
+      const content = lookup(fileName);
       if (content === undefined) return undefined;
       return ts.ScriptSnapshot.fromString(content);
     },
-    getDefaultLibFileName: () => VIRTUAL_LIB_NAME,
+    getDefaultLibFileName: (options) => libraries.size ? '/' + ts.getDefaultLibFileName(options) : VIRTUAL_LIB_NAME,
     fileExists: (fileName) =>
-      fileName === VIRTUAL_LIB_NAME || files.has(fileName),
+      fileName === VIRTUAL_LIB_NAME || lookup(fileName) !== undefined,
     readFile: (fileName) => {
       if (fileName === VIRTUAL_LIB_NAME) return MINIMAL_LIB_D_TS;
-      return files.get(fileName);
+      return libraries.get(fileName) ?? files.get(fileName);
     },
     readDirectory: () => [],
     getCurrentDirectory: () => '/',
@@ -483,12 +490,14 @@ export function parseTsConfigCompilerOptions(raw: string): ts.CompilerOptions {
  */
 export class BrowserTypeScriptCompiler {
   private files: Map<string, string> = new Map();
+  private libraries = new Map<string, string>();
+  private dependencies = new Map<string, string>();
   private version = 0;
   private compilerOptions: ts.CompilerOptions = { ...DEFAULT_COMPILER_OPTIONS };
   private languageService: ts.LanguageService;
 
   constructor() {
-    const host = createLanguageServiceHost(this.files, () => this.version, () => this.compilerOptions);
+    const host = createLanguageServiceHost(this.files, () => this.version, () => this.compilerOptions, this.libraries, this.dependencies);
     this.languageService = ts.createLanguageService(host, ts.createDocumentRegistry());
   }
 
@@ -501,14 +510,30 @@ export class BrowserTypeScriptCompiler {
     this.version++;
   }
 
+  setLibraries(libraries: Record<string, string>): void {
+    this.libraries.clear();
+    for (const [name, content] of Object.entries(libraries)) this.libraries.set('/' + name, content);
+    this.version++;
+  }
+
+  setDependencyFiles(entries: ReadonlyMap<string, string>): void {
+    this.dependencies.clear();
+    for (const [name, content] of entries) {
+      const path = '/' + name.replace(/^\/+/, '');
+      if (path.startsWith('/node_modules/') && !path.split('/').includes('..')) this.dependencies.set(path, content);
+    }
+    this.version++;
+    this.languageService.cleanupSemanticCache();
+  }
+
   updateFile(path: string, content: string): void {
+    if (this.files.get(path) === content) return;
     this.files.set(path, content);
     this.version++;
   }
 
   removeFile(path: string): void {
-    this.files.delete(path);
-    this.version++;
+    if (this.files.delete(path)) this.version++;
   }
 
   /**

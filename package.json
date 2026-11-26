@@ -16,7 +16,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "predev": "node scripts/generate-typescript-libs.mjs",
+    "prebuild": "node scripts/generate-typescript-libs.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.2",

@@ -1,0 +1,10 @@
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+const require = createRequire(import.meta.url);
+const lib = dirname(require.resolve('typescript'));
+const files = (await readdir(lib)).filter(name => /^lib(?:\..+)?\.d\.ts$/.test(name));
+const libraries = Object.fromEntries(await Promise.all(files.map(async name => [name, await readFile(join(lib, name), 'utf8')])));
+await mkdir('public', { recursive: true });
+await writeFile('public/typescript-libs.json', JSON.stringify(libraries));
+console.log('TypeScript standard libraries:', files.length);

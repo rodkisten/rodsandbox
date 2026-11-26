@@ -48,12 +48,12 @@ const EMPTY_AUTOCOMPLETE_PROVIDERS: CompletionSource[] = [];
  * @param language - File language detected by the sandbox.
  * @returns A CodeMirror language extension.
  */
-function getLanguageExtension(language: FileLanguage): Extension {
+function getLanguageExtension(language: FileLanguage, path: string): Extension {
   switch (language) {
     case 'typescript':
-      return javascript({ typescript: true, jsx: false });
+      return javascript({ typescript: true, jsx: /\.tsx$/i.test(path) });
     case 'javascript':
-      return javascript({ jsx: false });
+      return javascript({ jsx: /\.jsx$/i.test(path) });
     case 'html':
       return html();
     case 'css':
@@ -206,8 +206,9 @@ export default function Editor({
           : null;
 
     return [
-      getLanguageExtension(file.language),
+      getLanguageExtension(file.language, file.path),
       fontExtension,
+      EditorView.contentAttributes.of({ autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' }),
       EditorState.tabSize.of(Math.max(1, Math.min(8, tabSize))),
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
@@ -236,6 +237,7 @@ export default function Editor({
   }, [
     autocompleteEnabled,
     file.language,
+    file.path,
     fontFamily,
     fontSize,
     hoverProvider,
