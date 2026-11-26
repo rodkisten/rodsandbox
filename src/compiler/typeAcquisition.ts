@@ -78,19 +78,55 @@ async function acquire(name: string, version: string): Promise<Map<string, strin
   return files;
 }
 
+function acquireOnce(name: string, version: string): Promise<Map<string, string>> {
+  const key = name + '@' + version;
+  let task = pending.get(key);
+  if (!task) {
+    task = acquire(name, version).then(async result => {
+      if (result.size || name.startsWith('@types/')) return result;
+      return acquire('@types/' + name.replace(/^@/, '').replace('/', '__'), 'latest');
+    }).finally(() => pending.delete(key));
+    pending.set(key, task);
+  }
+  return task;
+}
+
 export async function acquireWorkspaceTypes(files: Source[]): Promise<Map<string, string>> {
-  const results = await Promise.all([...packages(files)].slice(0, 24).map(([name, version]) => {
-    const key = name + '@' + version;
-    let task = pending.get(key);
-    if (!task) {
-      task = acquire(name, version).then(async result => {
-        if (result.size || name.startsWith('@types/')) return result;
-        const fallback = '@types/' + name.replace(/^@/, '').replace('/', '__');
-        return acquire(fallback, 'latest');
-      }).finally(() => pending.delete(key));
-      pending.set(key, task);
+  const requested = packages(files);
+  const result = new Map<string, string>();
+  const visited = new Set<string>();
+  let frontier = [...requested];
+  for (let depth = 0; depth < 3 && frontier.length && visited.size < 24; depth++) {
+    const batch = frontier.filter(([name]) => !visited.has(name)).slice(0, 24 - visited.size);
+    for (const [name] of batch) visited.add(name);
+    const acquired = await Promise.all(batch.map(([name, version]) => acquireOnce(name, version)));
+    const next = new Map<string, string>();
+    for (const entries of acquired) {
+      const declared = new Map<string, string>();
+      for (const [path, content] of entries) {
+        result.set(path, content);
+        if (!path.endsWith('/package.json')) continue;
+        try {
+          const manifest = JSON.parse(content);
+          for (const [name, version] of Object.entries({ ...manifest.peerDependencies, ...manifest.dependencies })) {
+            if (typeof version === 'string' && /^(?:[~^]?\d+(?:\.\d+){0,2}(?:-[\w.-]+)?|latest|\*)$/.test(version)) declared.set(name, version);
+          }
+        } catch { /* Invalid package metadata. */ }
+      }
+      for (const [path, content] of entries) {
+        if (!/\.d\.[cm]?ts$/.test(path)) continue;
+        const refs = ts.preProcessFile(content, true, true);
+        for (const ref of [...refs.importedFiles, ...refs.typeReferenceDirectives]) {
+          const match = ref.fileName.match(/^(@[\w.-]+\/[\w.-]+|[\w-][\w.-]*)(?:\/|$)/);
+          if (!match || visited.has(match[1])) continue;
+          const name = match[1];
+          const version = requested.get(name) ?? declared.get(name);
+          if (version) next.set(name, version);
+          else if (refs.typeReferenceDirectives.includes(ref)) next.set('@types/' + name.replace(/^@/, '').replace('/', '__'), 'latest');
+        }
+      }
     }
-    return task;
-  }));
-  return new Map(results.flatMap(result => [...result]));
+    frontier = [...next];
+  }
+  return result;
 }
