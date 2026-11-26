@@ -1,12 +1,12 @@
 import ts from 'typescript';
-import { manifestVersions } from '@/bundler/moduleResolver';
+import { resolveManifestVersions } from '@/bundler/moduleResolver';
 import { readDeclarations, writeDeclarations } from './typeCache';
 
 type Source = { path: string; content: string };
 const pending = new Map<string, Promise<Map<string, string>>>();
 
-function packages(files: Source[]): Map<string, string> {
-  const versions = new Map(Object.entries(manifestVersions(files)));
+async function packages(files: Source[]): Promise<Map<string, string>> {
+  const versions = new Map(Object.entries(await resolveManifestVersions(files)));
   const imports = new Set<string>();
   for (const file of files) {
     if (!/\.[cm]?[jt]sx?$/.test(file.path)) continue;
@@ -83,7 +83,7 @@ function acquireOnce(name: string, version: string): Promise<Map<string, string>
 }
 
 export async function acquireWorkspaceTypes(files: Source[]): Promise<Map<string, string>> {
-  const requested = packages(files);
+  const requested = await packages(files);
   const result = new Map<string, string>();
   const visited = new Set<string>();
   let frontier = [...requested];

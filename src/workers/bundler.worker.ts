@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { manifestVersions, moduleUrl } from '@/bundler/moduleResolver';
+import { resolveManifestVersions, moduleUrl } from '@/bundler/moduleResolver';
 import type { Diagnostic } from '@/types';
 import type { BundlerBuildRequest, BundlerMessage, WorkerFileInput } from './messages';
 import { inferVirtualLoader, normalizeVirtualPath, resolveVirtualImportPath, resolveWithKnownExtensions } from '@/bundler/pathResolver';
@@ -86,7 +86,7 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
   const fileLookup = buildFileLookup(req.files);
   const entryFile = normalizeVirtualPath(req.entryFile);
   const dependencies = extractDependencies(req.files);
-  const pkgDeps = manifestVersions(req.files);
+  const pkgDeps = await resolveManifestVersions(req.files);
   const importMap: Record<string, string> = Object.create(null);
 
   try {
