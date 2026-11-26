@@ -1,4 +1,6 @@
 /// <reference lib="webworker" />
+import * as localEsbuild from 'esbuild-wasm';
+import wasmURL from 'esbuild-wasm/esbuild.wasm?url';
 import { resolveManifestVersions, moduleUrl } from '@/bundler/moduleResolver';
 import type { Diagnostic } from '@/types';
 import type { BundlerBuildRequest, BundlerMessage, WorkerFileInput } from './messages';
@@ -25,8 +27,7 @@ interface EsbuildApi {
 
 let esbuild: EsbuildApi | null = null;
 let latestRequestId = 0;
-const ESBUILD_VERSION = '0.27.0';
-const ESBUILD_WASM_URL = `https://esm.sh/esbuild-wasm@${ESBUILD_VERSION}/esbuild.wasm`;
+
 
 // ─── package.json helpers ─────────────────────────────────────────────────────
 
@@ -54,14 +55,13 @@ function buildFileLookup(files: WorkerFileInput[]): Map<string, WorkerFileInput>
 async function ensureEsbuild(): Promise<EsbuildApi> {
   if (esbuild) return esbuild;
   try {
-    // @ts-expect-error Remote ESM module is resolved in worker runtime.
-    const loaded = (await import('https://esm.sh/esbuild-wasm@0.27.0')) as EsbuildApi;
-    await loaded.initialize({ wasmURL: ESBUILD_WASM_URL, worker: false });
+    const loaded = localEsbuild as unknown as EsbuildApi;
+    await loaded.initialize({ wasmURL, worker: false });
     esbuild = loaded;
     return loaded;
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'unknown error';
-    throw new Error(`Failed to initialize esbuild-wasm from https://esm.sh/esbuild-wasm@0.27.0. Check network/CSP availability. ${reason}`);
+    throw new Error(`Failed to initialize local esbuild-wasm. Check asset availability and CSP. ${reason}`);
   }
 }
 
