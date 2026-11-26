@@ -17,6 +17,7 @@ import ReplPanel from './ReplPanel';
 import TerminalPanel from './TerminalPanel';
 import GitPanel from './GitPanel';
 import StatusBar from './StatusBar';
+import { EditorTabs, PanelHeader } from './workbench/WorkbenchChrome';
 import CommandPalette, { CommandPaletteCommand } from '@/components/ui/CommandPalette';
 import { buildPreviewHtml } from '@/preview/builder';
 import { downloadFile } from '@/lib/download';
@@ -1047,12 +1048,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         >
           <Panel id="m-files" defaultSize={settings.layoutSizes.mobileFiles} minSize={12} collapsible collapsedSize={6} panelRef={filesPanelRef}>
             <div className="flex h-full flex-col border-b border-neutral-800">
-              <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                <span>Files</span>
-                <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-files', filesPanelRef)} className="h-6 w-6">
-                  {isPanelCollapsed('m-files') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
+              <PanelHeader title="Files" collapsed={isPanelCollapsed('m-files')} onToggle={() => togglePanelCollapse('m-files', filesPanelRef)} />
               <FileTree
                 workspace={workspace}
                 activeFileId={workspace.activeFileId}
@@ -1072,12 +1068,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
           <ResizeGrip />
           <Panel id="m-editor" defaultSize={settings.layoutSizes.mobileEditor} minSize={18} collapsible collapsedSize={6} panelRef={editorPanelRef}>
             <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
-              <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                <span>Editor</span>
-                <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-editor', editorPanelRef)} className="h-6 w-6">
-                  {isPanelCollapsed('m-editor') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
+              <PanelHeader title="Editor" collapsed={isPanelCollapsed('m-editor')} onToggle={() => togglePanelCollapse('m-editor', editorPanelRef)} />
               {activeFile ? (
                 <Editor
                   file={activeFile}
@@ -1202,12 +1193,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
               >
                 <Panel id="d-files" defaultSize={settings.layoutSizes.sidebarWidth} minSize={12} maxSize={35} collapsible collapsedSize={6} panelRef={filesPanelRef}>
                   <div className="flex h-full flex-col">
-                    <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                      <span>{settings.sidebarView === 'git' ? 'Source Control' : 'Explorer'}</span>
-                      <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-files', filesPanelRef)} className="h-6 w-6">
-                        {isPanelCollapsed('d-files') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
+                    <PanelHeader title={settings.sidebarView === 'git' ? 'Source Control' : 'Explorer'} collapsed={isPanelCollapsed('d-files')} onToggle={() => togglePanelCollapse('d-files', filesPanelRef)} />
                     {settings.sidebarView === 'git' && FEATURE_FLAGS.ENABLE_GIT ? (
                       <GitPanel
                         workspace={workspace}
@@ -1236,34 +1222,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                 <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
                 <Panel id="d-editor" defaultSize={Math.max(20, 100 - settings.layoutSizes.sidebarWidth - settings.layoutSizes.previewWidth)} minSize={30} collapsible collapsedSize={6} panelRef={editorPanelRef}>
                   <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
-                    {/* Editor tab bar */}
-                    <div className="flex flex-shrink-0 items-center gap-0 overflow-x-auto border-b border-neutral-800 bg-neutral-900 scrollbar-none">
-                      {settings.openedFileIds.map((fileId) => {
-                        const file = workspace.files[fileId];
-                        if (!file) return null;
-                        const isActive = fileId === settings.activeFileId;
-                        return (
-                          <button
-                            key={fileId}
-                            type="button"
-                            className={`group flex flex-shrink-0 items-center gap-1.5 border-r border-neutral-800 px-3 py-1.5 text-[12px] transition ${
-                              isActive
-                                ? 'border-t-2 border-t-[#007acc] bg-neutral-950 text-white'
-                                : 'text-neutral-500 hover:bg-neutral-800/60 hover:text-neutral-300'
-                            }`}
-                            onClick={() => setActiveFile(fileId)}
-                          >
-                            <span className="max-w-[120px] truncate">{file.name}</span>
-                            <span
-                              className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition hover:bg-neutral-700 group-hover:opacity-100"
-                              onClick={(e) => { e.stopPropagation(); handleCloseTab(fileId); }}
-                            >
-                              <X className="h-2.5 w-2.5" />
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <EditorTabs items={settings.openedFileIds.flatMap(id => workspace.files[id] ? [{ id, label: workspace.files[id].name }] : [])} activeId={settings.activeFileId} onSelect={setActiveFile} onClose={handleCloseTab} />
                     {activeFile ? (
                       <Editor
                         file={activeFile}
@@ -1297,12 +1256,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                 <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
                 <Panel id="d-preview" defaultSize={settings.layoutSizes.previewWidth} minSize={20} collapsible collapsedSize={6} panelRef={previewPanelRef}>
                   <div className="flex h-full flex-col overflow-hidden">
-                    <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                      <span>Preview</span>
-                      <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-preview', previewPanelRef)} className="h-6 w-6">
-                        {isPanelCollapsed('d-preview') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
+                    <PanelHeader title="Preview" collapsed={isPanelCollapsed('d-preview')} onToggle={() => togglePanelCollapse('d-preview', previewPanelRef)} />
                     <PreviewPanel
                       ref={previewRef}
                       previewHtml={previewHtml}
