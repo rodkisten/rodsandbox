@@ -106,6 +106,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [dependencies, setDependencies] = useState<string[]>([]);
+  const [resolvedImports, setResolvedImports] = useState<Record<string, string>>({});
   const [isFormatting, setIsFormatting] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [pluginEditorExtensions, setPluginEditorExtensions] = useState<Extension[]>([]);
@@ -256,6 +257,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     if (!hasRunnableSource || !FEATURE_FLAGS.ENABLE_TYPESCRIPT_COMPILER) {
       setDiagnostics([]);
       setDependencies([]);
+      setResolvedImports({});
       return { files: {}, diagnosticsCount: 0, bundledCode: '', bundledCssText: '', dependencies: [] };
     }
 
@@ -286,6 +288,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     bundlerRef.current = bundler;
     const bundleResult = await bundler.build(runtimeFiles, entryFile);
     setDependencies(bundleResult.dependencies);
+    setResolvedImports(bundleResult.importMap ?? {});
 
     const normalizedTsDiagnostics = tsDiagnostics.map((diag) => ({
       ...diag,
@@ -942,7 +945,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
     }
     if (settings.bottomTab === 'diagnostics') {
-      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} packageJsonContent={packageJsonContent} onAddPackage={handleAddPackage} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>;
+      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel importMap={resolvedImports} dependencies={dependencies} packageJsonContent={packageJsonContent} onAddPackage={handleAddPackage} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>;
     }
     if (settings.bottomTab === 'terminal' && FEATURE_FLAGS.ENABLE_TERMINAL) {
       return <TerminalPanel workspace={workspace} onDetach={handleDetachTerminal} />;
