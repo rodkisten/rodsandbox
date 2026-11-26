@@ -1,0 +1,57 @@
+name: ☁️ SB · Cloudflare
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sandbox-cloudflare-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  deploy:
+    if: github.event.action != 'closed' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rodkisten/github/setup-pnpm@main
+        with:
+          node-version: '22'
+      - name: Validate and build browser application
+        run: |
+          pnpm typecheck
+          pnpm test
+          pnpm run build:browser
+          test -f dist/index.html
+      - name: Deploy
+        run: |
+          node scripts/cloudflare-config.mjs
+          pnpm dlx wrangler@4 deploy --config wrangler.generated.json
+      - name: Update preview comment
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "$PR_NUMBER" --edit-last --create-if-none --body "$(printf '☁️ RodSandbox preview\n\nhttps://pr-%s.sandbox.migos.club\n\nSHA: `%s`' "$PR_NUMBER" "$GITHUB_SHA")"
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npx --yes wrangler@4 delete --name "rodsandbox-pr-$PR_NUMBER" --force
