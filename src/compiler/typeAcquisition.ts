@@ -1,21 +1,12 @@
 import ts from 'typescript';
+import { manifestVersions } from '@/bundler/moduleResolver';
 import { readDeclarations, writeDeclarations } from './typeCache';
 
 type Source = { path: string; content: string };
 const pending = new Map<string, Promise<Map<string, string>>>();
 
 function packages(files: Source[]): Map<string, string> {
-  const manifest = files.find(f => f.path.replace(/^\//, '') === 'package.json');
-  const versions = new Map<string, string>();
-  if (!manifest) return versions;
-  try {
-    const data = JSON.parse(manifest.content);
-    for (const section of ['dependencies', 'devDependencies']) {
-      for (const [name, version] of Object.entries(data[section] ?? {})) {
-        if (typeof version === 'string' && /^(?:[~^]?\d+(?:\.\d+){0,2}(?:-[\w.-]+)?|latest|\*)$/.test(version)) versions.set(name, version);
-      }
-    }
-  } catch { /* Invalid manifest while editing. */ }
+  const versions = new Map(Object.entries(manifestVersions(files)));
   const imports = new Set<string>();
   for (const file of files) {
     if (!/\.[cm]?[jt]sx?$/.test(file.path)) continue;

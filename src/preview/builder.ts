@@ -217,7 +217,7 @@ export function buildPreviewHtml(input: PreviewBuildInput): string {
 
   const interceptorScript = `<script>\n${sanitizeInlineScriptContent(CONSOLE_INTERCEPTOR)}\n</script>`;
   const runtimeScript = input.bundledCode && input.bundledCode.trim().length > 0 ? input.bundledCode : jsBlocks;
-  const userScript = runtimeScript ? `<script>\n${sanitizeInlineScriptContent(runtimeScript)}\n</script>` : '';
+  const userScript = runtimeScript ? `<script${input.bundledCode?.trim() ? ' type="module"' : ''}>\n${sanitizeInlineScriptContent(runtimeScript)}\n</script>` : '';
   const encodedPluginScripts = (input.injectedScripts ?? []).map((script) =>
     encodeURIComponent(script),
   );
