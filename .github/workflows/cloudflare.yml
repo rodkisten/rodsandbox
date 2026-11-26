@@ -43,7 +43,7 @@ jobs:
         if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
         run: |
           host=sandbox.migos.club
-          if [ -n "$PR_NUMBER" ]; then host="pr-$PR_NUMBER.$host"; fi
+          if [ -n "$PR_NUMBER" ]; then host="pr$PR_NUMBER.$host"; fi
           curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "https://$host/api/health"
           curl --fail --silent --show-error --retry 5 --retry-all-errors "https://$host/" -o /tmp/sandbox-preview.html
       - name: Update preview comment
@@ -52,7 +52,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           marker='<!-- rodsandbox-cloudflare-preview -->'
-          body="$(printf '%s\n☁️ RodSandbox preview\n\nhttps://pr-%s.sandbox.migos.club\n\nSHA: `%s`' "$marker" "$PR_NUMBER" "$GITHUB_SHA")"
+          body="$(printf '%s\n☁️ RodSandbox preview\n\nhttps://pr%s.sandbox.migos.club\n\nSHA: `%s`' "$marker" "$PR_NUMBER" "$GITHUB_SHA")"
           id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- rodsandbox-cloudflare-preview -->"))) | .id' | head -n 1)
           if [ -n "$id" ]; then
             gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body"
