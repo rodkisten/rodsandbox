@@ -27,10 +27,10 @@ export function useWorkspace(workspaceId?: string) {
   useEffect(() => {
     let cancelled = false;
     Db.loadWorkspace(resolvedId).then((saved) => {
-      if (!cancelled && saved) setWorkspace(saved);
+      if (!cancelled) setWorkspace(saved ?? createDefaultWorkspace(resolvedId));
       if (!cancelled) setLoadedId(resolvedId);
     }).catch(() => {
-      if (!cancelled) setLoadedId(resolvedId);
+      if (!cancelled) { setWorkspace(createDefaultWorkspace(resolvedId)); setLoadedId(resolvedId); }
     });
     return () => { cancelled = true; };
   }, [resolvedId]);

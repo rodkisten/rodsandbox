@@ -1,5 +1,6 @@
 import React from 'react';
 import { createRootRoute, createRoute, createRouter, Outlet, Link } from '@tanstack/react-router';
+import LocalWorkspaces from './LocalWorkspaces';
 import Playground from '@/components/layout/Playground';
 
 const rootRoute = createRootRoute({
@@ -16,12 +17,17 @@ const workspaceRoute = createRoute({
   path: '/w/$workspaceId',
   component: WorkspacePage,
 });
+const workspacesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workspaces',
+  component: LocalWorkspaces,
+});
 function WorkspacePage() {
   const { workspaceId } = workspaceRoute.useParams();
   if (!/^[a-zA-Z0-9_-]+$/.test(workspaceId)) return <Link to="/">Invalid workspace. Return home.</Link>;
   return <Playground key={workspaceId} workspaceId={workspaceId} />;
 }
-export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, workspaceRoute]) });
+export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, workspaceRoute, workspacesRoute]) });
 declare module '@tanstack/react-router' {
   interface Register { router: typeof router }
 }
