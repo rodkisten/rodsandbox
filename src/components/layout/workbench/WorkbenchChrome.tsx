@@ -23,3 +23,10 @@ export function PanelHeader({ title, collapsed, onToggle }: { title: React.React
     {onToggle && <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={collapsed ? 'Expand panel' : 'Collapse panel'} aria-expanded={!collapsed} onClick={onToggle}>{collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}</Button>}
   </div>;
 }
+
+export interface ActivityItem { id: string; label: string; icon: React.ComponentType<{ className?: string }> }
+export function ActivityBar({ items, activeId, onSelect }: { items: ActivityItem[]; activeId: string; onSelect: (id: string) => void }) {
+  return <nav aria-label="Workbench views" className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-border bg-muted/40 py-2">
+    {items.map(({ id, label, icon: Icon }) => <Button key={id} type="button" size="icon" variant={activeId === id ? 'secondary' : 'ghost'} aria-label={label} aria-pressed={activeId === id} title={label} onClick={() => onSelect(id)} className="h-9 w-9"><Icon className="h-4 w-4" /></Button>)}
+  </nav>;
+}

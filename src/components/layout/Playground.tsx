@@ -17,7 +17,7 @@ import ReplPanel from './ReplPanel';
 import TerminalPanel from './TerminalPanel';
 import GitPanel from './GitPanel';
 import StatusBar from './StatusBar';
-import { EditorTabs, PanelHeader } from './workbench/WorkbenchChrome';
+import { ActivityBar, EditorTabs, PanelHeader } from './workbench/WorkbenchChrome';
 import CommandPalette, { CommandPaletteCommand } from '@/components/ui/CommandPalette';
 import { buildPreviewHtml } from '@/preview/builder';
 import { downloadFile } from '@/lib/download';
@@ -71,7 +71,7 @@ function useMobilePortrait() {
 }
 
 function ResizeGrip() {
-  return <Separator className="relative flex h-3 items-center justify-center bg-neutral-900/70 transition-colors hover:bg-neutral-500/25 data-[resize-handle-active]:bg-neutral-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
+  return <Separator className="relative flex h-3 items-center justify-center bg-muted/40 transition-colors hover:bg-neutral-500/25 data-[resize-handle-active]:bg-neutral-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
 }
 
 export default function Playground({ workspaceId, userId }: { workspaceId?: string; userId?: string }) {
@@ -976,7 +976,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   };
 
   if (loading || settingsLoading) {
-    return <div className="flex h-screen items-center justify-center bg-neutral-950 text-neutral-400">Loading workspace…</div>;
+    return <div className="flex h-screen items-center justify-center bg-background text-neutral-400">Loading workspace…</div>;
   }
 
   return (
@@ -1047,7 +1047,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
           }}
         >
           <Panel id="m-files" defaultSize={settings.layoutSizes.mobileFiles} minSize={12} collapsible collapsedSize={6} panelRef={filesPanelRef}>
-            <div className="flex h-full flex-col border-b border-neutral-800">
+            <div className="flex h-full flex-col border-b border-border">
               <PanelHeader title="Files" collapsed={isPanelCollapsed('m-files')} onToggle={() => togglePanelCollapse('m-files', filesPanelRef)} />
               <FileTree
                 workspace={workspace}
@@ -1067,7 +1067,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
           </Panel>
           <ResizeGrip />
           <Panel id="m-editor" defaultSize={settings.layoutSizes.mobileEditor} minSize={18} collapsible collapsedSize={6} panelRef={editorPanelRef}>
-            <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
+            <div className="flex h-full flex-col overflow-hidden bg-background">
               <PanelHeader title="Editor" collapsed={isPanelCollapsed('m-editor')} onToggle={() => togglePanelCollapse('m-editor', editorPanelRef)} />
               {activeFile ? (
                 <Editor
@@ -1092,7 +1092,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                   jumpTo={editorJumpTarget}
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-neutral-600">Select a file to edit</div>
+                <div className="flex h-full items-center justify-center text-muted-foreground">Select a file to edit</div>
               )}
             </div>
           </Panel>
@@ -1107,8 +1107,8 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
           </Panel>
           <ResizeGrip />
           <Panel id="m-bottom" defaultSize={settings.layoutSizes.mobileBottom} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
-            <div className="flex h-full flex-col overflow-hidden border-t border-neutral-800">
-              <div className="flex flex-shrink-0 items-center border-b border-neutral-800 bg-neutral-900 px-1 py-1">
+            <div className="flex h-full flex-col overflow-hidden border-t border-border">
+              <div className="flex flex-shrink-0 items-center border-b border-border bg-muted/40 px-1 py-1">
                 <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
                   <TabsList className="bg-transparent p-0">
                     <TabsTrigger value="console">{t('tabs.console')}</TabsTrigger>
@@ -1147,32 +1147,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         >
           <Panel id="d-main" defaultSize={100 - settings.layoutSizes.bottomPanelHeight} minSize={30}>
             <div className="flex h-full flex-row overflow-hidden">
-              {/* Activity bar */}
-              <div className="flex w-10 flex-shrink-0 flex-col items-center gap-1 border-r border-neutral-800 bg-neutral-900 py-2">
-                <button
-                  type="button"
-                  title="Files"
-                  onClick={() => updateSettings((prev) => ({ ...prev, sidebarView: 'files' }))}
-                  className={`flex h-9 w-9 items-center justify-center rounded transition ${settings.sidebarView === 'files' ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
-                >
-                  <Files className="h-5 w-5" />
-                </button>
-                {FEATURE_FLAGS.ENABLE_GIT && (
-                  <button
-                    type="button"
-                    title="Source Control"
-                    onClick={() => updateSettings((prev) => ({ ...prev, sidebarView: 'git' }))}
-                    className={`relative flex h-9 w-9 items-center justify-center rounded transition ${settings.sidebarView === 'git' ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
-                  >
-                    <GitBranchIcon className="h-5 w-5" />
-                    {errorCount > 0 && (
-                      <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
-                        {errorCount > 9 ? '9+' : errorCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-              </div>
+              <ActivityBar items={[{ id: 'files', label: 'Files', icon: Files }, ...(FEATURE_FLAGS.ENABLE_GIT ? [{ id: 'git', label: 'Source Control', icon: GitBranchIcon }] : [])]} activeId={settings.sidebarView} onSelect={id => updateSettings(prev => ({ ...prev, sidebarView: id as typeof prev.sidebarView }))} />
               <Group
                 orientation="horizontal"
                 defaultLayout={{
@@ -1219,9 +1194,9 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                     )}
                   </div>
                 </Panel>
-                <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
+                <Separator className="w-2 bg-muted/40 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
                 <Panel id="d-editor" defaultSize={Math.max(20, 100 - settings.layoutSizes.sidebarWidth - settings.layoutSizes.previewWidth)} minSize={30} collapsible collapsedSize={6} panelRef={editorPanelRef}>
-                  <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
+                  <div className="flex h-full flex-col overflow-hidden bg-background">
                     <EditorTabs items={settings.openedFileIds.flatMap(id => workspace.files[id] ? [{ id, label: workspace.files[id].name }] : [])} activeId={settings.activeFileId} onSelect={setActiveFile} onClose={handleCloseTab} />
                     {activeFile ? (
                       <Editor
@@ -1246,14 +1221,14 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                         jumpTo={editorJumpTarget}
                       />
                     ) : (
-                      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-neutral-600">
+                      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
                         <Files className="h-10 w-10 opacity-20" />
                         <span className="text-sm">Select a file to edit</span>
                       </div>
                     )}
                   </div>
                 </Panel>
-                <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
+                <Separator className="w-2 bg-muted/40 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
                 <Panel id="d-preview" defaultSize={settings.layoutSizes.previewWidth} minSize={20} collapsible collapsedSize={6} panelRef={previewPanelRef}>
                   <div className="flex h-full flex-col overflow-hidden">
                     <PanelHeader title="Preview" collapsed={isPanelCollapsed('d-preview')} onToggle={() => togglePanelCollapse('d-preview', previewPanelRef)} />
@@ -1270,11 +1245,11 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
           </Panel>
           <ResizeGrip />
           <Panel id="d-bottom" defaultSize={settings.layoutSizes.bottomPanelHeight} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
-            <div className="flex h-full flex-col overflow-hidden border-t border-neutral-800">
-              <div className="flex flex-shrink-0 items-center border-b border-neutral-800 bg-neutral-900 px-1 py-1">
+            <div className="flex h-full flex-col overflow-hidden border-t border-border">
+              <div className="flex flex-shrink-0 items-center border-b border-border bg-muted/40 px-1 py-1">
                 <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
                   <TabsList className="bg-transparent p-0">
-                    <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-neutral-500">{logs.length}</span> : null}</TabsTrigger>
+                    <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-muted-foreground">{logs.length}</span> : null}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
                     <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger>
                     {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}
