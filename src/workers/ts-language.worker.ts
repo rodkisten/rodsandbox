@@ -3,28 +3,31 @@ import { BrowserTypeScriptCompiler, parseTsConfigCompilerOptions } from '@/compi
 import type { Diagnostic } from '@/types';
 import type { TsMessage } from './messages';
 
-const WORKER_IDLE_TIMEOUT_MS = 45_000;
+let libraryPromise: Promise<Record<string, string>> | undefined;
+function loadLibraries() {
+  return libraryPromise ??= fetch('/typescript-libs.json').then(async (response) => {
+    if (!response.ok) throw new Error('TypeScript standard libraries unavailable');
+    return await response.json() as Record<string, string>;
+  }).catch((error: unknown) => { libraryPromise = undefined; throw error; });
+}
 let compiler: BrowserTypeScriptCompiler | null = null;
-let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let lastTsConfigHash: string | null = null;
 let previousPaths = new Set<string>();
 
-function refreshIdleTimer() {
-  if (idleTimer) clearTimeout(idleTimer);
-  idleTimer = setTimeout(() => {
-    compiler = null;
-    lastTsConfigHash = null;
-    previousPaths.clear();
-  }, WORKER_IDLE_TIMEOUT_MS);
-}
 
-function ensureCompiler(): BrowserTypeScriptCompiler {
-  compiler ??= new BrowserTypeScriptCompiler();
+async function ensureCompiler(): Promise<BrowserTypeScriptCompiler> {
+  if (!compiler) {
+    const libraries = await loadLibraries();
+    if (!compiler) {
+      compiler = new BrowserTypeScriptCompiler();
+      compiler.setLibraries(libraries);
+    }
+  }
   return compiler;
 }
 
-function syncFiles(files: Array<{ path: string; content: string }>) {
-  const service = ensureCompiler();
+async function syncFiles(files: Array<{ path: string; content: string }>) {
+  const service = await ensureCompiler();
 
   // Detect tsconfig.json and apply compiler options if changed
   const tsConfig = files.find((f) => f.path === '/tsconfig.json' || f.path === 'tsconfig.json');
@@ -38,7 +41,6 @@ function syncFiles(files: Array<{ path: string; content: string }>) {
   for (const path of previousPaths) if (!nextPaths.has(path)) service.removeFile(path);
   for (const file of files) service.updateFile(file.path, file.content);
   previousPaths = nextPaths;
-  refreshIdleTimer();
   return service;
 }
 
@@ -54,12 +56,12 @@ function createWorkerFailureDiagnostic(fileId: string, error: unknown): Diagnost
   };
 }
 
-self.onmessage = (event: MessageEvent<TsMessage>) => {
+self.onmessage = async (event: MessageEvent<TsMessage>) => {
   const msg = event.data;
 
   if (msg.type === 'TS_DIAGNOSTICS') {
     try {
-      const service = syncFiles(msg.files);
+      const service = await syncFiles(msg.files);
       const diagnostics = service.compile().diagnostics;
       self.postMessage({ type: 'TS_DIAGNOSTICS_RESULT', requestId: msg.requestId, diagnostics });
     } catch (error) {
@@ -74,7 +76,7 @@ self.onmessage = (event: MessageEvent<TsMessage>) => {
 
   if (msg.type === 'TS_COMPLETIONS') {
     try {
-      const service = syncFiles(msg.files);
+      const service = await syncFiles(msg.files);
       const items = service.getCompletions(msg.path, msg.position);
       self.postMessage({ type: 'TS_COMPLETIONS_RESULT', requestId: msg.requestId, items });
     } catch {
@@ -85,7 +87,7 @@ self.onmessage = (event: MessageEvent<TsMessage>) => {
 
   if (msg.type === 'TS_QUICK_INFO') {
     try {
-      const service = syncFiles(msg.files);
+      const service = await syncFiles(msg.files);
       const info = service.getQuickInfo(msg.path, msg.position);
       self.postMessage({ type: 'TS_QUICK_INFO_RESULT', requestId: msg.requestId, info });
     } catch {
@@ -96,7 +98,7 @@ self.onmessage = (event: MessageEvent<TsMessage>) => {
 
   if (msg.type === 'TS_DEFINITION') {
     try {
-      const service = syncFiles(msg.files);
+      const service = await syncFiles(msg.files);
       const location = service.getDefinitionLocation(msg.path, msg.position);
       self.postMessage({ type: 'TS_DEFINITION_RESULT', requestId: msg.requestId, location });
     } catch {

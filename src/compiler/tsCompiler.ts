@@ -359,25 +359,26 @@ declare function eval(x: string): unknown;
 function createLanguageServiceHost(
   files: Map<string, string>,
   getVersion: () => number,
-  getCompilerOptions: () => ts.CompilerOptions
+  getCompilerOptions: () => ts.CompilerOptions,
+  libraries: Map<string, string>
 ): ts.LanguageServiceHost {
   return {
-    getScriptFileNames: () => [VIRTUAL_LIB_NAME, ...Array.from(files.keys())],
+    getScriptFileNames: () => [...(libraries.size ? [] : [VIRTUAL_LIB_NAME]), ...Array.from(files.keys())],
     getScriptVersion: () => String(getVersion()),
     getScriptSnapshot: (fileName) => {
       if (fileName === VIRTUAL_LIB_NAME) {
         return ts.ScriptSnapshot.fromString(MINIMAL_LIB_D_TS);
       }
-      const content = files.get(fileName);
+      const content = libraries.get(fileName) ?? files.get(fileName);
       if (content === undefined) return undefined;
       return ts.ScriptSnapshot.fromString(content);
     },
-    getDefaultLibFileName: () => VIRTUAL_LIB_NAME,
+    getDefaultLibFileName: (options) => libraries.size ? '/' + ts.getDefaultLibFileName(options) : VIRTUAL_LIB_NAME,
     fileExists: (fileName) =>
-      fileName === VIRTUAL_LIB_NAME || files.has(fileName),
+      fileName === VIRTUAL_LIB_NAME || libraries.has(fileName) || files.has(fileName),
     readFile: (fileName) => {
       if (fileName === VIRTUAL_LIB_NAME) return MINIMAL_LIB_D_TS;
-      return files.get(fileName);
+      return libraries.get(fileName) ?? files.get(fileName);
     },
     readDirectory: () => [],
     getCurrentDirectory: () => '/',
@@ -483,12 +484,13 @@ export function parseTsConfigCompilerOptions(raw: string): ts.CompilerOptions {
  */
 export class BrowserTypeScriptCompiler {
   private files: Map<string, string> = new Map();
+  private libraries = new Map<string, string>();
   private version = 0;
   private compilerOptions: ts.CompilerOptions = { ...DEFAULT_COMPILER_OPTIONS };
   private languageService: ts.LanguageService;
 
   constructor() {
-    const host = createLanguageServiceHost(this.files, () => this.version, () => this.compilerOptions);
+    const host = createLanguageServiceHost(this.files, () => this.version, () => this.compilerOptions, this.libraries);
     this.languageService = ts.createLanguageService(host, ts.createDocumentRegistry());
   }
 
@@ -498,6 +500,12 @@ export class BrowserTypeScriptCompiler {
    */
   setCompilerOptions(options: ts.CompilerOptions): void {
     this.compilerOptions = options;
+    this.version++;
+  }
+
+  setLibraries(libraries: Record<string, string>): void {
+    this.libraries.clear();
+    for (const [name, content] of Object.entries(libraries)) this.libraries.set('/' + name, content);
     this.version++;
   }
 
