@@ -34,17 +34,25 @@ jobs:
           pnpm run build:browser
           test -f dist/index.html
       - name: Deploy
+        if: vars.SANDBOX_DEPLOY_ENABLED == 'true'
         run: |
           node scripts/cloudflare-config.mjs
           pnpm dlx wrangler@4 deploy --config wrangler.generated.json
       - name: Update preview comment
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && vars.SANDBOX_DEPLOY_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh pr comment "$PR_NUMBER" --edit-last --create-if-none --body "$(printf '☁️ RodSandbox preview\n\nhttps://pr-%s.sandbox.migos.club\n\nSHA: `%s`' "$PR_NUMBER" "$GITHUB_SHA")"
+          marker='<!-- rodsandbox-cloudflare-preview -->'
+          body="$(printf '%s\n☁️ RodSandbox preview\n\nhttps://pr-%s.sandbox.migos.club\n\nSHA: `%s`' "$marker" "$PR_NUMBER" "$GITHUB_SHA")"
+          id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- rodsandbox-cloudflare-preview -->"))) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body"
+          else
+            gh pr comment "$PR_NUMBER" --body "$body"
+          fi
   cleanup:
-    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    if: vars.SANDBOX_DEPLOY_ENABLED == 'true' && github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}

@@ -19,7 +19,9 @@
     "test": "vitest run",
     "predev": "node scripts/generate-typescript-libs.mjs",
     "prebuild": "node scripts/generate-typescript-libs.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:browser": "node scripts/generate-typescript-libs.mjs && vite build",
+    "dev:browser": "node scripts/generate-typescript-libs.mjs && vite"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.2",
@@ -71,7 +73,8 @@
     "eslint-config-next": "16.2.6",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "vite": "8.0.14"
   },
   "optionalDependencies": {
     "node-gyp": "^12.3.0"
