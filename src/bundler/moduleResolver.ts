@@ -16,7 +16,12 @@ export function moduleUrl(specifier: string, versions: Record<string, string>): 
   const name = packageName(specifier);
   if (!name || !/^[\w@./-]+$/.test(specifier) || specifier.split('/').includes('..')) return undefined;
   const version = versions[name];
-  return 'https://esm.sh/' + name + (version ? '@' + version : '') + specifier.slice(name.length);
+  const url = 'https://esm.sh/' + name + (version ? '@' + version : '') + specifier.slice(name.length);
+  const react = versions.react;
+  if (name !== 'react' && react && /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(react)) {
+    return url + '?deps=' + encodeURIComponent('react@' + react);
+  }
+  return url;
 }
 
 const exactVersion = /^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/;
