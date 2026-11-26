@@ -1,15 +1,16 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { AuthProvider } from '@/contexts/AuthContext';
+import Playground from '@/components/layout/Playground';
 import '../app/globals.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing application root');
 
-function MigrationShell() {
-  return <main className="flex min-h-screen items-center justify-center">
-    <div role="status">RodSandbox · Browser migration foundation</div>
-  </main>;
+// Local browser workspaces are not remote authentication credentials.
+function BrowserApp() {
+  const match = /^\/w\/([a-zA-Z0-9_-]+)\/?$/.exec(window.location.pathname);
+  const workspaceId = match?.[1] ?? 'default-workspace';
+  return <Playground key={workspaceId} workspaceId={workspaceId} />;
 }
 
-createRoot(root).render(<React.StrictMode><AuthProvider><MigrationShell /></AuthProvider></React.StrictMode>);
+createRoot(root).render(<BrowserApp />);
