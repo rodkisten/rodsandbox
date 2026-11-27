@@ -110,6 +110,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   const [buildStatus, setBuildStatus] = useState<BuildStatus>({ phase: 'idle' });
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [dependencies, setDependencies] = useState<string[]>([]);
+  const [typePaths, setTypePaths] = useState<string[]>([]);
   const [resolvedImports, setResolvedImports] = useState<Record<string, string>>({});
   const [isFormatting, setIsFormatting] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
@@ -147,7 +148,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   const isMobilePortrait = useMobilePortrait();
 
   useEffect(() => {
-    tsWorkerRef.current = new TypeScriptWorkerClient();
+    tsWorkerRef.current = new TypeScriptWorkerClient(setTypePaths);
     formatterWorkerRef.current = new FormatterWorkerClient();
     bundlerRef.current = new EsbuildBundlerService();
     return () => {
@@ -310,7 +311,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       files.push({ path, content });
     }
 
-    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient(setTypePaths);
     tsWorkerRef.current = worker;
     const position = editorCursorRef.current?.fileId === activeFile.id
       ? editorCursorRef.current.position
@@ -328,7 +329,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     const files = listFiles(workspace);
     const sources = files.filter(file => /\.[jt]sx?$|(?:^|\/)(?:package|tsconfig)\.json$/.test(file.path)).map(file => ({ path: file.path, content: file.content }));
     for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) sources.push({ path, content });
-    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient(setTypePaths);
     tsWorkerRef.current = worker;
     const ids = new Map(files.map(file => [file.path, file.id]));
     void worker.getDiagnostics(sources).then(diagnostics => {
@@ -887,7 +888,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         files.push({ path, content });
       }
 
-      const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+      const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient(setTypePaths);
       tsWorkerRef.current = worker;
       let items;
       try { items = await worker.getCompletions(files, activeFile.path, context.pos); }
@@ -915,7 +916,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     if (!activeFile || !['typescript', 'javascript'].includes(activeFile.language)) return null;
     const files = listFiles(workspace).filter(file => ['typescript', 'javascript', 'json'].includes(file.language)).map(file => ({ path: file.path, content: file.id === activeFile.id ? content : file.content }));
     for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) files.push({ path, content });
-    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient(setTypePaths);
     tsWorkerRef.current = worker;
     return worker.getSignatureHelp(files, activeFile.path, position);
   }, [activeFile, workspace]);
@@ -937,7 +938,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       files.push({ path, content });
     }
 
-    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient(setTypePaths);
     tsWorkerRef.current = worker;
     const info = await worker.getQuickInfo(files, activeFile.path, position);
     if (!info) return null;
@@ -973,7 +974,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       return <div className="h-full overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div>;
     }
     if (settings.bottomTab === 'dependencies') {
-      return <div className="h-full overflow-auto"><DependencyPanel importMap={resolvedImports} dependencies={dependencies} packageJsonContent={packageJsonContent} onAddPackage={handleAddPackage} /></div>;
+      return <div className="h-full overflow-auto"><DependencyPanel typePaths={typePaths} importMap={resolvedImports} dependencies={dependencies} packageJsonContent={packageJsonContent} onAddPackage={handleAddPackage} /></div>;
     }
     if (settings.bottomTab === 'plugins') {
       return <div className="h-full overflow-auto"><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /></div>;

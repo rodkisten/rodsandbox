@@ -35,6 +35,7 @@ async function syncFiles(files: Array<{ path: string; content: string }>) {
   if (key !== dependencyKey || Date.now() - dependencyRefresh > 60_000) {
     const dependencies = await acquireWorkspaceTypes(files);
     service.setDependencyFiles(dependencies);
+    self.postMessage({ type: 'TS_TYPES_SNAPSHOT', paths: [...dependencies.keys()].filter(path => /\.d\.[cm]?ts$/.test(path)) });
     dependencyKey = key;
     dependencyRefresh = Date.now();
   }

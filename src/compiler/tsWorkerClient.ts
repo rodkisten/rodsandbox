@@ -9,15 +9,22 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 export class TypeScriptWorkerClient {
   private worker: Worker | null = null;
   private requestId = 0;
+  constructor(private readonly onTypesSnapshot?: (paths: string[]) => void) {}
 
   private getWorker(): Worker {
-    this.worker ??= new Worker(new URL('../workers/ts-language.worker.ts', import.meta.url), { type: 'module' });
+    if (!this.worker) {
+      this.worker = new Worker(new URL('../workers/ts-language.worker.ts', import.meta.url), { type: 'module' });
+      this.worker.addEventListener('message', event => {
+        if (event.data?.type === 'TS_TYPES_SNAPSHOT' && Array.isArray(event.data.paths)) this.onTypesSnapshot?.(event.data.paths);
+      });
+    }
     return this.worker;
   }
 
   private resetWorker(): void {
     this.worker?.terminate();
     this.worker = null;
+    this.onTypesSnapshot?.([]);
   }
 
   private requestWithFallback<Result>(
