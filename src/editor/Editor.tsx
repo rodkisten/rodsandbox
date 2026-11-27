@@ -130,7 +130,21 @@ export default function Editor({
 
   const safeDiagnostics = diagnostics ?? EMPTY_DIAGNOSTICS;
   const safeExtraExtensions = extraExtensions ?? EMPTY_EXTENSIONS;
-  const safeAutocompleteProviders = extraAutocompleteProviders ?? EMPTY_AUTOCOMPLETE_PROVIDERS;
+  const providersRef = useRef(extraAutocompleteProviders);
+  providersRef.current = extraAutocompleteProviders;
+  const hasAutocompleteProviders = extraAutocompleteProviders.length > 0;
+  const stableCompletionSource = useMemo<CompletionSource>(() => async context => {
+    const results = await Promise.all(providersRef.current.map(source => Promise.resolve().then(() => source(context)).catch(() => null)));
+    if (context.aborted) return null;
+    const first = results.find(result => result && result.options.length);
+    if (!first) return null;
+    const options = new Map(first.options.map(option => [option.label, option]));
+    for (const result of results) {
+      if (!result || result.from !== first.from || result.to !== first.to) continue;
+      for (const option of result.options) if (!options.has(option.label)) options.set(option.label, option);
+    }
+    return { ...first, options: [...options.values()] };
+  }, []);
 
   const forwardContentChange = useCallback(
     (value: string) => {
@@ -240,8 +254,8 @@ export default function Editor({
       : null;
 
     const completionExtension =
-      autocompleteEnabled && safeAutocompleteProviders.length > 0
-        ? autocompletion({ override: safeAutocompleteProviders, maxRenderedOptions: 8, activateOnTypingDelay: 180 })
+      autocompleteEnabled && hasAutocompleteProviders
+        ? autocompletion({ override: [stableCompletionSource], maxRenderedOptions: 8, activateOnTypingDelay: 180 })
         : autocompleteEnabled
           ? autocompletion()
           : null;
@@ -251,7 +265,7 @@ export default function Editor({
       fontExtension,
       signatureExtension,
       tooltips({ position: 'fixed', tooltipSpace: () => { const vv = window.visualViewport; const left = vv?.offsetLeft ?? 0; const top = vv?.offsetTop ?? 0; return { left: left + 4, top: top + 4, right: left + (vv?.width ?? window.innerWidth) - 4, bottom: top + (vv?.height ?? window.innerHeight) - 4 }; } }),
-      EditorView.theme({ '.cm-tooltip-autocomplete': { border: '1px solid var(--border-default)', borderRadius: '8px', backgroundColor: 'var(--surface-2)', color: 'var(--app-fg)', boxShadow: '0 8px 24px #0005', maxWidth: 'min(90vw, 420px)' }, '.cm-tooltip-autocomplete > ul': { maxHeight: 'min(180px, 30dvh)', fontFamily: 'var(--font-sans)', fontSize: '12px' }, '.cm-tooltip-autocomplete > ul > li': { padding: '6px 8px' }, '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--surface-3)', color: 'var(--app-fg)' }, '.cm-completionIcon': { opacity: '0.75' } }),
+      EditorView.theme({ '.cm-tooltip-autocomplete': { border: '1px solid var(--border-default)', borderRadius: '8px', backgroundColor: 'var(--surface-2)', color: 'var(--app-fg)', boxShadow: '0 8px 24px #0005', maxWidth: 'min(90vw, 420px)' }, '.cm-tooltip-autocomplete > ul': { maxHeight: 'min(180px, 30dvh)', fontFamily: 'var(--font-sans)', fontSize: '12px' }, '.cm-tooltip-autocomplete > ul > li': { padding: '6px 8px' }, '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--surface-3)', color: 'var(--app-fg)' }, '.cm-completionIcon': { opacity: '0.85', fontFamily: 'monospace', fontSize: '11px' }, '.cm-completionIcon-keyword:after': { content: '"K"' }, '.cm-completionIcon-function:after': { content: '"ƒ"' }, '.cm-completionIcon-variable:after': { content: '"v"' }, '.cm-completionIcon-property:after': { content: '"p"' }, '.cm-completionIcon-class:after': { content: '"C"' }, '.cm-completionIcon-type:after': { content: '"T"' } }),
       EditorView.contentAttributes.of({ autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' }),
       EditorState.tabSize.of(Math.max(1, Math.min(8, tabSize))),
       history({ minDepth: Math.max(1, historyDepth), newGroupDelay: Math.max(0, historyGroupDelay) }),
@@ -292,7 +306,8 @@ export default function Editor({
     linterSource,
     onCursorPositionChange,
     onSave,
-    safeAutocompleteProviders,
+    hasAutocompleteProviders,
+    stableCompletionSource,
     safeExtraExtensions,
     tabSize,
     wordWrap,
