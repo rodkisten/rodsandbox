@@ -149,6 +149,7 @@ export interface TreeNode {
 }
 
 export interface PreviewMessage {
+  runId?: string;
   type: 'CONSOLE_LOG' | 'RUNTIME_ERROR' | 'REPL_RESULT';
   level?: LogLevel;
   args?: SerializedValue[];

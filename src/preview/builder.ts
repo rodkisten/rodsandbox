@@ -1,6 +1,7 @@
 import { VirtualFile } from '@/types';
 
 export interface PreviewBuildInput {
+  runId?: string;
   /** All virtual files by their ID */
   files: Record<string, VirtualFile>;
   /** Compiled JS output from BrowserTypeScriptCompiler: path → JS content */
@@ -20,11 +21,11 @@ function sanitizeInlineScriptContent(scriptContent: string): string {
     .replace(/<\/script/gi, '<\\/script');
 }
 
-const CONSOLE_INTERCEPTOR = `
+const consoleInterceptor = (runId?: string) => `
 (function() {
   var _postMessage = function(data) {
     var target = window.opener || window.parent;
-    try { target.postMessage(data, '*'); } catch(e) {}
+    try { target.postMessage(Object.assign({}, data, { runId: ${JSON.stringify(runId ?? null).replace(/</g, '\\u003c')} }), '*'); } catch(e) {}
   };
 
   function safeSerialize(val, seen) {
@@ -216,7 +217,7 @@ export function buildPreviewHtml(input: PreviewBuildInput): string {
     return `/* ${f.name} */\n${js}`;
   }).join('\n');
 
-  const interceptorScript = `<script>\n${sanitizeInlineScriptContent(CONSOLE_INTERCEPTOR)}\n</script>`;
+  const interceptorScript = `<script>\n${sanitizeInlineScriptContent(consoleInterceptor(input.runId))}\n</script>`;
   const runtimeScript = input.bundledCode && input.bundledCode.trim().length > 0 ? input.bundledCode : jsBlocks;
   const userScript = runtimeScript ? `<script${input.bundledCode?.trim() ? ' type="module"' : ''}>\n${sanitizeInlineScriptContent(runtimeScript)}\n</script>` : '';
   const encodedPluginScripts = (input.injectedScripts ?? []).map((script) =>

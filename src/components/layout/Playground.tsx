@@ -365,6 +365,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       if (!preserveLogsRef.current) setLogs([]);
       setDiagnostics(prev => prev.filter(d => d.source !== 'runtime'));
       setPreviewHtml(buildPreviewHtml({
+        runId: consoleRunId.current,
         files: workspace.files,
         compiledFiles: result.files,
         injectedScripts: pluginPreviewScriptsRef.current,
@@ -379,6 +380,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }, [compileWorkspace, workspace.files, updateSettings]);
 
   const handleMessage = useCallback((msg: PreviewMessage) => {
+    if (!consoleRunId.current || msg.runId !== consoleRunId.current) return;
     if (msg.type === 'CONSOLE_LOG') {
       setLogs((prev) => [...prev.slice(-(MAX_LOG_ENTRIES - 1)), {
         id: generateId(),
@@ -386,7 +388,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         args: msg.args ?? [],
         timestamp: msg.timestamp,
         groupDepth: 0,
-        runId: consoleRunId.current,
+        runId: msg.runId,
       }]);
       return;
     }
@@ -402,7 +404,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         args,
         timestamp: msg.timestamp,
         groupDepth: 0,
-        runId: consoleRunId.current,
+        runId: msg.runId,
       }]);
       return;
     }
@@ -415,7 +417,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       args,
       timestamp: msg.timestamp,
       groupDepth: 0,
-        runId: consoleRunId.current,
+        runId: msg.runId,
     }]);
     if (activeFile) {
       setDiagnostics((prev) => [...prev, createDiagnostic({
