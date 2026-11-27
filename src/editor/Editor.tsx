@@ -108,8 +108,11 @@ export default function Editor({
   useEffect(() => { setMenu(false); setClipboardError(''); }, [file.id]);
   const editorViewRef = useRef<EditorView | null>(null);
 
+  const signatureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (signatureTimer.current) clearTimeout(signatureTimer.current); }, []);
   const signatureExtension = useMemo(() => EditorView.updateListener.of(update => {
     if (!update.docChanged && !update.selectionSet && !update.focusChanged) return;
+    if (signatureTimer.current) clearTimeout(signatureTimer.current);
     const view = update.view;
     const snapshot = view.state;
     setSignature(null);
@@ -117,9 +120,11 @@ export default function Editor({
     const position = snapshot.selection.main.head;
     const content = snapshot.doc.toString();
     if (!content.slice(0, position).includes('(')) return;
-    void signatureRef.current(position, content).then(result => {
+    signatureTimer.current = setTimeout(() => {
+    void signatureRef.current?.(position, content).then(result => {
       if (editorViewRef.current === view && view.state.doc === snapshot.doc && view.state.selection.eq(snapshot.selection) && view.hasFocus) setSignature(result);
     }).catch(() => undefined);
+    }, 300);
   }), []);
   useEffect(() => { setSignature(null); }, [file.id]);
 

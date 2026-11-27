@@ -14,6 +14,8 @@ function loadLibraries() {
 let compiler: BrowserTypeScriptCompiler | null = null;
 let lastTsConfigHash: string | null = null;
 let previousPaths = new Set<string>();
+let dependencyKey = '';
+let dependencyRefresh = 0;
 
 
 async function ensureCompiler(): Promise<BrowserTypeScriptCompiler> {
@@ -28,9 +30,14 @@ async function ensureCompiler(): Promise<BrowserTypeScriptCompiler> {
 }
 
 async function syncFiles(files: Array<{ path: string; content: string }>) {
-  const dependencies = await acquireWorkspaceTypes(files);
   const service = await ensureCompiler();
-  service.setDependencyFiles(dependencies);
+  const key = JSON.stringify(files.map(file => [file.path, /(?:^|\/)package\.json$/.test(file.path) ? file.content : (file.content.match(/(?:from\s*|import\s*\(?\s*|require\s*\(\s*)['"][^'"]+['"]/g) ?? [])]));
+  if (key !== dependencyKey || Date.now() - dependencyRefresh > 60_000) {
+    const dependencies = await acquireWorkspaceTypes(files);
+    service.setDependencyFiles(dependencies);
+    dependencyKey = key;
+    dependencyRefresh = Date.now();
+  }
 
   // Detect tsconfig.json and apply compiler options if changed
   const tsConfig = files.find((f) => f.path === '/tsconfig.json' || f.path === 'tsconfig.json');

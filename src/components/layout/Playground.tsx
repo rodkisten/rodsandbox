@@ -597,7 +597,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   useEffect(() => {
     if (!settings.autoRun) return;
     if (autoRunTimer.current) clearTimeout(autoRunTimer.current);
-    autoRunTimer.current = setTimeout(handleRun, AUTO_RUN_DEBOUNCE_MS);
+    autoRunTimer.current = setTimeout(handleRun, Math.max(1500, AUTO_RUN_DEBOUNCE_MS));
     return () => {
       if (autoRunTimer.current) clearTimeout(autoRunTimer.current);
     };
@@ -883,7 +883,9 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       catch { return member ? null : localCompletionSource(context); }
       if (context.aborted) return null;
       const unique = new Map<string, Completion>();
-      for (const item of items) {
+      const prefix = word.text.toLowerCase();
+      const matches = items.filter(item => item.name.toLowerCase().startsWith(prefix));
+      for (const item of matches.length ? matches : member ? [] : items) {
         if (unique.has(item.name)) continue;
         const kind = item.kind;
         const type = /method|function/.test(kind) ? 'function' : /class/.test(kind) ? 'class' : /interface|type/.test(kind) ? 'type' : /property|getter|setter/.test(kind) ? 'property' : /keyword/.test(kind) ? 'keyword' : 'variable';
