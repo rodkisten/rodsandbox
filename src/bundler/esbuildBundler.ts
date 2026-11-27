@@ -1,3 +1,5 @@
+import bundlerWorkerUrl from '@/workers/bundler.worker.ts?worker&url';
+import { createModuleWorker } from '@/browser/moduleWorker';
 import type { Diagnostic } from '@/types';
 import type { WorkerFileInput, BundlerMessage } from '@/workers/messages';
 export interface BundleResult { cancelled?: boolean; code: string; cssText: string; dependencies: string[]; importMap?: Record<string, string>; diagnostics: Diagnostic[]; }
@@ -22,7 +24,7 @@ export class EsbuildBundlerService {
   private pending: { files: WorkerFileInput[]; entryFile: string; resolve: (result: BundleResult) => void } | null = null;
   private cancelActive: (() => void) | null = null;
   private cancelled(): BundleResult { return { cancelled: true, code: '', cssText: '', dependencies: [], diagnostics: [] }; }
-  private ensureWorker() { this.worker ??= new Worker(new URL('../workers/bundler.worker.ts', import.meta.url), { type: 'module' }); return this.worker; }
+  private ensureWorker() { this.worker ??= createModuleWorker(bundlerWorkerUrl); return this.worker; }
   build(files: WorkerFileInput[], entryFile: string): Promise<BundleResult> {
     return new Promise(resolve => {
       this.pending?.resolve(this.cancelled());

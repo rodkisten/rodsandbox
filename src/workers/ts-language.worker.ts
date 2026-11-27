@@ -6,7 +6,7 @@ import { acquireWorkspaceTypes } from '@/compiler/typeAcquisition';
 
 let libraryPromise: Promise<Record<string, string>> | undefined;
 function loadLibraries() {
-  return libraryPromise ??= fetch('/typescript-libs.json').then(async (response) => {
+  return libraryPromise ??= fetch(new URL(import.meta.env.BASE_URL + 'typescript-libs.json', import.meta.url)).then(async (response) => {
     if (!response.ok) throw new Error('TypeScript standard libraries unavailable');
     return await response.json() as Record<string, string>;
   }).catch((error: unknown) => { libraryPromise = undefined; throw error; });

@@ -3,11 +3,18 @@
 import * as React from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Check, ChevronRight } from 'lucide-react';
+import { useSandboxRuntime } from '@/browser/RuntimeContext';
 import { cn } from '@/lib/cn';
 
-export const DropdownMenu = DropdownMenuPrimitive.Root;
+export function DropdownMenu(props: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+  const { embedded } = useSandboxRuntime();
+  return <DropdownMenuPrimitive.Root {...props} modal={embedded ? false : props.modal} />;
+}
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
-export const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
+export function DropdownMenuPortal(props: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>) {
+  const { portalContainer } = useSandboxRuntime();
+  return <DropdownMenuPrimitive.Portal {...props} container={props.container ?? portalContainer} />;
+}
 export const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 export const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
@@ -60,7 +67,7 @@ export function DropdownMenuContent({
   ...props
 }: React.ComponentPropsWithRef<typeof DropdownMenuPrimitive.Content>) {
   return (
-    <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPortal>
       <DropdownMenuPrimitive.Content
         ref={ref}
         sideOffset={sideOffset}
@@ -70,7 +77,7 @@ export function DropdownMenuContent({
         )}
         {...props}
       />
-    </DropdownMenuPrimitive.Portal>
+    </DropdownMenuPortal>
   );
 }
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;

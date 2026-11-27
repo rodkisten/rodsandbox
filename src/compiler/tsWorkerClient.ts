@@ -1,3 +1,5 @@
+import tsWorkerUrl from '@/workers/ts-language.worker.ts?worker&url';
+import { createModuleWorker } from '@/browser/moduleWorker';
 import type { TypeAttempt } from './typeAcquisition';
 import type { Diagnostic } from '@/types';
 import type { TsMessage } from '@/workers/messages';
@@ -10,11 +12,12 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 export class TypeScriptWorkerClient {
   private worker: Worker | null = null;
   private requestId = 0;
+  private pending = new Set<() => void>();
   constructor(private readonly onTypesSnapshot?: (paths: string[]) => void, private readonly onTypeAttempt?: (attempt: TypeAttempt | null) => void) {}
 
   private getWorker(): Worker {
     if (!this.worker) {
-      this.worker = new Worker(new URL('../workers/ts-language.worker.ts', import.meta.url), { type: 'module' });
+      this.worker = createModuleWorker(tsWorkerUrl);
       this.worker.addEventListener('message', event => {
         if (event.data?.type === 'TS_TYPES_RESET') this.onTypeAttempt?.(null);
         if (event.data?.type === 'TS_TYPES_ATTEMPT') this.onTypeAttempt?.(event.data.attempt);
@@ -44,6 +47,7 @@ export class TypeScriptWorkerClient {
       const settle = (value: Result, shouldResetWorker = false) => {
         if (isSettled) return;
         isSettled = true;
+        this.pending.delete(cancel);
         clearTimeout(timeout);
         worker.removeEventListener('message', onMessage);
         worker.removeEventListener('error', onError);
@@ -52,6 +56,8 @@ export class TypeScriptWorkerClient {
         resolve(value);
       };
 
+      const cancel = () => settle(fallback);
+      this.pending.add(cancel);
       const onMessage = (event: MessageEvent<TsMessage>) => {
         const extracted = matchAndExtract(event.data, requestId);
         if (!extracted.matched) return;
@@ -121,6 +127,7 @@ export class TypeScriptWorkerClient {
   }
 
   terminate(): void {
+    for (const cancel of this.pending) cancel();
     this.resetWorker();
   }
 }

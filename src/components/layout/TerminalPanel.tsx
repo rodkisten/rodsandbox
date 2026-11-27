@@ -1,15 +1,16 @@
 'use client';
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
+import { useSandboxRuntime } from '@/browser/RuntimeContext';
 import { BrowserShellAdapter, createTerminalAdapter } from '@/services/terminal/adapter';
 import { TERMINAL_SCROLLBACK_LINES } from '@/constants';
 import { Workspace } from '@/types';
 import { ExternalLink, RefreshCw, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { loadTerminalHistory, saveTerminalHistory } from '@/persistence/db';
 
-const XTermComponent = dynamic(() => import('./XTermInner'), { ssr: false });
+
+const LazyXTerm = React.lazy(() => import('./XTermInner'));
+const XTermComponent = (props: React.ComponentProps<typeof LazyXTerm>) => <React.Suspense fallback={null}><LazyXTerm {...props} /></React.Suspense>;
 
 interface TerminalPanelProps {
   className?: string;
@@ -18,6 +19,7 @@ interface TerminalPanelProps {
 }
 
 export default function TerminalPanel({ className = '', workspace, onDetach }: TerminalPanelProps) {
+  const { persistence: { loadTerminalHistory, saveTerminalHistory } } = useSandboxRuntime();
   const [adapter, setAdapter] = useState<ReturnType<typeof createTerminalAdapter> | null>(null);
   const [resetKey, setResetKey] = useState(0);
   const adapterRef = useRef(adapter);
@@ -32,6 +34,7 @@ export default function TerminalPanel({ className = '', workspace, onDetach }: T
       adapterRef.current = next;
       setAdapter(next);
     }).catch(() => {
+      if (cancelled) return;
       const next = createTerminalAdapter(workspace);
       adapterRef.current = next;
       setAdapter(next);

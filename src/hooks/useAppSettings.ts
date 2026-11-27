@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import * as Db from '@/persistence/db';
+import { useSandboxRuntime } from '@/browser/RuntimeContext';
 import {
   DEFAULT_MOBILE_BOTTOM_SIZE,
   DEFAULT_MOBILE_EDITOR_SIZE,
@@ -66,6 +66,7 @@ function mergeSettings(saved: AppSettings | undefined): AppSettings {
 }
 
 export function useAppSettings() {
+  const { persistence: Db } = useSandboxRuntime();
   const [settings, setSettings] = useState<AppSettings>(() => createDefaultSettings());
   const [loading, setLoading] = useState(true);
 

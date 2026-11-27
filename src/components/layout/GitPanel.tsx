@@ -17,6 +17,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GitBranch, GitCommit, GitDiff, GitStatusEntry, Workspace } from '@/types';
+import { useSandboxRuntime } from '@/browser/RuntimeContext';
 import { GitService, syncWorkspaceToFs, cloneViaGithubApi, pushViaGithubApi } from '@/services/git/gitService';
 import GitDiffViewer from './GitDiffViewer';
 import {
@@ -52,6 +53,7 @@ interface GitPanelProps {
  * Manages its own GitService instance and local UI state.
  */
 export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
+  const { storageScope } = useSandboxRuntime();
   const serviceRef = useRef<GitService | null>(null);
   const [isRepo, setIsRepo] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,7 +87,7 @@ export default function GitPanel({ workspace, onFilesChanged }: GitPanelProps) {
 
   // Initialise service when workspace changes.
   useEffect(() => {
-    const svc = new GitService(workspace.id);
+    const svc = new GitService(storageScope ? `${storageScope}:${workspace.id}` : workspace.id);
     serviceRef.current = svc;
 
     async function init() {

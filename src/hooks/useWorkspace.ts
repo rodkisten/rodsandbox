@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Workspace, VirtualFile, FileId, FileLanguage } from '@/types';
 import { createDefaultWorkspace } from '@/filesystem/defaults';
 import * as VirtualFs from '@/filesystem/virtualFs';
-import * as Db from '@/persistence/db';
+import { useSandboxRuntime } from '@/browser/RuntimeContext';
 import { AUTOSAVE_DEBOUNCE_MS } from '@/constants';
 
 /** Legacy constant kept for backward compatibility. */
@@ -16,6 +16,7 @@ const LEGACY_WORKSPACE_ID = 'default-workspace';
  * @param workspaceId - The workspace to load. Defaults to the legacy single-workspace ID.
  */
 export function useWorkspace(workspaceId?: string) {
+  const { persistence: Db } = useSandboxRuntime();
   const resolvedId = workspaceId || LEGACY_WORKSPACE_ID;
   const [workspace, setWorkspace] = useState<Workspace>(() => createDefaultWorkspace(resolvedId));
   // Track which ID has finished loading so `loading` can be derived without a
@@ -41,6 +42,13 @@ export function useWorkspace(workspaceId?: string) {
       Db.saveWorkspace(ws).catch(console.error);
     }, AUTOSAVE_DEBOUNCE_MS);
   }, []);
+
+  const latest = useRef({ workspace, loading });
+  latest.current = { workspace, loading };
+  useEffect(() => () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (!latest.current.loading) void Db.saveWorkspace(latest.current.workspace);
+  }, [Db]);
 
   const updateWorkspace = useCallback((ws: Workspace) => {
     setWorkspace(ws);

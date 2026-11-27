@@ -74,6 +74,13 @@ describe('buildPreviewHtml', () => {
     expect(html).toContain('<style>');
   });
 
+  it('does not request an already bundled virtual entry from the deployed origin', () => {
+    const files = { html: makeFile('h', 'index.html', 'index.html', 'html', '<body><script src="./main.js"></script><script src="https://example.test/vendor.js"></script></body>') };
+    const html = buildPreviewHtml({files, compiledFiles: {'main.js': 'console.log(1)'}, bundledCode:'console.log(1)'});
+    expect(html).not.toContain('src="./main.js"');
+    expect(html).toContain('https://example.test/vendor.js');
+  });
+
   it('uses fallback HTML when no index.html is present', () => {
     const html = buildPreviewHtml({ files: {}, compiledFiles: {} });
     expect(html).toContain('<html');
