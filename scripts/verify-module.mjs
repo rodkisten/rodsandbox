@@ -11,10 +11,24 @@ async function get(path, type, method = 'GET') {
   assert.equal(response.headers.get('access-control-allow-origin'), '*', `${path}: CORS`);
   return response;
 }
-const pointer = await get('/rod-module.json', /application\/json/);
-assert.match(pointer.headers.get('cache-control') || '', /no-store/);
-const business = await pointer.json();
-assert.equal(business.gitSha, sha);
+// Workers deployments propagate across edges; an old mutable pointer is transient,
+// while its immutable chunks must remain usable by already pinned sessions.
+let business;
+let lastError;
+for (let attempt = 0; attempt < 30; attempt++) {
+  try {
+    const pointer = await get('/rod-module.json', /application\/json/);
+    assert.match(pointer.headers.get('cache-control') || '', /no-store/);
+    business = await pointer.json();
+    assert.equal(business.gitSha, sha);
+    lastError = undefined;
+    break;
+  } catch (error) {
+    lastError = error;
+    if (attempt < 29) await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+}
+if (lastError) throw lastError;
 assert.equal(business.entry, `${origin}/modules/sandbox/${sha}/mf-manifest.json`);
 const prefix = `/modules/sandbox/${sha}/`;
 const federation = await (await get(prefix + 'mf-manifest.json', /application\/json/)).json();
