@@ -1,10 +1,10 @@
 'use client';
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, useDraggable, useDroppable, DragOverlay, pointerWithin, rectIntersection, type DragEndEvent } from '@dnd-kit/core';
-import { GripVertical } from 'lucide-react';
+import { Download, GripVertical } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 import { FileLanguage, TreeNode, Workspace } from '@/types';
 import { buildFileTree } from '@/filesystem/virtualFs';
-import { importFileList, importZipFile } from '@/lib/archive';
+import { importFileList, importZipFile, exportWorkspaceAsZip } from '@/lib/archive';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -271,10 +271,20 @@ export default function FileTree({
   const uploadFolderRef = useRef<HTMLInputElement>(null);
   const uploadZipRef = useRef<HTMLInputElement>(null);
   const newFileInputRef = useRef<HTMLInputElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const onToggleSelection = (id: string) => setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const selectedFiles = Object.values(workspace.files).filter(file => selected.has(file.id) && file.name !== '.keep');
+  const exportSelection = async () => {
+    if (!selectedFiles.length || exporting) return;
+    setExporting(true);
+    setExportError('');
+    try { await exportWorkspaceAsZip(workspace, new Set(selectedFiles.map(file => file.id))); }
+    catch (error) { setExportError(error instanceof Error ? error.message : String(error)); }
+    finally { setExporting(false); }
+  };
   const tree = buildFileTree(workspace);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor));
   const [dragged, setDragged] = useState<TreeNode | null>(null);
@@ -415,7 +425,9 @@ export default function FileTree({
       {selectionMode && <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
         <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(Object.values(workspace.files).filter(file => file.name !== '.keep').map(file => file.id)))}>Todos</Button>
         <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Limpar</Button>
+        <Button variant="ghost" size="sm" disabled={!selectedFiles.length || exporting} onClick={() => void exportSelection()}><Download className="size-4" />{exporting ? 'Exportando…' : 'ZIP'}</Button>
       </div>}
+      {exportError && <p role="alert" className="px-2 py-1 text-xs text-destructive">{exportError}</p>}
       {creating && (
         <div className="border-b border-neutral-800 px-2 py-1">
           <input
