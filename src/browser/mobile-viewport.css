@@ -1,0 +1,15 @@
+@media (pointer: coarse) {
+  html, body, #root { touch-action: pan-x pan-y; overscroll-behavior: none; }
+  input, textarea, select, .xterm-helper-textarea { font-size: 16px !important; }
+  button, a, [role="button"] { touch-action: manipulation; }
+}
+
+/* CodeMirror preferences override the generic iOS input guard. */
+.cm-editor .cm-content, .cm-editor .cm-gutters { font-size: var(--editor-font-size, 14px) !important; }
+.cm-editor .cm-content { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+
+@media (pointer: coarse) {
+  #root { height: var(--visible-height, 100dvh); overflow: hidden; }
+  .sandbox-workbench:not([data-sandbox-mode="embedded"]) { height: var(--visible-height, 100dvh); }
+  .cm-tooltip-autocomplete > ul { max-height: var(--completion-height, 180px) !important; }
+}

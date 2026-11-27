@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { autocompletion, completionKeymap, type CompletionSource } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { css } from '@codemirror/lang-css';
@@ -12,13 +12,19 @@ import { defaultHighlightStyle, foldGutter, syntaxHighlighting } from '@codemirr
 import { lintGutter, linter, type Diagnostic as CMDiagnostic } from '@codemirror/lint';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView, hoverTooltip, keymap } from '@codemirror/view';
+import { EditorView, hoverTooltip, keymap, tooltips } from '@codemirror/view';
+import { Button } from '@/components/ui/button';
+import { Copy, Scissors, ClipboardPaste, TextSelect, Undo2, Redo2, X } from 'lucide-react';
+import { undo, redo, selectAll } from '@codemirror/commands';
 import CodeMirror from '@uiw/react-codemirror';
 import type { Diagnostic, EditorTheme, FileLanguage, VirtualFile } from '@/types';
 import { getDiagnosticRange } from './diagnosticRanges';
 import { getEditorTheme, type EditorThemeKey } from './themes';
 
+import type { TsSignatureHelp } from '@/types/tsLanguage';
+
 interface EditorProps {
+  signatureProvider?: (position: number, content: string) => Promise<TsSignatureHelp | null>;
   file: VirtualFile;
   onChange: (content: string) => void;
   onSave?: () => void;
@@ -27,6 +33,8 @@ interface EditorProps {
   extraAutocompleteProviders?: CompletionSource[];
   theme: EditorTheme;
   fontSize: number;
+  historyDepth?: number;
+  historyGroupDelay?: number;
   fontFamily: string;
   lineNumbers: boolean;
   wordWrap: boolean;
@@ -76,6 +84,8 @@ export default function Editor({
   extraAutocompleteProviders = EMPTY_AUTOCOMPLETE_PROVIDERS,
   theme,
   fontSize,
+  historyDepth = 200,
+  historyGroupDelay = 500,
   fontFamily,
   lineNumbers,
   wordWrap,
@@ -83,14 +93,58 @@ export default function Editor({
   linterEnabled,
   tabSize,
   hoverProvider,
+  signatureProvider,
   jumpTo,
   onCursorPositionChange,
 }: EditorProps) {
+  const [signature, setSignature] = useState<TsSignatureHelp | null>(null);
+  const signatureRef = useRef(signatureProvider);
+  signatureRef.current = signatureProvider;
+  const [menu, setMenu] = useState(false);
+  const [clipboardError, setClipboardError] = useState('');
+  const press = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const cancelPress = () => { if (press.current) clearTimeout(press.current.timer); press.current = null; };
+  useEffect(() => () => { if (press.current) clearTimeout(press.current.timer); }, []);
+  useEffect(() => { setMenu(false); setClipboardError(''); }, [file.id]);
   const editorViewRef = useRef<EditorView | null>(null);
+
+  const signatureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (signatureTimer.current) clearTimeout(signatureTimer.current); }, []);
+  const signatureExtension = useMemo(() => EditorView.updateListener.of(update => {
+    if (!update.docChanged && !update.selectionSet && !update.focusChanged) return;
+    if (signatureTimer.current) clearTimeout(signatureTimer.current);
+    const view = update.view;
+    const snapshot = view.state;
+    setSignature(null);
+    if (!view.hasFocus || !signatureRef.current) return;
+    const position = snapshot.selection.main.head;
+    const content = snapshot.doc.toString();
+    if (!content.slice(0, position).includes('(')) return;
+    signatureTimer.current = setTimeout(() => {
+    void signatureRef.current?.(position, content).then(result => {
+      if (editorViewRef.current === view && view.state.doc === snapshot.doc && view.state.selection.eq(snapshot.selection) && view.hasFocus) setSignature(result);
+    }).catch(() => undefined);
+    }, 300);
+  }), []);
+  useEffect(() => { setSignature(null); }, [file.id]);
 
   const safeDiagnostics = diagnostics ?? EMPTY_DIAGNOSTICS;
   const safeExtraExtensions = extraExtensions ?? EMPTY_EXTENSIONS;
-  const safeAutocompleteProviders = extraAutocompleteProviders ?? EMPTY_AUTOCOMPLETE_PROVIDERS;
+  const providersRef = useRef(extraAutocompleteProviders);
+  providersRef.current = extraAutocompleteProviders;
+  const hasAutocompleteProviders = extraAutocompleteProviders.length > 0;
+  const stableCompletionSource = useMemo<CompletionSource>(() => async context => {
+    const results = await Promise.all(providersRef.current.map(source => Promise.resolve().then(() => source(context)).catch(() => null)));
+    if (context.aborted) return null;
+    const first = results.find(result => result && result.options.length);
+    if (!first) return null;
+    const options = new Map(first.options.map(option => [option.label, option]));
+    for (const result of results) {
+      if (!result || result.from !== first.from || result.to !== first.to) continue;
+      for (const option of result.options) if (!options.has(option.label)) options.set(option.label, option);
+    }
+    return { ...first, options: [...options.values()] };
+  }, []);
 
   const forwardContentChange = useCallback(
     (value: string) => {
@@ -150,6 +204,7 @@ export default function Editor({
         fontSize: `${fontSize}px`,
         fontFamily,
       },
+      '.cm-content, .cm-gutters': { fontSize: 'inherit', fontFamily: 'inherit' },
     });
 
     const saveKeymap = keymap.of([
@@ -199,8 +254,8 @@ export default function Editor({
       : null;
 
     const completionExtension =
-      autocompleteEnabled && safeAutocompleteProviders.length > 0
-        ? autocompletion({ override: safeAutocompleteProviders })
+      autocompleteEnabled && hasAutocompleteProviders
+        ? autocompletion({ override: [stableCompletionSource], maxRenderedOptions: 8, activateOnTypingDelay: 180 })
         : autocompleteEnabled
           ? autocompletion()
           : null;
@@ -208,9 +263,12 @@ export default function Editor({
     return [
       getLanguageExtension(file.language, file.path),
       fontExtension,
+      signatureExtension,
+      tooltips({ position: 'fixed', tooltipSpace: () => { const vv = window.visualViewport; const left = vv?.offsetLeft ?? 0; const top = vv?.offsetTop ?? 0; return { left: left + 4, top: top + 4, right: left + (vv?.width ?? window.innerWidth) - 4, bottom: top + (vv?.height ?? window.innerHeight) - 4 }; } }),
+      EditorView.theme({ '.cm-tooltip-autocomplete': { border: '1px solid var(--border-default)', borderRadius: '8px', backgroundColor: 'var(--surface-2)', color: 'var(--app-fg)', boxShadow: '0 8px 24px #0005', maxWidth: 'min(90vw, 420px)' }, '.cm-tooltip-autocomplete > ul': { maxHeight: 'min(180px, 30dvh)', fontFamily: 'var(--font-sans)', fontSize: '12px' }, '.cm-tooltip-autocomplete > ul > li': { padding: '6px 8px' }, '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--surface-3)', color: 'var(--app-fg)' }, '.cm-completionIcon': { opacity: '0.85', fontFamily: 'monospace', fontSize: '11px' }, '.cm-completionIcon-keyword:after': { content: '"K"' }, '.cm-completionIcon-function:after': { content: '"ƒ"' }, '.cm-completionIcon-variable:after': { content: '"v"' }, '.cm-completionIcon-property:after': { content: '"p"' }, '.cm-completionIcon-class:after': { content: '"C"' }, '.cm-completionIcon-type:after': { content: '"T"' } }),
       EditorView.contentAttributes.of({ autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' }),
       EditorState.tabSize.of(Math.max(1, Math.min(8, tabSize))),
-      history(),
+      history({ minDepth: Math.max(1, historyDepth), newGroupDelay: Math.max(0, historyGroupDelay) }),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
       ...(autocompleteEnabled ? [keymap.of(completionKeymap)] : []),
       saveKeymap,
@@ -236,30 +294,74 @@ export default function Editor({
     ];
   }, [
     autocompleteEnabled,
+    signatureExtension,
     file.language,
     file.path,
     fontFamily,
     fontSize,
+    historyDepth,
+    historyGroupDelay,
     hoverProvider,
     linterEnabled,
     linterSource,
     onCursorPositionChange,
     onSave,
-    safeAutocompleteProviders,
+    hasAutocompleteProviders,
+    stableCompletionSource,
     safeExtraExtensions,
     tabSize,
     wordWrap,
   ]);
 
   return (
-    <div className="h-full w-full overflow-auto">
+    <div className="relative h-full w-full overflow-auto" style={{ '--editor-font-size': fontSize + 'px' } as React.CSSProperties}
+      onTouchStart={event => {
+        cancelPress();
+        if (event.touches.length !== 1 || !(event.target as HTMLElement).closest('.cm-content')) return;
+        const { clientX: x, clientY: y } = event.touches[0];
+        press.current = { x, y, timer: setTimeout(() => { setClipboardError(''); setMenu(true); }, 550) };
+      }}
+      onTouchMove={event => { const t = event.touches[0]; if (press.current && (!t || Math.hypot(t.clientX - press.current.x, t.clientY - press.current.y) > 10)) cancelPress(); }}
+      onTouchEnd={cancelPress} onTouchCancel={cancelPress}
+      onContextMenu={event => { if ((event.target as HTMLElement).closest('.cm-content')) { setClipboardError(''); setMenu(true); } }}>
+      {menu && <div role="toolbar" aria-label="Editor actions" className="sticky top-0 z-30 flex flex-wrap items-center gap-1 border-b border-border bg-popover p-1 text-popover-foreground shadow-md">
+        {([['Copy', Copy], ['Cut', Scissors], ['Paste', ClipboardPaste], ['Select all', TextSelect], ['Undo', Undo2], ['Redo', Redo2], ['Close', X]] as const).map(([action, Icon]) => <Button key={action} size="icon" className="size-9" title={action} aria-label={action} variant="ghost" onPointerDown={event => event.preventDefault()} onClick={async () => {
+          const view = editorViewRef.current;
+          if (!view) return;
+          setClipboardError('');
+          try {
+            if (action === 'Close') { setMenu(false); return; }
+            if (action === 'Select all') selectAll(view);
+            if (action === 'Undo') undo(view);
+            if (action === 'Redo') redo(view);
+            if (action === 'Copy' || action === 'Cut') {
+              const selection = view.state.selection.main;
+              if (selection.empty) { setClipboardError('Select text first.'); return; }
+              const snapshot = view.state;
+              await navigator.clipboard.writeText(snapshot.sliceDoc(selection.from, selection.to));
+              if (action === 'Cut' && view.state === snapshot) view.dispatch(view.state.replaceSelection(''));
+            }
+            if (action === 'Paste') {
+              const snapshot = view.state;
+              const value = await navigator.clipboard.readText();
+              if (view.state === snapshot) view.dispatch(view.state.replaceSelection(value));
+            }
+            view.focus();
+          } catch { setClipboardError('Clipboard unavailable. Use the native selection menu.'); }
+        }}><Icon className="size-4" aria-hidden="true" /></Button>)}
+        {clipboardError && <span role="status" className="w-full px-2 text-xs text-muted-foreground">{clipboardError}</span>}
+      </div>}
+      {signature && <div role="status" className="sticky top-0 z-20 w-full min-w-0 max-w-full overflow-hidden border-b border-border bg-popover px-3 py-2 text-xs text-popover-foreground">
+        <div className="min-w-0 whitespace-normal [overflow-wrap:anywhere] font-mono">{signature.prefix}{signature.parameters.map((parameter, index) => <React.Fragment key={index}>{index > 0 && signature.separator}<span className={index === signature.activeParameter ? 'rounded bg-accent font-semibold text-accent-foreground' : 'text-muted-foreground'}>{parameter.display}</span></React.Fragment>)}{signature.suffix}</div>
+        {signature.parameters[signature.activeParameter]?.documentation && <div className="mt-1 line-clamp-2 [overflow-wrap:anywhere] text-muted-foreground">{signature.parameters[signature.activeParameter].documentation}</div>}
+      </div>}
       <CodeMirror
         onCreateEditor={(view) => {
           editorViewRef.current = view;
           onCursorPositionChange?.(view.state.selection.main.head);
         }}
         value={file.content}
-        height="auto"
+        height="100%"
         extensions={extensions}
         onChange={forwardContentChange}
         theme={selectedTheme}

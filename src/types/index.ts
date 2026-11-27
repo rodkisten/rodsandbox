@@ -70,6 +70,7 @@ export interface Diagnostic {
 export type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug' | 'table' | 'group' | 'groupEnd' | 'time' | 'timeEnd' | 'assert';
 
 export interface LogEntry {
+  runId?: string;
   id: string;
   level: LogLevel;
   args: SerializedValue[];
@@ -101,11 +102,12 @@ export interface LayoutSizes {
 }
 
 export type LayoutMode = 'desktop' | 'mobile';
-export type BottomTab = 'console' | 'diagnostics' | 'repl' | 'terminal' | 'git';
+export type BottomTab = 'dependencies' | 'plugins' | 'console' | 'diagnostics' | 'repl' | 'terminal' | 'git';
 export type ReplRuntimeTarget = 'iframe' | 'detached' | 'auto';
 export type EditorTheme = 'github-dark' | 'github-light' | 'dracula' | 'monokai' | 'nord' | 'solarized-dark' | 'solarized-light' | 'one-dark' | 'tokyo-night' | 'midnight';
 
 export interface AppSettings {
+  preserveLogs?: boolean;
   theme: 'dark' | 'light' | 'oled' | 'tokyo' | 'midnight' | 'high-contrast';
   autoRun: boolean;
   formatOnSave: boolean;
@@ -128,6 +130,8 @@ export interface AppSettings {
   editorFormatterEnabled: boolean;
   editorMinimapEnabled: boolean;
   editorTabSize: number;
+  editorHistoryDepth?: number;
+  editorHistoryGroupDelay?: number;
   liveTypecheck: boolean;
   collapsedPanels: string[];
   enabledPlugins: string[];
@@ -145,6 +149,7 @@ export interface TreeNode {
 }
 
 export interface PreviewMessage {
+  runId?: string;
   type: 'CONSOLE_LOG' | 'RUNTIME_ERROR' | 'REPL_RESULT';
   level?: LogLevel;
   args?: SerializedValue[];

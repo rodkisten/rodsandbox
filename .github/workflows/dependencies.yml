@@ -60,4 +60,4 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "chore(deps): $OP dependencies"
           git push
-          gh workflow run checks.yml --ref "$GITHUB_REF_NAME" || echo 'Checks dispatch unavailable'
+          gh workflow run cloudflare.yml --ref "$GITHUB_REF_NAME"

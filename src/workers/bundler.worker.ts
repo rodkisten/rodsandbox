@@ -1,4 +1,7 @@
 /// <reference lib="webworker" />
+import * as localEsbuild from 'esbuild-wasm';
+import wasmURL from 'esbuild-wasm/esbuild.wasm?url';
+import { resolveManifestVersions, moduleUrl } from '@/bundler/moduleResolver';
 import type { Diagnostic } from '@/types';
 import type { BundlerBuildRequest, BundlerMessage, WorkerFileInput } from './messages';
 import { inferVirtualLoader, normalizeVirtualPath, resolveVirtualImportPath, resolveWithKnownExtensions } from '@/bundler/pathResolver';
@@ -7,68 +10,27 @@ interface EsbuildOutputFile { path: string; text: string }
 interface EsbuildBuildResult { outputFiles?: EsbuildOutputFile[] }
 type EsbuildLoader = 'ts' | 'tsx' | 'js' | 'jsx' | 'css' | 'text' | 'json';
 interface EsbuildPluginBuild {
-  onResolve(options: { filter: RegExp }, callback: (args: { path: string; importer: string; resolveDir: string }) => { path: string; namespace?: string } | null): void;
+  onResolve(options: { filter: RegExp }, callback: (args: { path: string; importer: string; resolveDir: string }) => { path: string; namespace?: string; external?: boolean } | null): void;
   onLoad(options: { filter: RegExp; namespace?: string }, callback: (args: { path: string }) => { contents: string; loader: EsbuildLoader } | null): void;
 }
 interface EsbuildApi {
   initialize(options: { wasmURL: string; worker: boolean }): Promise<void>;
   build(options: {
     stdin: { contents: string; sourcefile: string; resolveDir: string; loader: 'ts' | 'tsx' | 'js' | 'jsx' };
+    outfile: string;
     bundle: boolean;
     write: boolean;
-    format: 'iife';
+    format: 'esm';
     sourcemap: 'inline';
     plugins: Array<{ name: string; setup: (build: EsbuildPluginBuild) => void }>;
   }): Promise<EsbuildBuildResult>;
 }
 
-let esbuild: EsbuildApi | null = null;
+let initialization: Promise<EsbuildApi> | undefined;
 let latestRequestId = 0;
-const ESBUILD_VERSION = '0.27.0';
-const ESBUILD_WASM_URL = `https://esm.sh/esbuild-wasm@${ESBUILD_VERSION}/esbuild.wasm`;
+
 
 // ─── package.json helpers ─────────────────────────────────────────────────────
-
-interface PackageJsonDeps { [pkg: string]: string }
-
-/**
- * Parses the package.json file (if present) and returns a map of
- * packageName → version-constraint so the bundler can rewrite bare imports
- * to versioned esm.sh URLs.
- */
-function parsePackageJsonDeps(files: WorkerFileInput[]): PackageJsonDeps {
-  const pkgFile = files.find((f) => f.path === 'package.json' || f.path === '/package.json');
-  if (!pkgFile) return {};
-  try {
-    const parsed = JSON.parse(pkgFile.content) as {
-      dependencies?: PackageJsonDeps;
-      devDependencies?: PackageJsonDeps;
-    };
-    return { ...parsed.devDependencies, ...parsed.dependencies };
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Builds a versioned esm.sh URL for a package specifier.
- *
- * Examples:
- *   react            + { react: "^18.2.0" }  → https://esm.sh/react@^18.2.0
- *   react/jsx-runtime + { react: "^18.2.0" } → https://esm.sh/react@^18.2.0/jsx-runtime
- */
-function toEsmShUrl(specifier: string, deps: PackageJsonDeps): string {
-  // Scoped packages like @scope/pkg
-  const scopedMatch = specifier.match(/^(@[^/]+\/[^/]+)(\/.*)?$/);
-  const simpleMatch = specifier.match(/^([^/]+)(\/.*)?$/);
-  const match = scopedMatch ?? simpleMatch;
-  if (!match) return `https://esm.sh/${specifier}`;
-
-  const pkg = match[1];
-  const subpath = match[2] ?? '';
-  const version = deps[pkg] ? `@${deps[pkg]}` : '';
-  return `https://esm.sh/${pkg}${version}${subpath}`;
-}
 
 function extractDependencies(files: WorkerFileInput[]): string[] {
   const deps = new Set<string>();
@@ -91,18 +53,16 @@ function buildFileLookup(files: WorkerFileInput[]): Map<string, WorkerFileInput>
   return map;
 }
 
-async function ensureEsbuild(): Promise<EsbuildApi> {
-  if (esbuild) return esbuild;
-  try {
-    // @ts-expect-error Remote ESM module is resolved in worker runtime.
-    const loaded = (await import('https://esm.sh/esbuild-wasm@0.27.0')) as EsbuildApi;
-    await loaded.initialize({ wasmURL: ESBUILD_WASM_URL, worker: false });
-    esbuild = loaded;
-    return loaded;
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : 'unknown error';
-    throw new Error(`Failed to initialize esbuild-wasm from https://esm.sh/esbuild-wasm@0.27.0. Check network/CSP availability. ${reason}`);
-  }
+function ensureEsbuild(): Promise<EsbuildApi> {
+  return initialization ??= (async () => {
+    const loaded = localEsbuild as unknown as EsbuildApi;
+    try {
+      await loaded.initialize({ wasmURL, worker: false });
+      return loaded;
+    } catch (error) {
+      throw new Error('Failed to initialize local esbuild-wasm: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  })();
 }
 
 function normalizeBuildError(error: unknown, fileId: string): Diagnostic {
@@ -126,9 +86,10 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
   const fileLookup = buildFileLookup(req.files);
   const entryFile = normalizeVirtualPath(req.entryFile);
   const dependencies = extractDependencies(req.files);
-  const pkgDeps = parsePackageJsonDeps(req.files);
+  const importMap: Record<string, string> = Object.create(null);
 
   try {
+    const pkgDeps = await resolveManifestVersions(req.files);
     if (req.requestId !== latestRequestId) return;
     const buildApi = await ensureEsbuild();
     const entryContent = fileLookup.get(entryFile)?.content ?? '';
@@ -144,9 +105,10 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
         resolveDir: '/',
         loader: entryLoader,
       },
+      outfile: 'bundle.js',
       bundle: true,
       write: false,
-      format: 'iife',
+      format: 'esm',
       sourcemap: 'inline',
       plugins: [{
         name: 'rodsandbox-virtual-fs',
@@ -164,8 +126,10 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
             // a known CDN URL (already fully qualified).
             const p = args.path;
             if (!p.startsWith('.') && !p.startsWith('/') && !p.startsWith('https://') && !p.startsWith('http://')) {
-              return { path: toEsmShUrl(p, pkgDeps), external: true };
+              const url = moduleUrl(p, pkgDeps);
+              if (url) { importMap[p] = url; return { path: p, external: true }; }
             }
+            if (/^https:\/\//.test(p)) return { path: p, external: true };
             return null;
           });
 
@@ -179,9 +143,11 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
     });
 
     if (req.requestId === latestRequestId) {
-      const code = result.outputFiles?.find((file) => file.path.endsWith('.js'))?.text ?? '';
+      const output = result.outputFiles?.find((file) => file.path.endsWith('.js'));
+      if (!output) throw new Error('Compiler returned no JavaScript output');
+      const code = output.text;
       const cssText = result.outputFiles?.find((file) => file.path.endsWith('.css'))?.text ?? '';
-      self.postMessage({ type: 'BUNDLE_RESULT', requestId: req.requestId, success: true, code, cssText, dependencies });
+      self.postMessage({ type: 'BUNDLE_RESULT', requestId: req.requestId, success: true, code, cssText, dependencies, importMap });
     }
   } catch (error) {
     if (req.requestId === latestRequestId) {

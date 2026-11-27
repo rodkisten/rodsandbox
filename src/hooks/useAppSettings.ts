@@ -42,6 +42,8 @@ export function createDefaultSettings(): AppSettings {
     editorFormatterEnabled: true,
     editorMinimapEnabled: false,
     editorTabSize: 2,
+    editorHistoryDepth: 200,
+    editorHistoryGroupDelay: 500,
     liveTypecheck: true,
     collapsedPanels: [],
     enabledPlugins: [],

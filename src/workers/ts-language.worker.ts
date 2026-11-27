@@ -14,6 +14,8 @@ function loadLibraries() {
 let compiler: BrowserTypeScriptCompiler | null = null;
 let lastTsConfigHash: string | null = null;
 let previousPaths = new Set<string>();
+let dependencyKey = '';
+let dependencyRefresh = 0;
 
 
 async function ensureCompiler(): Promise<BrowserTypeScriptCompiler> {
@@ -28,9 +30,16 @@ async function ensureCompiler(): Promise<BrowserTypeScriptCompiler> {
 }
 
 async function syncFiles(files: Array<{ path: string; content: string }>) {
-  const dependencies = await acquireWorkspaceTypes(files);
   const service = await ensureCompiler();
-  service.setDependencyFiles(dependencies);
+  const key = JSON.stringify(files.map(file => [file.path, /(?:^|\/)package\.json$/.test(file.path) ? file.content : (file.content.match(/(?:from\s*|import\s*\(?\s*|require\s*\(\s*)['"][^'"]+['"]/g) ?? [])]));
+  if (key !== dependencyKey || Date.now() - dependencyRefresh > 60_000) {
+    self.postMessage({ type: 'TS_TYPES_RESET' });
+    const dependencies = await acquireWorkspaceTypes(files, attempt => self.postMessage({ type: 'TS_TYPES_ATTEMPT', attempt }));
+    service.setDependencyFiles(dependencies);
+    self.postMessage({ type: 'TS_TYPES_SNAPSHOT', paths: [...dependencies.keys()].filter(path => /\.d\.[cm]?ts$/.test(path)) });
+    dependencyKey = key;
+    dependencyRefresh = Date.now();
+  }
 
   // Detect tsconfig.json and apply compiler options if changed
   const tsConfig = files.find((f) => f.path === '/tsconfig.json' || f.path === 'tsconfig.json');
@@ -65,7 +74,7 @@ async function handleMessage(event: MessageEvent<TsMessage>) {
   if (msg.type === 'TS_DIAGNOSTICS') {
     try {
       const service = await syncFiles(msg.files);
-      const diagnostics = service.compile().diagnostics;
+      const diagnostics = service.collectDiagnostics();
       self.postMessage({ type: 'TS_DIAGNOSTICS_RESULT', requestId: msg.requestId, diagnostics });
     } catch (error) {
       self.postMessage({
@@ -84,6 +93,16 @@ async function handleMessage(event: MessageEvent<TsMessage>) {
       self.postMessage({ type: 'TS_COMPLETIONS_RESULT', requestId: msg.requestId, items });
     } catch {
       self.postMessage({ type: 'TS_COMPLETIONS_RESULT', requestId: msg.requestId, items: [] });
+    }
+    return;
+  }
+
+  if (msg.type === 'TS_SIGNATURE') {
+    try {
+      const service = await syncFiles(msg.files);
+      self.postMessage({ type: 'TS_SIGNATURE_RESULT', requestId: msg.requestId, signature: service.getSignatureHelp(msg.path, msg.position) });
+    } catch {
+      self.postMessage({ type: 'TS_SIGNATURE_RESULT', requestId: msg.requestId, signature: null });
     }
     return;
   }

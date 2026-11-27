@@ -1,7 +1,7 @@
 import type { Diagnostic } from '@/types';
 import type { WorkerFileInput, BundlerMessage } from '@/workers/messages';
-export interface BundleResult { code: string; cssText: string; dependencies: string[]; diagnostics: Diagnostic[]; }
-const WORKER_REQUEST_TIMEOUT_MS = 20_000;
+export interface BundleResult { cancelled?: boolean; code: string; cssText: string; dependencies: string[]; importMap?: Record<string, string>; diagnostics: Diagnostic[]; }
+const WORKER_REQUEST_TIMEOUT_MS = 45_000;
 
 function createBundlerFailureDiagnostic(fileId: string, message: string): Diagnostic {
   return {
@@ -18,8 +18,35 @@ function createBundlerFailureDiagnostic(fileId: string, message: string): Diagno
 export class EsbuildBundlerService {
   private worker: Worker | null = null;
   private requestId = 0;
+  private running = false;
+  private pending: { files: WorkerFileInput[]; entryFile: string; resolve: (result: BundleResult) => void } | null = null;
+  private cancelActive: (() => void) | null = null;
+  private cancelled(): BundleResult { return { cancelled: true, code: '', cssText: '', dependencies: [], diagnostics: [] }; }
   private ensureWorker() { this.worker ??= new Worker(new URL('../workers/bundler.worker.ts', import.meta.url), { type: 'module' }); return this.worker; }
   build(files: WorkerFileInput[], entryFile: string): Promise<BundleResult> {
+    return new Promise(resolve => {
+      this.pending?.resolve(this.cancelled());
+      this.pending = { files, entryFile, resolve };
+      void this.drain();
+    });
+  }
+  private async drain(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      while (this.pending) {
+        const task = this.pending;
+        this.pending = null;
+        let result: BundleResult;
+        try { result = await this.execute(task.files, task.entryFile); }
+        catch (error) {
+          result = { code: '', cssText: '', dependencies: [], diagnostics: [createBundlerFailureDiagnostic(task.entryFile, String(error))] };
+        }
+        task.resolve(this.pending ? this.cancelled() : result);
+      }
+    } finally { this.running = false; }
+  }
+  private execute(files: WorkerFileInput[], entryFile: string): Promise<BundleResult> {
     const worker = this.ensureWorker();
     const id = ++this.requestId;
     return new Promise((resolve) => {
@@ -27,11 +54,12 @@ export class EsbuildBundlerService {
       const settle = (result: BundleResult, shouldResetWorker = false) => {
         if (isSettled) return;
         isSettled = true;
+        this.cancelActive = null;
         clearTimeout(timeout);
         worker.removeEventListener('message', onMessage);
         worker.removeEventListener('error', onError);
         worker.removeEventListener('messageerror', onMessageError);
-        if (shouldResetWorker) {
+        if (shouldResetWorker && this.worker === worker) {
           this.worker?.terminate();
           this.worker = null;
         }
@@ -51,7 +79,7 @@ export class EsbuildBundlerService {
         const msg = event.data;
         if (msg.type !== 'BUNDLE_RESULT' || msg.requestId !== id) return;
         settle(msg.success
-          ? { code: msg.code, cssText: msg.cssText, dependencies: msg.dependencies, diagnostics: [] }
+          ? { code: msg.code, cssText: msg.cssText, dependencies: msg.dependencies, importMap: msg.importMap, diagnostics: [] }
           : { code: '', cssText: '', dependencies: [], diagnostics: msg.errors });
       };
       const onError = (event: ErrorEvent) => fail(event.message || 'Bundler worker failed', true);
@@ -61,11 +89,16 @@ export class EsbuildBundlerService {
       worker.addEventListener('message', onMessage);
       worker.addEventListener('error', onError);
       worker.addEventListener('messageerror', onMessageError);
-      worker.postMessage({ type: 'BUNDLE_BUILD', requestId: id, files, entryFile });
+      this.cancelActive = () => settle(this.cancelled(), true);
+      try { worker.postMessage({ type: 'BUNDLE_BUILD', requestId: id, files, entryFile }); }
+      catch (error) { fail(String(error), true); }
     });
   }
 
   terminate(): void {
+    this.pending?.resolve(this.cancelled());
+    this.pending = null;
+    this.cancelActive?.();
     this.worker?.terminate();
     this.worker = null;
   }

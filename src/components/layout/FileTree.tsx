@@ -1,4 +1,6 @@
 'use client';
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, useDraggable, useDroppable, DragOverlay, pointerWithin, rectIntersection, type DragEndEvent } from '@dnd-kit/core';
+import { GripVertical } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 import { FileLanguage, TreeNode, Workspace } from '@/types';
 import { buildFileTree } from '@/filesystem/virtualFs';
@@ -70,6 +72,9 @@ function guessLanguage(name: string): FileLanguage {
 }
 
 interface TreeItemProps {
+  selectionMode: boolean;
+  selected: Set<string>;
+  onToggleSelection: (id: string) => void;
   node: TreeNode;
   activeFileId: string | null;
   depth: number;
@@ -83,6 +88,7 @@ interface TreeItemProps {
 }
 
 function TreeItem({
+  selectionMode, selected, onToggleSelection,
   node,
   activeFileId,
   depth,
@@ -94,6 +100,13 @@ function TreeItem({
   onRenameFolder,
   onDeleteFolder,
 }: TreeItemProps) {
+  const drag = useDraggable({ id: node.id, data: { node } });
+  const drop = useDroppable({ id: 'drop:' + node.path, data: { path: node.path }, disabled: node.type !== 'folder' });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const start = useRef({ x: 0, y: 0 });
+  const cancelHold = () => { if (hold.current) clearTimeout(hold.current); hold.current = null; };
+  useEffect(() => () => { if (hold.current) clearTimeout(hold.current); }, []);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
   const [expanded, setExpanded] = useState(true);
@@ -105,7 +118,7 @@ function TreeItem({
 
   const handleRename = () => {
     const value = renameValue.trim();
-    if (!value || value === node.name) {
+    if (!value || value === node.name || /[\\/]/.test(value) || value === '.' || value === '..') {
       setRenaming(false);
       return;
     }
@@ -126,7 +139,13 @@ function TreeItem({
   return (
     <div>
       <div
-        className={`group relative flex items-center gap-1 rounded px-2 py-1 text-sm ${isActive ? 'bg-neutral-600/25 text-neutral-100' : 'text-neutral-300 hover:bg-neutral-800/80'}`}
+        ref={drop.setNodeRef}
+        className={`group relative flex items-center gap-1 rounded px-2 py-1 text-sm ${isActive ? 'bg-neutral-600/25 text-neutral-100' : 'text-neutral-300 hover:bg-neutral-800/80'} ${drop.isOver ? 'ring-2 ring-primary' : ''} ${drag.isDragging ? 'opacity-40' : ''}`}
+        onContextMenu={event => { if (renaming) return; event.preventDefault(); setMenuOpen(true); }}
+        onPointerDown={event => { if (event.pointerType !== 'touch' || renaming || (event.target as HTMLElement).closest('[data-file-actions]')) return; start.current = { x: event.clientX, y: event.clientY }; cancelHold(); hold.current = setTimeout(() => setMenuOpen(true), 550); }}
+        onPointerMove={event => { if (Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > 10) cancelHold(); }}
+        onPointerUp={cancelHold}
+        onPointerCancel={cancelHold}
         style={{ paddingLeft: `${(depth + 1) * 12}px` }}
       >
         {node.type === 'folder' ? (
@@ -141,6 +160,8 @@ function TreeItem({
           <span className="w-4" />
         )}
 
+        <button type="button" ref={drag.setNodeRef} {...drag.attributes} {...drag.listeners} data-file-actions aria-label={'Mover ' + node.name} className="touch-none shrink-0 cursor-grab text-muted-foreground"><GripVertical className="size-4" /></button>
+        {selectionMode && node.type === 'file' && <input type="checkbox" aria-label={'Selecionar ' + node.name} checked={selected.has(node.id)} onChange={() => onToggleSelection(node.id)} className="size-4 shrink-0 accent-primary" data-file-actions />}
         <span>{getIcon(node)}</span>
         {renaming ? (
           <input
@@ -157,9 +178,11 @@ function TreeItem({
         ) : (
           <button
             type="button"
-            className="flex-1 truncate text-left text-xs"
+            className="min-w-0 flex-1 truncate text-left text-xs"
             onClick={() => {
-              if (node.type === 'file') onSelect(node.id);
+              if (menuOpen) return;
+              if (node.type === 'file' && selectionMode) onToggleSelection(node.id);
+              else if (node.type === 'file') onSelect(node.id);
               else setExpanded((value) => !value);
             }}
           >
@@ -167,9 +190,9 @@ function TreeItem({
             {node.dirty ? <span className="ml-1 text-orange-400">●</span> : null}
           </button>
         )}
-        <DropdownMenu>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="rounded p-1 text-neutral-500 opacity-0 transition group-hover:opacity-100 hover:bg-neutral-700 hover:text-neutral-200">
+            <button type="button" data-file-actions aria-label={'Ações: ' + node.name} className="flex size-8 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground">
               <MoreHorizontal className="size-3.5" />
             </button>
           </DropdownMenuTrigger>
@@ -194,14 +217,15 @@ function TreeItem({
                 >
                   <FolderPlus className="size-4" /> Mover
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-red-300 focus:text-red-200" onClick={() => onDeleteFile(node.id)}>
+                <DropdownMenuItem className="text-red-300 focus:text-red-200" onClick={() => { if (window.confirm('Excluir ' + node.name + '?')) onDeleteFile(node.id); }}>
                   <Trash2 className="size-4" /> Excluir
                 </DropdownMenuItem>
               </>
             ) : (
-              <DropdownMenuItem className="text-red-300 focus:text-red-200" onClick={() => onDeleteFolder(node.path)}>
+              <><DropdownMenuItem onClick={() => { const next = window.prompt('Novo caminho da pasta', node.path); if (next && next !== node.path && !next.startsWith(node.path + '/')) onRenameFolder(node.path, next); }}><FolderPlus className="size-4" /> Mover pasta</DropdownMenuItem>
+              <DropdownMenuItem className="text-red-300 focus:text-red-200" onClick={() => { if (window.confirm('Excluir a pasta ' + node.name + ' e seu conteúdo?')) onDeleteFolder(node.path); }}>
                 <Trash2 className="size-4" /> Excluir pasta
-              </DropdownMenuItem>
+              </DropdownMenuItem></>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -211,6 +235,7 @@ function TreeItem({
           key={child.id}
           node={child}
           activeFileId={activeFileId}
+          selectionMode={selectionMode} selected={selected} onToggleSelection={onToggleSelection}
           depth={depth + 1}
           onSelect={onSelect}
           onRenameFile={onRenameFile}
@@ -246,7 +271,23 @@ export default function FileTree({
   const uploadFolderRef = useRef<HTMLInputElement>(null);
   const uploadZipRef = useRef<HTMLInputElement>(null);
   const newFileInputRef = useRef<HTMLInputElement>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const onToggleSelection = (id: string) => setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const selectedFiles = Object.values(workspace.files).filter(file => selected.has(file.id) && file.name !== '.keep');
   const tree = buildFileTree(workspace);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor));
+  const [dragged, setDragged] = useState<TreeNode | null>(null);
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    setDragged(null);
+    const node = active.data.current?.node as TreeNode | undefined;
+    const folder = over?.data.current?.path as string | undefined;
+    if (!node || folder === undefined) return;
+    const destination = folder ? folder + '/' + node.name : node.name;
+    if (destination === node.path || destination.startsWith(node.path + '/')) return;
+    if (node.type === 'folder') onRenameFolder(node.path, destination);
+    else onMoveFile(node.id, destination);
+  };
 
   useEffect(() => {
     if (creating) newFileInputRef.current?.focus();
@@ -294,8 +335,9 @@ export default function FileTree({
       }}
     >
       <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Files</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{selectionMode ? selectedFiles.length + ' selecionados' : 'Files'}</span>
         <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => { setSelectionMode(value => !value); setSelected(new Set()); }}>{selectionMode ? 'Cancelar' : 'Selecionar'}</Button>
           <Button
             onClick={() => setCreating(true)}
             variant="ghost"
@@ -370,6 +412,10 @@ export default function FileTree({
         }}
       />
 
+      {selectionMode && <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
+        <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(Object.values(workspace.files).filter(file => file.name !== '.keep').map(file => file.id)))}>Todos</Button>
+        <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Limpar</Button>
+      </div>}
       {creating && (
         <div className="border-b border-neutral-800 px-2 py-1">
           <input
@@ -389,7 +435,9 @@ export default function FileTree({
           />
         </div>
       )}
+      <DndContext sensors={sensors} collisionDetection={args => { const hits = pointerWithin(args); return hits.length ? hits : rectIntersection(args); }} onDragStart={event => setDragged(event.active.data.current?.node ?? null)} onDragCancel={() => setDragged(null)} onDragEnd={handleDragEnd}>
       <div className="flex-1 overflow-auto py-1">
+        <RootDropTarget />
         {isDragOver ? (
           <div className="mx-2 mb-2 rounded border border-dashed border-neutral-500/60 bg-neutral-500/10 px-2 py-1 text-[11px] text-neutral-300">
             Solte ZIP/arquivos aqui para importar
@@ -400,6 +448,7 @@ export default function FileTree({
             key={node.id}
             node={node}
             activeFileId={activeFileId}
+          selectionMode={selectionMode} selected={selected} onToggleSelection={onToggleSelection}
             depth={0}
             onSelect={onSelectFile}
             onRenameFile={onRenameFile}
@@ -411,6 +460,13 @@ export default function FileTree({
           />
         ))}
       </div>
+      <DragOverlay>{dragged ? <div className="rounded border border-border bg-popover px-3 py-2 text-sm shadow-lg">{getIcon(dragged)} {dragged.name}</div> : null}</DragOverlay>
+      </DndContext>
     </div>
   );
+}
+
+function RootDropTarget() {
+  const { setNodeRef, isOver } = useDroppable({ id: 'drop:root', data: { path: '' } });
+  return <div ref={setNodeRef} className={`mx-2 mb-1 rounded border border-dashed px-2 py-1 text-xs text-muted-foreground ${isOver ? 'border-primary bg-accent' : 'border-border'}`}>Workspace /</div>;
 }

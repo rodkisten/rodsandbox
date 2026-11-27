@@ -1,8 +1,8 @@
+import type { TypeAttempt } from '@/compiler/typeAcquisition';
 'use client';
 
+import { PanelNavigation } from '@/components/uai/panel-navigation';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
-import { useRouter } from 'next/navigation';
 import type { Completion, CompletionContext, CompletionSource } from '@codemirror/autocomplete';
 import type { Extension } from '@codemirror/state';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
@@ -10,7 +10,7 @@ import { useWorkspace } from '@/hooks/useWorkspace';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import Toolbar from './Toolbar';
 import FileTree from './FileTree';
-import PreviewPanel, { PreviewPanelHandle } from './PreviewPanel';
+import PreviewPanel, { PreviewPanelHandle, type BuildStatus } from './PreviewPanel';
 import LogsPanel from './LogsPanel';
 import DiagnosticsPanel from './DiagnosticsPanel';
 import DependencyPanel from './DependencyPanel';
@@ -19,6 +19,7 @@ import ReplPanel from './ReplPanel';
 import TerminalPanel from './TerminalPanel';
 import GitPanel from './GitPanel';
 import StatusBar from './StatusBar';
+import { ActivityBar, EditorTabs, PanelHeader } from './workbench/WorkbenchChrome';
 import CommandPalette, { CommandPaletteCommand } from '@/components/ui/CommandPalette';
 import { buildPreviewHtml } from '@/preview/builder';
 import { downloadFile } from '@/lib/download';
@@ -27,7 +28,6 @@ import { exportWorkspaceJson, importWorkspaceJson } from '@/lib/workspaceTransfe
 import { createWorkspaceSnapshot, deleteWorkspaceSnapshot, diffSnapshotAgainstWorkspace, getWorkspaceSnapshot, listWorkspaceSnapshots } from '@/lib/snapshots';
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
 import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constants';
-import { loadConsoleLogs, saveConsoleLogs } from '@/persistence/db';
 import { inferLanguageFromPath, listFiles } from '@/filesystem/virtualFs';
 import { WORKSPACE_TEMPLATES, getTemplateById } from '@/filesystem/templates';
 import { TypeScriptWorkerClient } from '@/compiler/tsWorkerClient';
@@ -37,6 +37,7 @@ import { PluginRegistry } from '@/plugins/registry';
 import { builtinPlugins } from '@/plugins/builtin';
 import { t } from '@/lib/i18n';
 import {
+  Code2, Monitor, Terminal,
   ChevronDown,
   ChevronUp,
   Files,
@@ -46,7 +47,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-const Editor = dynamic(() => import('@/editor/Editor'), { ssr: false });
+const LazyEditor = React.lazy(() => import('@/editor/Editor'));
+function Editor(props: React.ComponentProps<typeof LazyEditor>) {
+  return <React.Suspense fallback={<div role="status" className="p-3 text-sm text-neutral-400">Loading editor…</div>}><LazyEditor {...props} /></React.Suspense>;
+}
 
 function generateId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
@@ -56,23 +60,31 @@ function createDiagnostic(partial: Omit<Diagnostic, 'id'>): Diagnostic {
   return { id: `diag-${generateId()}`, ...partial };
 }
 
-function useMobilePortrait() {
+function useMobilePortrait(embedded: boolean, root: React.RefObject<HTMLDivElement | null>) {
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   useEffect(() => {
+    if (embedded && root.current) {
+      const element = root.current;
+      const apply = () => setIsMobilePortrait(element.clientWidth <= 900);
+      const observer = new ResizeObserver(apply);
+      observer.observe(element);
+      apply();
+      return () => observer.disconnect();
+    }
     const mediaQuery = window.matchMedia('(max-width: 900px) and (orientation: portrait)');
     const apply = () => setIsMobilePortrait(mediaQuery.matches);
     apply();
     mediaQuery.addEventListener('change', apply);
     return () => mediaQuery.removeEventListener('change', apply);
-  }, []);
+  }, [embedded, root]);
   return isMobilePortrait;
 }
 
 function ResizeGrip() {
-  return <Separator className="relative flex h-3 items-center justify-center bg-neutral-900/70 transition-colors hover:bg-neutral-500/25 data-[resize-handle-active]:bg-neutral-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
+  return <Separator className="relative flex h-3 items-center justify-center bg-muted/40 transition-colors hover:bg-neutral-500/25 data-[resize-handle-active]:bg-neutral-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
 }
 
-export default function Playground({ workspaceId, userId }: { workspaceId?: string; userId?: string }) {
+export default function Playground({ workspaceId, userId, embedded = false }: { workspaceId?: string; userId?: string; embedded?: boolean }) {
   const {
     workspace,
     activeFile,
@@ -92,20 +104,25 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     saveWorkspace,
   } = useWorkspace(workspaceId);
   const { settings, loading: settingsLoading, updateSettings } = useAppSettings();
-  const router = useRouter();
 
   // Ownership check: redirect if the loaded workspace belongs to a different user.
   useEffect(() => {
     if (loading) return;
     if (userId && workspace.ownerId && workspace.ownerId !== userId) {
-      router.replace('/workspaces');
+      if (!embedded) window.location.replace('/workspaces');
     }
-  }, [loading, workspace.ownerId, userId, router]);
+  }, [loading, workspace.ownerId, userId, embedded]);
 
+  const [mobilePane, setMobilePane] = useState('editor');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+  const [buildStatus, setBuildStatus] = useState<BuildStatus>({ phase: 'idle' });
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [dependencies, setDependencies] = useState<string[]>([]);
+  const [typeAttempts, setTypeAttempts] = useState<TypeAttempt[]>([]);
+  const reportTypeAttempt = useCallback((attempt: TypeAttempt | null) => setTypeAttempts(previous => attempt ? [...previous.filter(item => item.name !== attempt.name || item.version !== attempt.version), attempt] : []), []);
+  const [typePaths, setTypePaths] = useState<string[]>([]);
+  const [resolvedImports, setResolvedImports] = useState<Record<string, string>>({});
   const [isFormatting, setIsFormatting] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [pluginEditorExtensions, setPluginEditorExtensions] = useState<Extension[]>([]);
@@ -138,31 +155,12 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   const workspaceImportInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceBundleImportInputRef = useRef<HTMLInputElement | null>(null);
   const editorCursorRef = useRef<{ fileId: string; position: number } | null>(null);
-  const consoleLogsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isMobilePortrait = useMobilePortrait();
-
-  // Load persisted console logs on mount.
-  useEffect(() => {
-    loadConsoleLogs().then((persisted) => {
-      if (persisted.length > 0) setLogs(persisted);
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Save console logs to DB (debounced) whenever they change.
-  useEffect(() => {
-    if (consoleLogsSaveTimer.current) clearTimeout(consoleLogsSaveTimer.current);
-    consoleLogsSaveTimer.current = setTimeout(() => {
-      saveConsoleLogs(logs.slice(-MAX_LOG_ENTRIES)).catch(() => {});
-    }, 1000);
-    return () => {
-      if (consoleLogsSaveTimer.current) clearTimeout(consoleLogsSaveTimer.current);
-    };
-  }, [logs]);
+  const workbenchRoot = useRef<HTMLDivElement>(null);
+  const isMobilePortrait = useMobilePortrait(embedded, workbenchRoot);
 
   useEffect(() => {
-    tsWorkerRef.current = new TypeScriptWorkerClient();
+    tsWorkerRef.current = new TypeScriptWorkerClient(setTypePaths, reportTypeAttempt);
     formatterWorkerRef.current = new FormatterWorkerClient();
     bundlerRef.current = new EsbuildBundlerService();
     return () => {
@@ -242,7 +240,11 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     }));
   }, [activeFile?.id, updateSettings]);
 
-  const compileWorkspace = useCallback(async (): Promise<{ files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string; dependencies: string[] }> => {
+  const runRevision = useRef(0);
+  const consoleRunId = useRef<string | undefined>(undefined);
+  const preserveLogsRef = useRef(settings.preserveLogs ?? false);
+  preserveLogsRef.current = settings.preserveLogs ?? false;
+  const compileWorkspace = useCallback(async (revision: number): Promise<{ cancelled?: boolean; files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string; dependencies: string[]; importMap?: Record<string, string> }> => {
     const files = listFiles(workspace);
     const fileIdByPath = new Map(files.map((file) => [file.path, file.id]));
     let hasRunnableSource = false;
@@ -256,6 +258,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     if (!hasRunnableSource || !FEATURE_FLAGS.ENABLE_TYPESCRIPT_COMPILER) {
       setDiagnostics([]);
       setDependencies([]);
+      setResolvedImports({});
       return { files: {}, diagnosticsCount: 0, bundledCode: '', bundledCssText: '', dependencies: [] };
     }
 
@@ -263,9 +266,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       tsFiles.push({ path, content });
     }
 
-    const tsWorker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
-    tsWorkerRef.current = tsWorker;
-    const tsDiagnostics = await tsWorker.getDiagnostics(tsFiles);
+    const tsDiagnostics: Diagnostic[] = [];
 
     const runtimeFilesByPath = new Map(files.map((file) => [file.path, { path: file.path, content: file.content, language: file.language }]));
     for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
@@ -285,7 +286,9 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     const bundler = bundlerRef.current ?? new EsbuildBundlerService();
     bundlerRef.current = bundler;
     const bundleResult = await bundler.build(runtimeFiles, entryFile);
+    if (bundleResult.cancelled || revision !== runRevision.current) return { cancelled: true, files: {}, diagnosticsCount: 0, bundledCode: '', bundledCssText: '', dependencies: [] };
     setDependencies(bundleResult.dependencies);
+    setResolvedImports(bundleResult.importMap ?? {});
 
     const normalizedTsDiagnostics = tsDiagnostics.map((diag) => ({
       ...diag,
@@ -296,13 +299,13 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       fileId: fileIdByPath.get(diag.fileId) ?? diag.fileId,
     }));
     const allDiagnostics = [...normalizedTsDiagnostics, ...normalizedBundlerDiagnostics];
-    setDiagnostics(allDiagnostics);
+    setDiagnostics(prev => [...prev.filter(d => d.source === 'typescript'), ...allDiagnostics]);
 
     const compiledFiles: Record<string, string> = {
       [`${entryFile.replace(/\.tsx?$/, '').replace(/\.jsx?$/, '')}.js`]: bundleResult.code,
     };
 
-    return { files: compiledFiles, diagnosticsCount: allDiagnostics.length, bundledCode: bundleResult.code, bundledCssText: bundleResult.cssText, dependencies: bundleResult.dependencies };
+    return { files: compiledFiles, diagnosticsCount: allDiagnostics.length, bundledCode: bundleResult.code, bundledCssText: bundleResult.cssText, dependencies: bundleResult.dependencies, importMap: bundleResult.importMap };
   }, [workspace]);
 
 
@@ -320,7 +323,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       files.push({ path, content });
     }
 
-    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient(setTypePaths, reportTypeAttempt);
     tsWorkerRef.current = worker;
     const position = editorCursorRef.current?.fileId === activeFile.id
       ? editorCursorRef.current.position
@@ -335,29 +338,55 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }, [activeFile, setActiveFile, workspace]);
 
   const handleTypecheck = useCallback(() => {
-    void compileWorkspace().then((result) => {
-      if (result.diagnosticsCount > 0) {
-        updateSettings((prev) => ({ ...prev, bottomTab: 'diagnostics' }));
-      }
+    const files = listFiles(workspace);
+    const sources = files.filter(file => /\.[jt]sx?$|(?:^|\/)(?:package|tsconfig)\.json$/.test(file.path)).map(file => ({ path: file.path, content: file.content }));
+    for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) sources.push({ path, content });
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient(setTypePaths, reportTypeAttempt);
+    tsWorkerRef.current = worker;
+    const ids = new Map(files.map(file => [file.path, file.id]));
+    void worker.getDiagnostics(sources).then(diagnostics => {
+      setDiagnostics(prev => [...prev.filter(d => d.source !== 'typescript'), ...diagnostics.map(d => ({ ...d, fileId: ids.get(d.fileId) ?? d.fileId }))]);
     });
-  }, [compileWorkspace, updateSettings]);
+  }, [workspace]);
 
   const handleRun = useCallback(() => {
-    void compileWorkspace().then((result) => {
+    const revision = ++runRevision.current;
+    const started = performance.now();
+    setBuildStatus({ phase: 'building' });
+    if (!preserveLogsRef.current) setLogs([]);
+    setDiagnostics(prev => prev.filter(d => d.source !== 'runtime'));
+    void compileWorkspace(revision).then((result) => {
+      if (result.cancelled || revision !== runRevision.current) return;
+      const durationMs = Math.round(performance.now() - started);
+      if (!result.bundledCode && result.diagnosticsCount > 0) {
+        setBuildStatus({ phase: 'failed', durationMs });
+        return;
+      }
+      setBuildStatus({ phase: 'built', durationMs });
+      consoleRunId.current = generateId();
+      if (!preserveLogsRef.current) setLogs([]);
+      setDiagnostics(prev => prev.filter(d => d.source !== 'runtime'));
       setPreviewHtml(buildPreviewHtml({
+        runId: consoleRunId.current,
         files: workspace.files,
         compiledFiles: result.files,
         injectedScripts: pluginPreviewScriptsRef.current,
         bundledCode: result.bundledCode,
         bundledCssText: result.bundledCssText,
+        importMap: result.importMap,
       }));
       if (result.diagnosticsCount > 0) {
         updateSettings((prev) => ({ ...prev, bottomTab: 'diagnostics' }));
       }
+    }).catch(error => {
+      if (revision !== runRevision.current) return;
+      setBuildStatus({ phase: 'failed', durationMs: Math.round(performance.now() - started) });
+      setDiagnostics(prev => [...prev, createDiagnostic({ fileId: Object.values(workspace.files)[0]?.id ?? 'main.ts', severity: 'error', message: String(error), line: 1, column: 1, source: 'build' })]);
     });
   }, [compileWorkspace, workspace.files, updateSettings]);
 
   const handleMessage = useCallback((msg: PreviewMessage) => {
+    if (!consoleRunId.current || msg.runId !== consoleRunId.current) return;
     if (msg.type === 'CONSOLE_LOG') {
       setLogs((prev) => [...prev.slice(-(MAX_LOG_ENTRIES - 1)), {
         id: generateId(),
@@ -365,6 +394,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         args: msg.args ?? [],
         timestamp: msg.timestamp,
         groupDepth: 0,
+        runId: msg.runId,
       }]);
       return;
     }
@@ -380,6 +410,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         args,
         timestamp: msg.timestamp,
         groupDepth: 0,
+        runId: msg.runId,
       }]);
       return;
     }
@@ -392,6 +423,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       args,
       timestamp: msg.timestamp,
       groupDepth: 0,
+        runId: msg.runId,
     }]);
     if (activeFile) {
       setDiagnostics((prev) => [...prev, createDiagnostic({
@@ -548,6 +580,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }, [activeFile, diagnostics, settings]);
 
   const handleOpenEditorDetached = useCallback(() => {
+    if (embedded) return;
     if (detachedEditorWindowRef.current && !detachedEditorWindowRef.current.closed) {
       detachedEditorWindowRef.current.focus();
       syncDetachedEditor();
@@ -584,12 +617,12 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       detachedEditorTimeoutRef.current = null;
       syncDetachedEditor();
     }, 2000);
-  }, [syncDetachedEditor]);
+  }, [syncDetachedEditor, embedded]);
 
   useEffect(() => {
     if (!settings.autoRun) return;
     if (autoRunTimer.current) clearTimeout(autoRunTimer.current);
-    autoRunTimer.current = setTimeout(handleRun, AUTO_RUN_DEBOUNCE_MS);
+    autoRunTimer.current = setTimeout(handleRun, Math.max(1500, AUTO_RUN_DEBOUNCE_MS));
     return () => {
       if (autoRunTimer.current) clearTimeout(autoRunTimer.current);
     };
@@ -606,6 +639,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (embedded && (!workbenchRoot.current || !event.composedPath().includes(workbenchRoot.current))) return;
       const modifier = event.metaKey || event.ctrlKey;
       if (modifier && event.key.toLowerCase() === 'k') {
         event.preventDefault();
@@ -618,7 +652,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleRun]);
+  }, [handleRun, embedded]);
 
   useEffect(() => {
     syncDetachedEditor();
@@ -803,7 +837,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       if (!activeFile || !settings.editorAutocomplete) return null;
       if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return null;
 
-      const word = context.matchBefore(/\w*/);
+      const word = context.matchBefore(/[\w$]*/);
       if (!word) return null;
       if (word.from === word.to && !context.explicit) return null;
 
@@ -849,14 +883,15 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       if (!settings.editorAutocomplete || !activeFile) return null;
       if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return null;
 
-      const word = context.matchBefore(/\w*/);
+      const word = context.matchBefore(/[\w$]*/);
       if (!word) return null;
-      if (word.from === word.to && !context.explicit) return null;
+      const member = context.state.sliceDoc(Math.max(0, word.from - 1), word.from) === '.';
+      if (word.from === word.to && !context.explicit && !member) return null;
 
       const docText = context.state.doc.toString();
       const files: Array<{ path: string; content: string }> = [];
       for (const file of listFiles(workspace)) {
-        if (file.language !== 'typescript' && file.language !== 'javascript') continue;
+        if (file.language !== 'typescript' && file.language !== 'javascript' && !/\/(?:package|tsconfig)\.json$|^(?:package|tsconfig)\.json$/.test(file.path)) continue;
         files.push({
           path: file.path,
           content: file.id === activeFile.id ? docText : file.content,
@@ -867,23 +902,38 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         files.push({ path, content });
       }
 
-      const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+      const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient(setTypePaths, reportTypeAttempt);
       tsWorkerRef.current = worker;
-      const items = await worker.getCompletions(files, activeFile.path, context.pos);
-      const options: Completion[] = items.map((item) => ({
-        label: item.name,
-        type: item.kind,
-        detail: item.detail,
-      }));
-
+      let items;
+      try { items = await worker.getCompletions(files, activeFile.path, context.pos); }
+      catch { return null; }
+      if (context.aborted) return null;
+      const unique = new Map<string, Completion>();
+      const prefix = word.text.toLowerCase();
+      const matches = items.filter(item => item.name.toLowerCase().startsWith(prefix));
+      for (const item of matches) {
+        if (unique.has(item.name)) continue;
+        const kind = item.kind;
+        const type = /method|function/.test(kind) ? 'function' : /class/.test(kind) ? 'class' : /interface|type/.test(kind) ? 'type' : /property|getter|setter/.test(kind) ? 'property' : /keyword/.test(kind) ? 'keyword' : 'variable';
+        unique.set(item.name, { label: item.name, type, ...(item.detail || item.documentation ? { info: () => { const panel = document.createElement('div'); panel.className = 'p-2 text-xs whitespace-pre-wrap max-w-[280px]'; panel.textContent = [item.detail, item.documentation].filter(Boolean).join('\n\n'); return panel; } } : {}), boost: Math.max(-20, Math.min(20, 15 - (Number.parseInt(item.sortText ?? '15', 10) || 15))), ...(item.insertText && item.insertText === item.name ? { apply: item.insertText } : {}) });
+      }
+      if (!unique.size) return null;
       return {
         from: word.from,
-        options,
-        validFor: /^\w*$/,
+        options: [...unique.values()],
       };
     };
-  }, [activeFile, settings.editorAutocomplete, workspace]);
+  }, [activeFile, settings.editorAutocomplete, workspace, localCompletionSource]);
 
+
+  const tsSignatureProvider = useCallback(async (position: number, content: string) => {
+    if (!activeFile || !['typescript', 'javascript'].includes(activeFile.language)) return null;
+    const files = listFiles(workspace).filter(file => ['typescript', 'javascript', 'json'].includes(file.language)).map(file => ({ path: file.path, content: file.id === activeFile.id ? content : file.content }));
+    for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) files.push({ path, content });
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient(setTypePaths, reportTypeAttempt);
+    tsWorkerRef.current = worker;
+    return worker.getSignatureHelp(files, activeFile.path, position);
+  }, [activeFile, workspace]);
 
   const tsLanguageHoverProvider = useCallback(async (position: number) => {
     if (!activeFile) return null;
@@ -902,7 +952,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       files.push({ path, content });
     }
 
-    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient(setTypePaths, reportTypeAttempt);
     tsWorkerRef.current = worker;
     const info = await worker.getQuickInfo(files, activeFile.path, position);
     if (!info) return null;
@@ -910,19 +960,13 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }, [activeFile, workspace]);
 
   const handleDetachTerminal = useCallback(() => {
-    window.open('/detached-terminal', '_blank', 'popup=yes,width=900,height=600');
-  }, []);
+    if (!embedded) window.open('/detached-terminal', '_blank', 'popup=yes,width=900,height=600');
+  }, [embedded]);
 
   const handleToggleView = useCallback((panel: 'files' | 'preview' | 'terminal') => {
     if (isMobilePortrait) {
-      const id = panel === 'files' ? 'm-files' : panel === 'preview' ? 'm-preview' : 'm-bottom';
-      const ref = panel === 'files' ? filesPanelRef : panel === 'preview' ? previewPanelRef : bottomPanelRef;
-      if (panel === 'terminal') {
-        updateSettings((prev) => ({ ...prev, bottomTab: 'terminal' as const }));
-        togglePanelCollapse(id, ref);
-      } else {
-        togglePanelCollapse(id, ref);
-      }
+      setMobilePane(panel === 'terminal' ? 'bottom' : panel);
+      if (panel === 'terminal') updateSettings(prev => ({ ...prev, bottomTab: 'terminal' }));
     } else {
       const id = panel === 'files' ? 'd-files' : panel === 'preview' ? 'd-preview' : 'd-bottom';
       const ref = panel === 'files' ? filesPanelRef : panel === 'preview' ? previewPanelRef : bottomPanelRef;
@@ -938,10 +982,16 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
 
   const renderBottomPanelContent = () => {
     if (settings.bottomTab === 'console') {
-      return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
+      return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} preserveLogs={settings.preserveLogs ?? false} onPreserveLogsChange={value => updateSettings(prev => ({ ...prev, preserveLogs: value }))} />;
     }
     if (settings.bottomTab === 'diagnostics') {
-      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel dependencies={dependencies} packageJsonContent={packageJsonContent} onAddPackage={handleAddPackage} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>;
+      return <div className="h-full overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div>;
+    }
+    if (settings.bottomTab === 'dependencies') {
+      return <div className="h-full overflow-auto"><DependencyPanel typeAttempts={typeAttempts} typePaths={typePaths} importMap={resolvedImports} dependencies={dependencies} packageJsonContent={packageJsonContent} onAddPackage={handleAddPackage} /></div>;
+    }
+    if (settings.bottomTab === 'plugins') {
+      return <div className="h-full overflow-auto"><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /></div>;
     }
     if (settings.bottomTab === 'terminal' && FEATURE_FLAGS.ENABLE_TERMINAL) {
       return <TerminalPanel workspace={workspace} onDetach={handleDetachTerminal} />;
@@ -971,11 +1021,14 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   };
 
   if (loading || settingsLoading) {
-    return <div className="flex h-screen items-center justify-center bg-neutral-950 text-neutral-400">Loading workspace…</div>;
+    return <div ref={workbenchRoot} className={embedded ? 'flex h-full min-h-0 items-center justify-center' : 'flex h-screen items-center justify-center bg-background text-neutral-400'}>Loading workspace…</div>;
+  }
+  if (userId && workspace.ownerId && workspace.ownerId !== userId) {
+    return <div role="alert">Workspace access denied.</div>;
   }
 
   return (
-    <div data-theme={settings.theme} className="flex h-screen flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] pt-[env(safe-area-inset-top)]">
+    <div ref={workbenchRoot} data-theme={settings.theme} data-sandbox-mode={embedded ? "embedded" : "standalone"} className={`sandbox-workbench flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] ${embedded ? "h-full" : "h-dvh pt-[env(safe-area-inset-top)]"}`}>
       <Toolbar
         onRun={handleRun}
         onFormat={handleFormat}
@@ -1005,6 +1058,10 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         editorFormatterEnabled={settings.editorFormatterEnabled}
         onToggleEditorFormatter={() => updateSettings((prev) => ({ ...prev, editorFormatterEnabled: !prev.editorFormatterEnabled }))}
         editorFontSize={settings.editorFontSize}
+        editorHistoryDepth={settings.editorHistoryDepth}
+        editorHistoryGroupDelay={settings.editorHistoryGroupDelay}
+        onEditorHistoryDepthChange={value => updateSettings(prev => ({ ...prev, editorHistoryDepth: value }))}
+        onEditorHistoryGroupDelayChange={value => updateSettings(prev => ({ ...prev, editorHistoryGroupDelay: value }))}
         onEditorFontSizeChange={(editorFontSize) => updateSettings((prev) => ({ ...prev, editorFontSize }))}
         editorTabSize={settings.editorTabSize}
         onEditorTabSizeChange={(editorTabSize) => updateSettings((prev) => ({ ...prev, editorTabSize }))}
@@ -1018,41 +1075,14 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       />
 
       {isMobilePortrait ? (
-        <Group
-          orientation="vertical"
-          className="flex-1 overflow-hidden"
-          defaultLayout={{
-            'm-files': settings.layoutSizes.mobileFiles,
-            'm-editor': settings.layoutSizes.mobileEditor,
-            'm-preview': settings.layoutSizes.mobilePreview,
-            'm-bottom': settings.layoutSizes.mobileBottom,
-          }}
-          onLayoutChanged={(layout) => {
-            updateSettings((prev) => ({
-              ...prev,
-              layoutMode: 'mobile',
-              layoutSizes: {
-                ...prev.layoutSizes,
-                mobileFiles: layout['m-files'] ?? prev.layoutSizes.mobileFiles,
-                mobileEditor: layout['m-editor'] ?? prev.layoutSizes.mobileEditor,
-                mobilePreview: layout['m-preview'] ?? prev.layoutSizes.mobilePreview,
-                mobileBottom: layout['m-bottom'] ?? prev.layoutSizes.mobileBottom,
-              },
-            }));
-          }}
-        >
-          <Panel id="m-files" defaultSize={settings.layoutSizes.mobileFiles} minSize={12} collapsible collapsedSize={6} panelRef={filesPanelRef}>
-            <div className="flex h-full flex-col border-b border-neutral-800">
-              <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                <span>Files</span>
-                <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-files', filesPanelRef)} className="h-6 w-6">
-                  {isPanelCollapsed('m-files') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden"><section aria-hidden={mobilePane !== 'files'} className={mobilePane === 'files' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
+            <div className="flex h-full flex-col border-b border-border">
+              <PanelHeader title="Files" collapsed={isPanelCollapsed('m-files')} onToggle={() => togglePanelCollapse('m-files', filesPanelRef)} />
               <FileTree
                 workspace={workspace}
                 activeFileId={workspace.activeFileId}
-                onSelectFile={setActiveFile}
+                onSelectFile={(id) => { setActiveFile(id); setMobilePane('editor'); }}
                 onRenameFile={renameFile}
                 onDeleteFile={deleteFile}
                 onCreateFile={createFile}
@@ -1064,16 +1094,11 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                 onImportEntries={upsertFiles}
               />
             </div>
-          </Panel>
-          <ResizeGrip />
-          <Panel id="m-editor" defaultSize={settings.layoutSizes.mobileEditor} minSize={18} collapsible collapsedSize={6} panelRef={editorPanelRef}>
-            <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
-              <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                <span>Editor</span>
-                <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-editor', editorPanelRef)} className="h-6 w-6">
-                  {isPanelCollapsed('m-editor') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
+          </section>
+          
+          <section aria-hidden={mobilePane !== 'editor'} className={mobilePane === 'editor' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
+            <div className="flex h-full flex-col overflow-hidden bg-background">
+              <PanelHeader title="Editor" collapsed={isPanelCollapsed('m-editor')} onToggle={() => togglePanelCollapse('m-editor', editorPanelRef)} />
               {activeFile ? (
                 <Editor
                   file={activeFile}
@@ -1084,9 +1109,11 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                   onSave={handleSave}
                   diagnostics={diagnostics}
                   extraExtensions={pluginEditorExtensions}
-                  extraAutocompleteProviders={[tsLanguageCompletionSource, localCompletionSource, ...pluginAutocompleteProviders]}
+                  extraAutocompleteProviders={[tsLanguageCompletionSource, ...pluginAutocompleteProviders]}
                   theme={settings.editorTheme}
                   fontSize={settings.editorFontSize}
+                  historyDepth={settings.editorHistoryDepth}
+                  historyGroupDelay={settings.editorHistoryGroupDelay}
                   fontFamily={settings.editorFontFamily}
                   lineNumbers={settings.editorLineNumbers}
                   wordWrap={settings.editorWordWrap}
@@ -1094,43 +1121,54 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                   linterEnabled={settings.editorLinterEnabled}
                   tabSize={settings.editorTabSize}
                   hoverProvider={tsLanguageHoverProvider}
+                  signatureProvider={tsSignatureProvider}
                   jumpTo={editorJumpTarget}
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-neutral-600">Select a file to edit</div>
+                <div className="flex h-full items-center justify-center text-muted-foreground">Select a file to edit</div>
               )}
             </div>
-          </Panel>
-          <ResizeGrip />
-          <Panel id="m-preview" defaultSize={settings.layoutSizes.mobilePreview} minSize={14} collapsible collapsedSize={6} panelRef={previewPanelRef}>
+          </section>
+          
+          <section aria-hidden={mobilePane !== 'preview'} className={mobilePane === 'preview' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
             <PreviewPanel
               ref={previewRef}
               previewHtml={previewHtml}
+              buildStatus={buildStatus}
               onMessage={handleMessage}
               onDetachedChange={(detached) => updateSettings((prev) => ({ ...prev, previewDetached: detached }))}
             />
-          </Panel>
-          <ResizeGrip />
-          <Panel id="m-bottom" defaultSize={settings.layoutSizes.mobileBottom} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
-            <div className="flex h-full flex-col overflow-hidden border-t border-neutral-800">
-              <div className="flex flex-shrink-0 items-center border-b border-neutral-800 bg-neutral-900 px-1 py-1">
-                <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
-                  <TabsList className="bg-transparent p-0">
+          </section>
+          
+          <section aria-hidden={mobilePane !== 'bottom'} className={mobilePane === 'bottom' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
+            <div className="flex h-full flex-col overflow-hidden border-t border-border">
+              <div className="flex flex-shrink-0 items-center border-b border-border bg-muted/40 px-1 py-1">
+                <Tabs className="min-w-0 flex-1 overflow-x-auto" value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
+                  <TabsList className="w-max min-w-full justify-start bg-transparent p-0">
                     <TabsTrigger value="console">{t('tabs.console')}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')} {errorCount > 0 ? <span className="ml-1 text-red-400">{errorCount}</span> : null} {warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
+                    <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
+                    {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM && <TabsTrigger value="plugins">Plugins</TabsTrigger>}
                     {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger> : null}
                     {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}
                     {FEATURE_FLAGS.ENABLE_GIT ? <TabsTrigger value="git">{t('tabs.git')}</TabsTrigger> : null}
                   </TabsList>
                 </Tabs>
-                <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-bottom', bottomPanelRef)} className="ml-auto mr-1">
-                  {isPanelCollapsed('m-bottom') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </Button>
+                
               </div>
               <div className="flex-1 overflow-hidden">{renderBottomPanelContent()}</div>
             </div>
-          </Panel>
-        </Group>
+          </section>
+        </div>
+          <div className="shrink-0 border-t border-border bg-background px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            <PanelNavigation value={mobilePane} onChange={setMobilePane} items={[
+              { id: 'files', label: 'Files', icon: <Files className="size-4" /> },
+              { id: 'editor', label: 'Editor', icon: <Code2 className="size-4" /> },
+              { id: 'preview', label: 'Preview', icon: <Monitor className="size-4" /> },
+              { id: 'bottom', label: 'Tools', icon: <Terminal className="size-4" /> },
+            ]} />
+          </div>
+        </div>
       ) : (
         <Group
           orientation="vertical"
@@ -1152,32 +1190,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         >
           <Panel id="d-main" defaultSize={100 - settings.layoutSizes.bottomPanelHeight} minSize={30}>
             <div className="flex h-full flex-row overflow-hidden">
-              {/* Activity bar */}
-              <div className="flex w-10 flex-shrink-0 flex-col items-center gap-1 border-r border-neutral-800 bg-neutral-900 py-2">
-                <button
-                  type="button"
-                  title="Files"
-                  onClick={() => updateSettings((prev) => ({ ...prev, sidebarView: 'files' }))}
-                  className={`flex h-9 w-9 items-center justify-center rounded transition ${settings.sidebarView === 'files' ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
-                >
-                  <Files className="h-5 w-5" />
-                </button>
-                {FEATURE_FLAGS.ENABLE_GIT && (
-                  <button
-                    type="button"
-                    title="Source Control"
-                    onClick={() => updateSettings((prev) => ({ ...prev, sidebarView: 'git' }))}
-                    className={`relative flex h-9 w-9 items-center justify-center rounded transition ${settings.sidebarView === 'git' ? 'bg-neutral-700 text-white' : 'text-neutral-500 hover:text-neutral-300'}`}
-                  >
-                    <GitBranchIcon className="h-5 w-5" />
-                    {errorCount > 0 && (
-                      <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
-                        {errorCount > 9 ? '9+' : errorCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-              </div>
+              <ActivityBar items={[{ id: 'files', label: 'Files', icon: Files }, ...(FEATURE_FLAGS.ENABLE_GIT ? [{ id: 'git', label: 'Source Control', icon: GitBranchIcon }] : [])]} activeId={settings.sidebarView} onSelect={id => updateSettings(prev => ({ ...prev, sidebarView: id as typeof prev.sidebarView }))} />
               <Group
                 orientation="horizontal"
                 defaultLayout={{
@@ -1198,12 +1211,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
               >
                 <Panel id="d-files" defaultSize={settings.layoutSizes.sidebarWidth} minSize={12} maxSize={35} collapsible collapsedSize={6} panelRef={filesPanelRef}>
                   <div className="flex h-full flex-col">
-                    <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                      <span>{settings.sidebarView === 'git' ? 'Source Control' : 'Explorer'}</span>
-                      <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-files', filesPanelRef)} className="h-6 w-6">
-                        {isPanelCollapsed('d-files') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
+                    <PanelHeader title={settings.sidebarView === 'git' ? 'Source Control' : 'Explorer'} collapsed={isPanelCollapsed('d-files')} onToggle={() => togglePanelCollapse('d-files', filesPanelRef)} />
                     {settings.sidebarView === 'git' && FEATURE_FLAGS.ENABLE_GIT ? (
                       <GitPanel
                         workspace={workspace}
@@ -1229,37 +1237,10 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                     )}
                   </div>
                 </Panel>
-                <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
+                <Separator className="w-2 bg-muted/40 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
                 <Panel id="d-editor" defaultSize={Math.max(20, 100 - settings.layoutSizes.sidebarWidth - settings.layoutSizes.previewWidth)} minSize={30} collapsible collapsedSize={6} panelRef={editorPanelRef}>
-                  <div className="flex h-full flex-col overflow-hidden bg-neutral-950">
-                    {/* Editor tab bar */}
-                    <div className="flex flex-shrink-0 items-center gap-0 overflow-x-auto border-b border-neutral-800 bg-neutral-900 scrollbar-none">
-                      {settings.openedFileIds.map((fileId) => {
-                        const file = workspace.files[fileId];
-                        if (!file) return null;
-                        const isActive = fileId === settings.activeFileId;
-                        return (
-                          <button
-                            key={fileId}
-                            type="button"
-                            className={`group flex flex-shrink-0 items-center gap-1.5 border-r border-neutral-800 px-3 py-1.5 text-[12px] transition ${
-                              isActive
-                                ? 'border-t-2 border-t-[#007acc] bg-neutral-950 text-white'
-                                : 'text-neutral-500 hover:bg-neutral-800/60 hover:text-neutral-300'
-                            }`}
-                            onClick={() => setActiveFile(fileId)}
-                          >
-                            <span className="max-w-[120px] truncate">{file.name}</span>
-                            <span
-                              className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition hover:bg-neutral-700 group-hover:opacity-100"
-                              onClick={(e) => { e.stopPropagation(); handleCloseTab(fileId); }}
-                            >
-                              <X className="h-2.5 w-2.5" />
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div className="flex h-full flex-col overflow-hidden bg-background">
+                    <EditorTabs items={settings.openedFileIds.flatMap(id => workspace.files[id] ? [{ id, label: workspace.files[id].name }] : [])} activeId={settings.activeFileId} onSelect={setActiveFile} onClose={handleCloseTab} />
                     {activeFile ? (
                       <Editor
                         file={activeFile}
@@ -1270,9 +1251,11 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                         onSave={handleSave}
                         diagnostics={diagnostics}
                         extraExtensions={pluginEditorExtensions}
-                        extraAutocompleteProviders={[tsLanguageCompletionSource, localCompletionSource, ...pluginAutocompleteProviders]}
+                        extraAutocompleteProviders={[tsLanguageCompletionSource, ...pluginAutocompleteProviders]}
                         theme={settings.editorTheme}
                         fontSize={settings.editorFontSize}
+                  historyDepth={settings.editorHistoryDepth}
+                  historyGroupDelay={settings.editorHistoryGroupDelay}
                         fontFamily={settings.editorFontFamily}
                         lineNumbers={settings.editorLineNumbers}
                         wordWrap={settings.editorWordWrap}
@@ -1280,28 +1263,25 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                         linterEnabled={settings.editorLinterEnabled}
                         tabSize={settings.editorTabSize}
                         hoverProvider={tsLanguageHoverProvider}
+                  signatureProvider={tsSignatureProvider}
                         jumpTo={editorJumpTarget}
                       />
                     ) : (
-                      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-neutral-600">
+                      <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
                         <Files className="h-10 w-10 opacity-20" />
                         <span className="text-sm">Select a file to edit</span>
                       </div>
                     )}
                   </div>
                 </Panel>
-                <Separator className="w-2 bg-neutral-900/70 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
+                <Separator className="w-2 bg-muted/40 hover:bg-neutral-500/30 data-[resize-handle-active]:bg-neutral-500/40" />
                 <Panel id="d-preview" defaultSize={settings.layoutSizes.previewWidth} minSize={20} collapsible collapsedSize={6} panelRef={previewPanelRef}>
                   <div className="flex h-full flex-col overflow-hidden">
-                    <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/70 px-2 py-1 text-[11px] uppercase tracking-wide text-neutral-400">
-                      <span>Preview</span>
-                      <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('d-preview', previewPanelRef)} className="h-6 w-6">
-                        {isPanelCollapsed('d-preview') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                      </Button>
-                    </div>
+                    <PanelHeader title="Preview" collapsed={isPanelCollapsed('d-preview')} onToggle={() => togglePanelCollapse('d-preview', previewPanelRef)} />
                     <PreviewPanel
                       ref={previewRef}
                       previewHtml={previewHtml}
+              buildStatus={buildStatus}
                       onMessage={handleMessage}
                       onDetachedChange={(detached) => updateSettings((prev) => ({ ...prev, previewDetached: detached }))}
                     />
@@ -1312,12 +1292,14 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
           </Panel>
           <ResizeGrip />
           <Panel id="d-bottom" defaultSize={settings.layoutSizes.bottomPanelHeight} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
-            <div className="flex h-full flex-col overflow-hidden border-t border-neutral-800">
-              <div className="flex flex-shrink-0 items-center border-b border-neutral-800 bg-neutral-900 px-1 py-1">
-                <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
-                  <TabsList className="bg-transparent p-0">
-                    <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-neutral-500">{logs.length}</span> : null}</TabsTrigger>
+            <div className="flex h-full flex-col overflow-hidden border-t border-border">
+              <div className="flex flex-shrink-0 items-center border-b border-border bg-muted/40 px-1 py-1">
+                <Tabs className="min-w-0 flex-1 overflow-x-auto" value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
+                  <TabsList className="w-max min-w-full justify-start bg-transparent p-0">
+                    <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-muted-foreground">{logs.length}</span> : null}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
+                    <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
+                    {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM && <TabsTrigger value="plugins">Plugins</TabsTrigger>}
                     <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger>
                     {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}
                     {FEATURE_FLAGS.ENABLE_GIT ? <TabsTrigger value="git">{t('tabs.git')}</TabsTrigger> : null}

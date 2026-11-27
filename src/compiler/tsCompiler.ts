@@ -21,7 +21,7 @@ const DEFAULT_COMPILER_OPTIONS: ts.CompilerOptions = {
   esModuleInterop: true,
   skipLibCheck: true,
   noEmitOnError: false,
-  jsx: ts.JsxEmit.React,
+  jsx: ts.JsxEmit.ReactJSX,
   moduleResolution: ts.ModuleResolutionKind.Bundler,
 };
 
@@ -356,6 +356,32 @@ declare function structuredClone<T>(value: T, options?: { transfer?: unknown[] }
 declare function eval(x: string): unknown;
 `;
 
+
+// Use TypeScript's own directory matcher against the virtual filesystem.
+function projectRoots(files: Map<string, string>): string[] {
+  const config = files.get('/tsconfig.json') ?? files.get('tsconfig.json');
+  const paths = new Map([...files.keys()].map(path => ['/' + path.replace(/^\/+/, ''), path]));
+  const sourcePaths = [...paths.keys()].filter(path => /\.[cm]?[jt]sx?$/.test(path));
+  if (!config) return sourcePaths.filter(path => !/(^|\/)(node_modules|\.git|dist|build)\//.test(path)).map(path => paths.get(path)!);
+  const parsed = ts.parseConfigFileTextToJson('/tsconfig.json', config);
+  if (parsed.error) return sourcePaths.map(path => paths.get(path)!);
+  type MatchFiles = (path: string, extensions: readonly string[] | undefined, excludes: readonly string[] | undefined, includes: readonly string[] | undefined, caseSensitive: boolean, cwd: string, depth: number | undefined, entries: (path: string) => { files: string[]; directories: string[] }, realpath: (path: string) => string) => string[];
+  const matchFiles = (ts as unknown as { matchFiles?: MatchFiles }).matchFiles;
+  const entries = (directory: string) => {
+    const prefix = '/' + directory.replace(/^\/+|\/+$/g, '') + '/';
+    const normalized = prefix === '//' ? '/' : prefix;
+    const children = [...paths.keys()].filter(path => path.startsWith(normalized)).map(path => path.slice(normalized.length));
+    return { files: children.filter(path => !path.includes('/')), directories: [...new Set(children.filter(path => path.includes('/')).map(path => path.split('/')[0]))] };
+  };
+  const result = ts.parseJsonConfigFileContent(parsed.config, {
+    useCaseSensitiveFileNames: true,
+    fileExists: path => paths.has(path),
+    readFile: path => files.get(paths.get(path) ?? path),
+    readDirectory: (path, extensions, excludes, includes, depth) => matchFiles ? matchFiles(path, extensions, excludes, includes, true, '/', depth, entries, path => path) : sourcePaths,
+  }, '/', DEFAULT_COMPILER_OPTIONS, '/tsconfig.json');
+  return result.fileNames.map(path => paths.get(path)).filter((path): path is string => path !== undefined);
+}
+
 function createLanguageServiceHost(
   files: Map<string, string>,
   getVersion: () => number,
@@ -364,12 +390,15 @@ function createLanguageServiceHost(
   dependencies: Map<string, string>
 ): ts.LanguageServiceHost {
   const allPaths = () => [...files.keys(), ...libraries.keys(), ...dependencies.keys()];
-  const lookup = (name: string) => files.get(name) ?? files.get(name.replace(/^\//, '')) ?? libraries.get(name) ?? dependencies.get(name);
+  const lookup = (name: string) => {
+    const absolute = '/' + name.replace(/^\/+/, '');
+    return files.get(name) ?? files.get(absolute) ?? files.get(absolute.slice(1)) ?? libraries.get(absolute) ?? dependencies.get(absolute);
+  };
   const directoryPrefix = (name: string) => name.replace(/\/$/, '') + '/';
   return {
     directoryExists: (name) => name === '/' || allPaths().some(path => ('/' + path.replace(/^\//, '')).startsWith(directoryPrefix(name))),
     getDirectories: (name) => [...new Set(allPaths().map(path => '/' + path.replace(/^\//, '')).filter(path => path.startsWith(directoryPrefix(name))).map(path => path.slice(directoryPrefix(name).length)).filter(path => path.includes('/')).map(path => path.split('/')[0]))],
-    getScriptFileNames: () => [...(libraries.size ? [] : [VIRTUAL_LIB_NAME]), ...Array.from(files.keys())],
+    getScriptFileNames: () => [...(libraries.size ? [] : [VIRTUAL_LIB_NAME]), ...projectRoots(files)],
     getScriptVersion: () => String(getVersion()),
     getScriptSnapshot: (fileName) => {
       if (fileName === VIRTUAL_LIB_NAME) {
@@ -384,7 +413,7 @@ function createLanguageServiceHost(
       fileName === VIRTUAL_LIB_NAME || lookup(fileName) !== undefined,
     readFile: (fileName) => {
       if (fileName === VIRTUAL_LIB_NAME) return MINIMAL_LIB_D_TS;
-      return libraries.get(fileName) ?? files.get(fileName);
+      return lookup(fileName);
     },
     readDirectory: () => [],
     getCurrentDirectory: () => '/',
@@ -394,7 +423,12 @@ function createLanguageServiceHost(
     }),
     getNewLine: () => '\n',
     useCaseSensitiveFileNames: () => true,
-    resolveModuleNameLiterals: undefined,
+    resolveModuleNameLiterals: (literals, containingFile, _redirected, options) => literals.map(literal => ts.resolveModuleName(literal.text, '/' + containingFile.replace(/^\/+/, ''), options, {
+      fileExists: name => lookup(name) !== undefined,
+      readFile: lookup,
+      directoryExists: name => name === '/' || allPaths().some(path => ('/' + path.replace(/^\/+/, '')).startsWith(directoryPrefix('/' + name.replace(/^\/+/, '')))),
+      getCurrentDirectory: () => '/',
+    })),
   };
 }
 
@@ -405,7 +439,7 @@ function createLanguageServiceHost(
  */
 export function parseTsConfigCompilerOptions(raw: string): ts.CompilerOptions {
   try {
-    const json = JSON.parse(raw) as { compilerOptions?: Record<string, unknown> };
+    const json = ts.parseConfigFileTextToJson('/tsconfig.json', raw).config as { compilerOptions?: Record<string, unknown> };
     const co = json.compilerOptions ?? {};
 
     const targetMap: Record<string, ts.ScriptTarget> = {
@@ -475,7 +509,7 @@ export function parseTsConfigCompilerOptions(raw: string): ts.CompilerOptions {
     if (typeof co.noUncheckedIndexedAccess === 'boolean') result.noUncheckedIndexedAccess = co.noUncheckedIndexedAccess;
     if (typeof co.exactOptionalPropertyTypes === 'boolean') result.exactOptionalPropertyTypes = co.exactOptionalPropertyTypes;
 
-    return result;
+    return { ...result, ...ts.convertCompilerOptionsFromJson(co, '/').options };
   } catch {
     return { ...DEFAULT_COMPILER_OPTIONS };
   }
@@ -506,7 +540,7 @@ export class BrowserTypeScriptCompiler {
    * Increments version so the language service picks up the change.
    */
   setCompilerOptions(options: ts.CompilerOptions): void {
-    this.compilerOptions = options;
+    this.compilerOptions = { ...DEFAULT_COMPILER_OPTIONS, ...options };
     this.version++;
   }
 
@@ -590,6 +624,16 @@ export class BrowserTypeScriptCompiler {
     return result;
   }
 
+  collectDiagnostics(): Diagnostic[] {
+    const diagnostics: Diagnostic[] = [];
+    for (const path of projectRoots(this.files)) {
+      if (!/\.[jt]sx?$/.test(path) || path.endsWith('.d.ts')) continue;
+      diagnostics.push(...this.languageService.getSyntacticDiagnostics(path).map(d => normalizeTsDiagnosticToModel(d, path)));
+      diagnostics.push(...this.getSemanticDiagnostics(path));
+    }
+    return diagnostics;
+  }
+
   getSemanticDiagnostics(path: string): Diagnostic[] {
     if (!this.files.has(path)) return [];
     try {
@@ -614,19 +658,43 @@ export class BrowserTypeScriptCompiler {
     );
   }
 
-  getCompletions(path: string, position: number): Array<{ name: string; kind: string; detail?: string }> {
+  getCompletions(path: string, position: number): Array<{ name: string; kind: string; detail?: string; sortText?: string; insertText?: string; documentation?: string }> {
     if (!this.files.has(path)) return [];
     try {
       const completions = this.languageService.getCompletionsAtPosition(path, position, {});
       if (!completions) return [];
-      return completions.entries.slice(0, 100).map((entry) => ({
+      const prefix = (this.files.get(path)?.slice(0, position).match(/[\w$]*$/)?.[0] ?? '').toLowerCase();
+      const rank = (name: string) => name.toLowerCase().startsWith(prefix) ? 0 : name.toLowerCase().includes(prefix) ? 1 : 2;
+      return completions.entries.filter(entry => !entry.source && !entry.hasAction).sort((a, b) => rank(a.name) - rank(b.name) || a.sortText.localeCompare(b.sortText)).slice(0, 500).map((entry, index) => {
+        let details: ts.CompletionEntryDetails | undefined;
+        if (index < 12) { try { details = this.languageService.getCompletionEntryDetails(path, position, entry.name, undefined, entry.source, undefined, entry.data); } catch { /* Documentation must not discard valid completions. */ } }
+        return {
         name: entry.name,
         kind: entry.kind,
-        detail: entry.kindModifiers,
-      }));
+        sortText: entry.sortText,
+        insertText: entry.insertText,
+        detail: details ? ts.displayPartsToString(details.displayParts) : undefined,
+        documentation: details ? ts.displayPartsToString(details.documentation ?? []) : undefined,
+      }; });
     } catch {
       return [];
     }
+  }
+
+  getSignatureHelp(path: string, position: number): import('@/types/tsLanguage').TsSignatureHelp | null {
+    if (!this.files.has(path)) return null;
+    const help = this.languageService.getSignatureHelpItems(path, position, undefined);
+    const item = help?.items[help.selectedItemIndex];
+    if (!help || !item) return null;
+    const display = ts.displayPartsToString;
+    return {
+      prefix: display(item.prefixDisplayParts),
+      suffix: display(item.suffixDisplayParts),
+      separator: display(item.separatorDisplayParts),
+      parameters: item.parameters.map(parameter => ({ display: display(parameter.displayParts), documentation: display(parameter.documentation) })),
+      activeParameter: item.isVariadic ? Math.min(help.argumentIndex, item.parameters.length - 1) : help.argumentIndex,
+      documentation: display(item.documentation),
+    };
   }
 
   getQuickInfo(path: string, position: number): { display: string; documentation: string; kind: string } | null {

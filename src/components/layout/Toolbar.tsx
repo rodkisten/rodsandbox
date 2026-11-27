@@ -49,6 +49,10 @@ interface ToolbarProps {
   onToggleEditorFormatter: () => void;
   editorFontSize: number;
   onEditorFontSizeChange: (size: number) => void;
+  editorHistoryDepth?: number;
+  editorHistoryGroupDelay?: number;
+  onEditorHistoryDepthChange?: (value: number) => void;
+  onEditorHistoryGroupDelayChange?: (value: number) => void;
   editorTabSize: number;
   onEditorTabSizeChange: (size: number) => void;
   diagnosticsCount: number;
@@ -87,6 +91,10 @@ export default function Toolbar({
   onToggleEditorFormatter,
   editorFontSize,
   onEditorFontSizeChange,
+  editorHistoryDepth = 200,
+  editorHistoryGroupDelay = 500,
+  onEditorHistoryDepthChange,
+  onEditorHistoryGroupDelayChange,
   editorTabSize,
   onEditorTabSizeChange,
   diagnosticsCount,
@@ -172,6 +180,17 @@ export default function Toolbar({
                 <DropdownMenuRadioItem value="16">16px</DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="18">18px</DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
+              {onEditorHistoryDepthChange && <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Histórico mínimo</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={String(editorHistoryDepth)} onValueChange={value => onEditorHistoryDepthChange(Number(value))}>
+                {[100, 200, 500, 1000, 2000].map(n => <DropdownMenuRadioItem key={n} value={String(n)}>{n} alterações</DropdownMenuRadioItem>)}
+              </DropdownMenuRadioGroup>
+              <DropdownMenuLabel>Agrupar alterações</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={String(editorHistoryGroupDelay)} onValueChange={value => onEditorHistoryGroupDelayChange?.(Number(value))}>
+                {[0, 250, 500, 1000].map(n => <DropdownMenuRadioItem key={n} value={String(n)}>{n} ms</DropdownMenuRadioItem>)}
+              </DropdownMenuRadioGroup>
+              </>}
               <DropdownMenuLabel className="pb-0 pt-1 text-[10px]">Tab Size</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={String(editorTabSize)} onValueChange={(value) => onEditorTabSizeChange(Number(value))}>
                 <DropdownMenuRadioItem value="2">2 espaços</DropdownMenuRadioItem>

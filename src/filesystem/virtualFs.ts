@@ -2,6 +2,14 @@ import { Workspace, VirtualFile, FileId, FileLanguage, TreeNode } from '@/types'
 
 const FOLDER_KEEP_FILE = '.keep';
 
+function validPath(path: string): boolean {
+  return !!path && !path.includes('\\') && !path.includes('\0') && path.split('/').every(part => !!part && part !== '.' && part !== '..');
+}
+
+function conflicts(path: string, other: string): boolean {
+  return path === other || path.startsWith(other + '/') || other.startsWith(path + '/');
+}
+
 function generateId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -13,6 +21,7 @@ export function createFile(
   language: FileLanguage,
   content: string
 ): Workspace {
+  if (!validPath(path) || Object.values(workspace.files).some(file => conflicts(path, file.path))) return workspace;
   const now = Date.now();
   const id: FileId = `file-${generateId()}`;
   const file: VirtualFile = { id, name, path, language, content, dirty: false, createdAt: now, updatedAt: now };
@@ -52,11 +61,11 @@ export function updateFileContent(workspace: Workspace, fileId: FileId, content:
 
 export function renameFile(workspace: Workspace, fileId: FileId, newName: string, newPath: string): Workspace {
   const file = workspace.files[fileId];
-  if (!file) return workspace;
+  if (!file || !validPath(newPath) || Object.values(workspace.files).some(other => other.id !== fileId && conflicts(newPath, other.path))) return workspace;
   const now = Date.now();
   return {
     ...workspace,
-    files: { ...workspace.files, [fileId]: { ...file, name: newName, path: newPath, dirty: true, updatedAt: now } },
+    files: { ...workspace.files, [fileId]: { ...file, name: newName, path: newPath, language: inferLanguageFromPath(newPath), dirty: true, updatedAt: now } },
     updatedAt: now,
   };
 }
@@ -67,9 +76,11 @@ export function duplicateFile(workspace: Workspace, fileId: FileId): Workspace {
   const dot = file.name.lastIndexOf('.');
   const baseName = dot > 0 ? file.name.slice(0, dot) : file.name;
   const ext = dot > 0 ? file.name.slice(dot) : '';
-  const duplicatedName = `${baseName}.copy${ext}`;
+  let duplicatedName = `${baseName}.copy${ext}`;
   const lastSlash = file.path.lastIndexOf('/');
   const dir = lastSlash >= 0 ? file.path.slice(0, lastSlash + 1) : '';
+  let index = 2;
+  while (Object.values(workspace.files).some(other => conflicts(dir + duplicatedName, other.path))) duplicatedName = `${baseName}.copy${index++}${ext}`;
   const duplicatedPath = dir + duplicatedName;
   return createFile(workspace, duplicatedName, duplicatedPath, file.language, file.content);
 }
@@ -113,7 +124,10 @@ export function deleteFolder(workspace: Workspace, folderPath: string): Workspac
 export function renameFolder(workspace: Workspace, oldPath: string, newPath: string): Workspace {
   const normalizedOld = oldPath.replace(/^\/+/, '').replace(/\/+$/, '');
   const normalizedNew = newPath.replace(/^\/+/, '').replace(/\/+$/, '');
-  if (!normalizedOld || !normalizedNew) return workspace;
+  if (!validPath(normalizedOld) || !validPath(normalizedNew) || normalizedOld === normalizedNew || normalizedNew.startsWith(normalizedOld + '/')) return workspace;
+  const moving = Object.values(workspace.files).filter(file => file.path.startsWith(normalizedOld + '/'));
+  const remaining = Object.values(workspace.files).filter(file => !file.path.startsWith(normalizedOld + '/'));
+  if (!moving.length || remaining.some(file => conflicts(normalizedNew, file.path))) return workspace;
   const now = Date.now();
   const nextFiles = Object.fromEntries(
     Object.values(workspace.files).map((file) => {
@@ -179,7 +193,7 @@ export function markFileClean(workspace: Workspace, fileId: FileId): Workspace {
 }
 
 export function buildFileTree(workspace: Workspace): TreeNode[] {
-  const files = listFiles(workspace).filter((file) => file.name !== FOLDER_KEEP_FILE);
+  const files = listFiles(workspace);
   const root: TreeNode[] = [];
   const folders: Record<string, TreeNode> = {};
 
@@ -193,6 +207,7 @@ export function buildFileTree(workspace: Workspace): TreeNode[] {
   for (const file of sorted) {
     const parts = file.path.split('/');
     if (parts.length === 1) {
+      if (file.name === FOLDER_KEEP_FILE) continue;
       root.push({ id: file.id, name: file.name, path: file.path, type: 'file', language: file.language, dirty: file.dirty });
     } else {
       let currentPath = '';
@@ -209,6 +224,7 @@ export function buildFileTree(workspace: Workspace): TreeNode[] {
           }
         }
       }
+      if (file.name === FOLDER_KEEP_FILE) continue;
       const parentPath = parts.slice(0, -1).join('/');
       const fileNode: TreeNode = { id: file.id, name: file.name, path: file.path, type: 'file', language: file.language, dirty: file.dirty };
       if (folders[parentPath]) {

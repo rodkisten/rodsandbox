@@ -28,17 +28,17 @@ export default function StatusBar({
   const isDark = settings.theme !== 'light';
 
   return (
-    <div className="flex h-6 flex-shrink-0 items-center justify-between border-t border-neutral-800 bg-[#007acc] px-2 text-[11px] text-white select-none">
+    <div className="flex h-6 flex-shrink-0 items-center justify-between border-t border-border bg-background px-3 text-[11px] text-muted-foreground select-none">
       {/* Left side */}
       <div className="flex items-center gap-3">
         {branch !== null && (
-          <button className="flex items-center gap-1 opacity-90 hover:opacity-100" title="Switch branch">
+          <span className="flex items-center gap-1" title="Current branch">
             <GitBranch className="h-3 w-3" />
             <span>{branch ?? 'no branch'}</span>
-          </button>
+          </span>
         )}
         {errorCount > 0 && (
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 text-destructive">
             <AlertCircle className="h-3 w-3" />
             {errorCount}
           </span>

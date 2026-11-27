@@ -1,21 +1,13 @@
 import ts from 'typescript';
+import { manifestVersions, resolvePackageVersion } from '@/bundler/moduleResolver';
 import { readDeclarations, writeDeclarations } from './typeCache';
 
+export type TypeAttempt = { name: string; version: string; status: 'loading' | 'loaded' | 'unavailable'; count: number; durationMs: number };
 type Source = { path: string; content: string };
 const pending = new Map<string, Promise<Map<string, string>>>();
 
-function packages(files: Source[]): Map<string, string> {
-  const manifest = files.find(f => f.path.replace(/^\//, '') === 'package.json');
-  const versions = new Map<string, string>();
-  if (!manifest) return versions;
-  try {
-    const data = JSON.parse(manifest.content);
-    for (const section of ['dependencies', 'devDependencies']) {
-      for (const [name, version] of Object.entries(data[section] ?? {})) {
-        if (typeof version === 'string' && /^(?:[~^]?\d+(?:\.\d+){0,2}(?:-[\w.-]+)?|latest|\*)$/.test(version)) versions.set(name, version);
-      }
-    }
-  } catch { /* Invalid manifest while editing. */ }
+async function packages(files: Source[]): Promise<Map<string, string>> {
+  const versions = new Map(Object.entries(manifestVersions(files)));
   const imports = new Set<string>();
   for (const file of files) {
     if (!/\.[cm]?[jt]sx?$/.test(file.path)) continue;
@@ -24,11 +16,16 @@ function packages(files: Source[]): Map<string, string> {
       if (match) imports.add(match[1]);
     }
   }
-  return new Map([...versions].filter(([name]) => imports.has(name)));
+  const requested = new Map([...versions].filter(([name]) => imports.has(name) || name.startsWith('@types/')));
+  if (files.some(file => /\.[jt]sx$/.test(file.path)) && versions.has('react')) {
+    requested.set('react', versions.get('react')!);
+    if (!requested.has('@types/react')) requested.set('@types/react', versions.get('@types/react') ?? 'latest');
+  }
+  return new Map(await Promise.all([...requested].map(async ([name, range]) => [name, await resolvePackageVersion(name, range)] as const)));
 }
 
 async function acquire(name: string, version: string): Promise<Map<string, string>> {
-  const key = name + '@' + version;
+  const key = 'exports-v2:' + name + '@' + version;
   const cached = await readDeclarations(key);
   if (cached) return cached;
   const root = 'https://cdn.jsdelivr.net/npm/' + name + '@' + encodeURIComponent(version) + '/';
@@ -69,7 +66,27 @@ async function acquire(name: string, version: string): Promise<Map<string, strin
         }
       }));
     };
-    await visit(path);
+    // Include explicit declaration exports (including React JSX runtime).
+    const exportPaths = new Set<string>();
+    const scanExports = (value: unknown, depth = 0): void => {
+      if (depth > 8 || exportPaths.size >= 24) return;
+      if (typeof value === 'string') {
+        const target = value.replace(/^\.\//, '');
+        if (/^[\w./-]+\.d\.[cm]?ts$/.test(target) && !target.split('/').includes('..')) exportPaths.add(target);
+      } else if (value && typeof value === 'object') {
+        for (const child of Object.values(value)) scanExports(child, depth + 1);
+      }
+    };
+    scanExports(data.exports);
+    if (name === '@types/react') {
+      exportPaths.add('jsx-runtime.d.ts');
+      exportPaths.add('jsx-dev-runtime.d.ts');
+    }
+    if (name === '@types/react-dom') {
+      exportPaths.add('client.d.ts');
+      exportPaths.add('server.d.ts');
+    }
+    await Promise.all([visit(path), ...[...exportPaths].map(visit)]);
     if (!files.size) return files;
     files.set('/node_modules/' + name + '/package.json', manifest);
     await writeDeclarations(key, files);
@@ -91,15 +108,22 @@ function acquireOnce(name: string, version: string): Promise<Map<string, string>
   return task;
 }
 
-export async function acquireWorkspaceTypes(files: Source[]): Promise<Map<string, string>> {
-  const requested = packages(files);
+export async function acquireWorkspaceTypes(files: Source[], report?: (attempt: TypeAttempt) => void): Promise<Map<string, string>> {
+  const requested = await packages(files);
   const result = new Map<string, string>();
   const visited = new Set<string>();
-  let frontier = [...requested];
+  let frontier = [...requested].sort(([a], [b]) => Number(!a.startsWith('@types/')) - Number(!b.startsWith('@types/')));
   for (let depth = 0; depth < 3 && frontier.length && visited.size < 24; depth++) {
     const batch = frontier.filter(([name]) => !visited.has(name)).slice(0, 24 - visited.size);
     for (const [name] of batch) visited.add(name);
-    const acquired = await Promise.all(batch.map(([name, version]) => acquireOnce(name, version)));
+    const acquired = await Promise.all(batch.map(async ([name, version]) => {
+      const started = performance.now();
+      report?.({ name, version, status: 'loading', count: 0, durationMs: 0 });
+      const entries = await acquireOnce(name, version).catch(() => new Map<string, string>());
+      const count = [...entries.keys()].filter(path => /\.d\.[cm]?ts$/.test(path)).length;
+      report?.({ name, version, status: count ? 'loaded' : 'unavailable', count, durationMs: Math.round(performance.now() - started) });
+      return entries;
+    }));
     const next = new Map<string, string>();
     for (const entries of acquired) {
       const declared = new Map<string, string>();

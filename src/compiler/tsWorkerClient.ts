@@ -1,23 +1,34 @@
+import type { TypeAttempt } from './typeAcquisition';
 import type { Diagnostic } from '@/types';
 import type { TsMessage } from '@/workers/messages';
-import type { TsCompletionItem, TsDefinitionLocation, TsQuickInfo } from '@/types/tsLanguage';
+import type { TsCompletionItem, TsDefinitionLocation, TsQuickInfo, TsSignatureHelp } from '@/types/tsLanguage';
 
 const WORKER_REQUEST_TIMEOUT_MS = 20_000;
-type TsRequestMessage = Extract<TsMessage, { type: 'TS_DIAGNOSTICS' | 'TS_COMPLETIONS' | 'TS_QUICK_INFO' | 'TS_DEFINITION' }>;
+type TsRequestMessage = Extract<TsMessage, { type: 'TS_DIAGNOSTICS' | 'TS_COMPLETIONS' | 'TS_QUICK_INFO' | 'TS_DEFINITION' | 'TS_SIGNATURE' }>;
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 export class TypeScriptWorkerClient {
   private worker: Worker | null = null;
   private requestId = 0;
+  constructor(private readonly onTypesSnapshot?: (paths: string[]) => void, private readonly onTypeAttempt?: (attempt: TypeAttempt | null) => void) {}
 
   private getWorker(): Worker {
-    this.worker ??= new Worker(new URL('../workers/ts-language.worker.ts', import.meta.url), { type: 'module' });
+    if (!this.worker) {
+      this.worker = new Worker(new URL('../workers/ts-language.worker.ts', import.meta.url), { type: 'module' });
+      this.worker.addEventListener('message', event => {
+        if (event.data?.type === 'TS_TYPES_RESET') this.onTypeAttempt?.(null);
+        if (event.data?.type === 'TS_TYPES_ATTEMPT') this.onTypeAttempt?.(event.data.attempt);
+        if (event.data?.type === 'TS_TYPES_SNAPSHOT' && Array.isArray(event.data.paths)) this.onTypesSnapshot?.(event.data.paths);
+      });
+    }
     return this.worker;
   }
 
   private resetWorker(): void {
     this.worker?.terminate();
     this.worker = null;
+    this.onTypesSnapshot?.([]);
+    this.onTypeAttempt?.(null);
   }
 
   private requestWithFallback<Result>(
@@ -75,6 +86,16 @@ export class TypeScriptWorkerClient {
         ? { matched: true, value: msg.items ?? [] as TsCompletionItem[] }
         : { matched: false }),
       [],
+    );
+  }
+
+  async getSignatureHelp(files: Array<{ path: string; content: string }>, path: string, position: number): Promise<TsSignatureHelp | null> {
+    return this.requestWithFallback<TsSignatureHelp | null>(
+      { type: 'TS_SIGNATURE', files, path, position },
+      (msg, requestId) => msg.type === 'TS_SIGNATURE_RESULT' && msg.requestId === requestId
+        ? { matched: true, value: msg.signature }
+        : { matched: false },
+      null,
     );
   }
 
