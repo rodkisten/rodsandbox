@@ -811,7 +811,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       if (!activeFile || !settings.editorAutocomplete) return null;
       if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return null;
 
-      const word = context.matchBefore(/\w*/);
+      const word = context.matchBefore(/[\w$]*/);
       if (!word) return null;
       if (word.from === word.to && !context.explicit) return null;
 
@@ -857,14 +857,15 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       if (!settings.editorAutocomplete || !activeFile) return null;
       if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return null;
 
-      const word = context.matchBefore(/\w*/);
+      const word = context.matchBefore(/[\w$]*/);
       if (!word) return null;
-      if (word.from === word.to && !context.explicit) return null;
+      const member = context.state.sliceDoc(Math.max(0, word.from - 1), word.from) === '.';
+      if (word.from === word.to && !context.explicit && !member) return null;
 
       const docText = context.state.doc.toString();
       const files: Array<{ path: string; content: string }> = [];
       for (const file of listFiles(workspace)) {
-        if (file.language !== 'typescript' && file.language !== 'javascript') continue;
+        if (file.language !== 'typescript' && file.language !== 'javascript' && !/\/(?:package|tsconfig)\.json$|^(?:package|tsconfig)\.json$/.test(file.path)) continue;
         files.push({
           path: file.path,
           content: file.id === activeFile.id ? docText : file.content,
@@ -877,20 +878,24 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
 
       const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
       tsWorkerRef.current = worker;
-      const items = await worker.getCompletions(files, activeFile.path, context.pos);
-      const options: Completion[] = items.map((item) => ({
-        label: item.name,
-        type: item.kind,
-        detail: item.detail,
-      }));
-
+      let items;
+      try { items = await worker.getCompletions(files, activeFile.path, context.pos); }
+      catch { return member ? null : localCompletionSource(context); }
+      if (context.aborted) return null;
+      const unique = new Map<string, Completion>();
+      for (const item of items) {
+        if (unique.has(item.name)) continue;
+        const kind = item.kind;
+        const type = /method|function/.test(kind) ? 'function' : /class/.test(kind) ? 'class' : /interface|type/.test(kind) ? 'type' : /property|getter|setter/.test(kind) ? 'property' : /keyword/.test(kind) ? 'keyword' : 'variable';
+        unique.set(item.name, { label: item.name, type });
+      }
+      if (!unique.size && !member) return localCompletionSource(context);
       return {
         from: word.from,
-        options,
-        validFor: /^\w*$/,
+        options: [...unique.values()],
       };
     };
-  }, [activeFile, settings.editorAutocomplete, workspace]);
+  }, [activeFile, settings.editorAutocomplete, workspace, localCompletionSource]);
 
 
   const tsLanguageHoverProvider = useCallback(async (position: number) => {
@@ -1058,7 +1063,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                   onSave={handleSave}
                   diagnostics={diagnostics}
                   extraExtensions={pluginEditorExtensions}
-                  extraAutocompleteProviders={[tsLanguageCompletionSource, localCompletionSource, ...pluginAutocompleteProviders]}
+                  extraAutocompleteProviders={[tsLanguageCompletionSource, ...pluginAutocompleteProviders]}
                   theme={settings.editorTheme}
                   fontSize={settings.editorFontSize}
                   historyDepth={settings.editorHistoryDepth}
@@ -1196,7 +1201,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                         onSave={handleSave}
                         diagnostics={diagnostics}
                         extraExtensions={pluginEditorExtensions}
-                        extraAutocompleteProviders={[tsLanguageCompletionSource, localCompletionSource, ...pluginAutocompleteProviders]}
+                        extraAutocompleteProviders={[tsLanguageCompletionSource, ...pluginAutocompleteProviders]}
                         theme={settings.editorTheme}
                         fontSize={settings.editorFontSize}
                   historyDepth={settings.editorHistoryDepth}

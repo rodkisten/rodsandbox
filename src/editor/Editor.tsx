@@ -214,7 +214,7 @@ export default function Editor({
 
     const completionExtension =
       autocompleteEnabled && safeAutocompleteProviders.length > 0
-        ? autocompletion({ override: safeAutocompleteProviders })
+        ? autocompletion({ override: safeAutocompleteProviders, maxRenderedOptions: 8, activateOnTypingDelay: 180 })
         : autocompleteEnabled
           ? autocompletion()
           : null;
@@ -222,6 +222,7 @@ export default function Editor({
     return [
       getLanguageExtension(file.language, file.path),
       fontExtension,
+      EditorView.theme({ '.cm-tooltip-autocomplete': { border: '1px solid var(--border-default)', borderRadius: '8px', backgroundColor: 'var(--surface-2)', color: 'var(--app-fg)', boxShadow: '0 8px 24px #0005', maxWidth: 'min(90vw, 420px)' }, '.cm-tooltip-autocomplete > ul': { maxHeight: 'min(180px, 30dvh)', fontFamily: 'var(--font-sans)', fontSize: '12px' }, '.cm-tooltip-autocomplete > ul > li': { padding: '6px 8px' }, '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--surface-3)', color: 'var(--app-fg)' }, '.cm-completionIcon': { opacity: '0.75' } }),
       EditorView.contentAttributes.of({ autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' }),
       EditorState.tabSize.of(Math.max(1, Math.min(8, tabSize))),
       history({ minDepth: Math.max(1, historyDepth), newGroupDelay: Math.max(0, historyGroupDelay) }),
