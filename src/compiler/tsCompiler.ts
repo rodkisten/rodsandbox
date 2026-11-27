@@ -590,6 +590,16 @@ export class BrowserTypeScriptCompiler {
     return result;
   }
 
+  collectDiagnostics(): Diagnostic[] {
+    const diagnostics: Diagnostic[] = [];
+    for (const path of this.files.keys()) {
+      if (!/\.[jt]sx?$/.test(path) || path.endsWith('.d.ts')) continue;
+      diagnostics.push(...this.languageService.getSyntacticDiagnostics(path).map(d => normalizeTsDiagnosticToModel(d, path)));
+      diagnostics.push(...this.getSemanticDiagnostics(path));
+    }
+    return diagnostics;
+  }
+
   getSemanticDiagnostics(path: string): Diagnostic[] {
     if (!this.files.has(path)) return [];
     try {

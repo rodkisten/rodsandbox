@@ -269,9 +269,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       tsFiles.push({ path, content });
     }
 
-    const tsWorker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
-    tsWorkerRef.current = tsWorker;
-    const tsDiagnostics = await tsWorker.getDiagnostics(tsFiles);
+    const tsDiagnostics: Diagnostic[] = [];
 
     const runtimeFilesByPath = new Map(files.map((file) => [file.path, { path: file.path, content: file.content, language: file.language }]));
     for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) {
@@ -303,7 +301,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       fileId: fileIdByPath.get(diag.fileId) ?? diag.fileId,
     }));
     const allDiagnostics = [...normalizedTsDiagnostics, ...normalizedBundlerDiagnostics];
-    setDiagnostics(allDiagnostics);
+    setDiagnostics(prev => [...prev.filter(d => d.source === 'typescript'), ...allDiagnostics]);
 
     const compiledFiles: Record<string, string> = {
       [`${entryFile.replace(/\.tsx?$/, '').replace(/\.jsx?$/, '')}.js`]: bundleResult.code,
@@ -342,12 +340,16 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }, [activeFile, setActiveFile, workspace]);
 
   const handleTypecheck = useCallback(() => {
-    void compileWorkspace().then((result) => {
-      if (result.diagnosticsCount > 0) {
-        updateSettings((prev) => ({ ...prev, bottomTab: 'diagnostics' }));
-      }
+    const files = listFiles(workspace);
+    const sources = files.filter(file => /\.[jt]sx?$|(?:^|\/)(?:package|tsconfig)\.json$/.test(file.path)).map(file => ({ path: file.path, content: file.content }));
+    for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) sources.push({ path, content });
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    tsWorkerRef.current = worker;
+    const ids = new Map(files.map(file => [file.path, file.id]));
+    void worker.getDiagnostics(sources).then(diagnostics => {
+      setDiagnostics(prev => [...prev.filter(d => d.source !== 'typescript'), ...diagnostics.map(d => ({ ...d, fileId: ids.get(d.fileId) ?? d.fileId }))]);
     });
-  }, [compileWorkspace, updateSettings]);
+  }, [workspace]);
 
   const handleRun = useCallback(() => {
     void compileWorkspace().then((result) => {

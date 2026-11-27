@@ -72,7 +72,7 @@ async function handleMessage(event: MessageEvent<TsMessage>) {
   if (msg.type === 'TS_DIAGNOSTICS') {
     try {
       const service = await syncFiles(msg.files);
-      const diagnostics = service.compile().diagnostics;
+      const diagnostics = service.collectDiagnostics();
       self.postMessage({ type: 'TS_DIAGNOSTICS_RESULT', requestId: msg.requestId, diagnostics });
     } catch (error) {
       self.postMessage({
