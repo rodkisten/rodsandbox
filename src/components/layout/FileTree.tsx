@@ -37,6 +37,7 @@ interface FileTreeProps {
   onDuplicateFile: (fileId: string) => void;
   onMoveFile: (fileId: string, newPath: string) => void;
   onMoveFiles: (ids: string[], folder: string) => boolean;
+  onCopyFiles: (ids: string[], folder: string) => boolean;
   onCreateFolder: (folderPath: string) => void;
   onDeleteFolder: (folderPath: string) => void;
   onRenameFolder: (oldPath: string, newPath: string) => void;
@@ -263,6 +264,7 @@ export default function FileTree({
   onDuplicateFile,
   onMoveFile,
   onMoveFiles,
+  onCopyFiles,
   onCreateFolder,
   onDeleteFolder,
   onRenameFolder,
@@ -276,6 +278,8 @@ export default function FileTree({
   const uploadZipRef = useRef<HTMLInputElement>(null);
   const newFileInputRef = useRef<HTMLInputElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [clipboard, setClipboard] = useState<{ mode: 'cut' | 'copy'; ids: string[] } | null>(null);
+  const [pasteFolder, setPasteFolder] = useState('');
   const [exportError, setExportError] = useState('');
   const [selectionMode, setSelectionMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -295,6 +299,18 @@ export default function FileTree({
     finally { setExporting(false); }
   };
   const tree = buildFileTree(workspace);
+  const folders: string[] = [''];
+  const collectFolders = (nodes: TreeNode[]) => {
+    for (const node of nodes) if (node.type === 'folder') { folders.push(node.path); collectFolders(node.children ?? []); }
+  };
+  collectFolders(tree);
+  const pasteFiles = () => {
+    if (!clipboard) return;
+    setExportError('');
+    const ok = (clipboard.mode === 'cut' ? onMoveFiles : onCopyFiles)(clipboard.ids, pasteFolder);
+    if (!ok) { setExportError('Não foi possível colar: arquivos ausentes ou caminhos em conflito.'); return; }
+    if (clipboard.mode === 'cut') setClipboard(null);
+  };
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor));
   const [dragged, setDragged] = useState<TreeNode | null>(null);
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
@@ -439,8 +455,16 @@ export default function FileTree({
       {selectionMode && <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
         <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(Object.values(workspace.files).filter(file => file.name !== '.keep').map(file => file.id)))}>Todos</Button>
         <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Limpar</Button>
+        <Button variant="ghost" size="sm" disabled={!selectedFiles.length} onClick={() => setClipboard({ mode: 'cut', ids: selectedFiles.map(file => file.id) })}>Recortar</Button>
+        <Button variant="ghost" size="sm" disabled={!selectedFiles.length} onClick={() => setClipboard({ mode: 'copy', ids: selectedFiles.map(file => file.id) })}>Copiar</Button>
         <Button variant="ghost" size="sm" disabled={!selectedFiles.length} onClick={deleteSelection} className="text-destructive"><Trash2 className="size-4" /> Excluir</Button>
         <Button variant="ghost" size="sm" disabled={!selectedFiles.length || exporting} onClick={() => void exportSelection()}><Download className="size-4" />{exporting ? 'Exportando…' : 'ZIP'}</Button>
+      </div>}
+      {clipboard && <div className="flex flex-wrap items-center gap-2 border-b border-border p-2 text-xs">
+        <span>{clipboard.ids.length} {clipboard.mode === 'cut' ? 'recortados' : 'copiados'}</span>
+        <select aria-label="Pasta de destino" className="min-w-0 flex-1 rounded border border-border bg-background p-1" value={pasteFolder} onChange={event => setPasteFolder(event.target.value)}>{folders.map(folder => <option key={folder} value={folder}>{folder || 'Workspace /'}</option>)}</select>
+        <Button size="sm" onClick={pasteFiles}>Colar</Button>
+        <Button size="sm" variant="ghost" onClick={() => setClipboard(null)}>Cancelar</Button>
       </div>}
       {exportError && <p role="alert" className="px-2 py-1 text-xs text-destructive">{exportError}</p>}
       {creating && (

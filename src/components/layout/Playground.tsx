@@ -101,6 +101,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
     duplicateFile,
     moveFile,
     moveFiles,
+    copyFiles,
     createFolder,
     deleteFolder,
     renameFolder,
@@ -1096,6 +1097,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
                 onDuplicateFile={duplicateFile}
                 onMoveFile={moveFile}
                 onMoveFiles={moveFiles}
+                onCopyFiles={copyFiles}
                 onCreateFolder={createFolder}
                 onDeleteFolder={deleteFolder}
                 onRenameFolder={renameFolder}
@@ -1239,6 +1241,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
                         onDuplicateFile={duplicateFile}
                         onMoveFile={moveFile}
                 onMoveFiles={moveFiles}
+                onCopyFiles={copyFiles}
                         onCreateFolder={createFolder}
                         onDeleteFolder={deleteFolder}
                         onRenameFolder={renameFolder}

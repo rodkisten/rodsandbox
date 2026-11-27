@@ -107,6 +107,20 @@ export function moveFiles(workspace: Workspace, ids: readonly FileId[], folder: 
   return { ...workspace, files, updatedAt: now };
 }
 
+export function copyFiles(workspace: Workspace, ids: readonly FileId[], folder: string): Workspace {
+  if (folder && !validPath(folder)) return workspace;
+  const sources = [...new Set(ids)].map(id => workspace.files[id]);
+  if (!sources.length || sources.some(file => !file)) return workspace;
+  let next = workspace;
+  for (const file of sources) {
+    const path = folder ? folder + '/' + file.name : file.name;
+    const created = createFile(next, file.name, path, file.language, file.content);
+    if (created === next) return workspace;
+    next = created;
+  }
+  return next;
+}
+
 export function deleteFile(workspace: Workspace, fileId: FileId): Workspace {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { [fileId]: _removed, ...rest } = workspace.files;
