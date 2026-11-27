@@ -94,6 +94,11 @@ function TreeItem({
   onRenameFolder,
   onDeleteFolder,
 }: TreeItemProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const start = useRef({ x: 0, y: 0 });
+  const cancelHold = () => { if (hold.current) clearTimeout(hold.current); hold.current = null; };
+  useEffect(() => () => { if (hold.current) clearTimeout(hold.current); }, []);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.name);
   const [expanded, setExpanded] = useState(true);
@@ -105,7 +110,7 @@ function TreeItem({
 
   const handleRename = () => {
     const value = renameValue.trim();
-    if (!value || value === node.name) {
+    if (!value || value === node.name || /[\\/]/.test(value) || value === '.' || value === '..') {
       setRenaming(false);
       return;
     }
@@ -127,6 +132,11 @@ function TreeItem({
     <div>
       <div
         className={`group relative flex items-center gap-1 rounded px-2 py-1 text-sm ${isActive ? 'bg-neutral-600/25 text-neutral-100' : 'text-neutral-300 hover:bg-neutral-800/80'}`}
+        onContextMenu={event => { if (renaming) return; event.preventDefault(); setMenuOpen(true); }}
+        onPointerDown={event => { if (event.pointerType !== 'touch' || renaming || (event.target as HTMLElement).closest('[data-file-actions]')) return; start.current = { x: event.clientX, y: event.clientY }; cancelHold(); hold.current = setTimeout(() => setMenuOpen(true), 550); }}
+        onPointerMove={event => { if (Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > 10) cancelHold(); }}
+        onPointerUp={cancelHold}
+        onPointerCancel={cancelHold}
         style={{ paddingLeft: `${(depth + 1) * 12}px` }}
       >
         {node.type === 'folder' ? (
@@ -157,8 +167,9 @@ function TreeItem({
         ) : (
           <button
             type="button"
-            className="flex-1 truncate text-left text-xs"
+            className="min-w-0 flex-1 truncate text-left text-xs"
             onClick={() => {
+              if (menuOpen) return;
               if (node.type === 'file') onSelect(node.id);
               else setExpanded((value) => !value);
             }}
@@ -167,9 +178,9 @@ function TreeItem({
             {node.dirty ? <span className="ml-1 text-orange-400">●</span> : null}
           </button>
         )}
-        <DropdownMenu>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="rounded p-1 text-neutral-500 opacity-0 transition group-hover:opacity-100 hover:bg-neutral-700 hover:text-neutral-200">
+            <button type="button" data-file-actions aria-label={'Ações: ' + node.name} className="flex size-8 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground">
               <MoreHorizontal className="size-3.5" />
             </button>
           </DropdownMenuTrigger>
@@ -194,14 +205,15 @@ function TreeItem({
                 >
                   <FolderPlus className="size-4" /> Mover
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-red-300 focus:text-red-200" onClick={() => onDeleteFile(node.id)}>
+                <DropdownMenuItem className="text-red-300 focus:text-red-200" onClick={() => { if (window.confirm('Excluir ' + node.name + '?')) onDeleteFile(node.id); }}>
                   <Trash2 className="size-4" /> Excluir
                 </DropdownMenuItem>
               </>
             ) : (
-              <DropdownMenuItem className="text-red-300 focus:text-red-200" onClick={() => onDeleteFolder(node.path)}>
+              <><DropdownMenuItem onClick={() => { const next = window.prompt('Novo caminho da pasta', node.path); if (next && next !== node.path && !next.startsWith(node.path + '/')) onRenameFolder(node.path, next); }}><FolderPlus className="size-4" /> Mover pasta</DropdownMenuItem>
+              <DropdownMenuItem className="text-red-300 focus:text-red-200" onClick={() => { if (window.confirm('Excluir a pasta ' + node.name + ' e seu conteúdo?')) onDeleteFolder(node.path); }}>
                 <Trash2 className="size-4" /> Excluir pasta
-              </DropdownMenuItem>
+              </DropdownMenuItem></>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
