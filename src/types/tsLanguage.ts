@@ -4,6 +4,7 @@ export interface TsCompletionItem {
   detail?: string;
   sortText?: string;
   insertText?: string;
+  documentation?: string;
 }
 
 export interface TsQuickInfo {

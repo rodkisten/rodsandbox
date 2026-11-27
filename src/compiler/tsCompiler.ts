@@ -614,17 +614,21 @@ export class BrowserTypeScriptCompiler {
     );
   }
 
-  getCompletions(path: string, position: number): Array<{ name: string; kind: string; detail?: string; sortText?: string; insertText?: string }> {
+  getCompletions(path: string, position: number): Array<{ name: string; kind: string; detail?: string; sortText?: string; insertText?: string; documentation?: string }> {
     if (!this.files.has(path)) return [];
     try {
       const completions = this.languageService.getCompletionsAtPosition(path, position, {});
       if (!completions) return [];
-      return completions.entries.filter(entry => !entry.source && !entry.hasAction).sort((a, b) => a.sortText.localeCompare(b.sortText)).slice(0, 500).map((entry) => ({
+      return completions.entries.filter(entry => !entry.source && !entry.hasAction).sort((a, b) => a.sortText.localeCompare(b.sortText)).slice(0, 500).map((entry, index) => {
+        const details = index < 12 ? this.languageService.getCompletionEntryDetails(path, position, entry.name, undefined, entry.source, undefined, entry.data) : undefined;
+        return {
         name: entry.name,
         kind: entry.kind,
         sortText: entry.sortText,
         insertText: entry.insertText,
-      }));
+        detail: details ? ts.displayPartsToString(details.displayParts) : undefined,
+        documentation: details ? ts.displayPartsToString(details.documentation ?? []) : undefined,
+      }; });
     } catch {
       return [];
     }
