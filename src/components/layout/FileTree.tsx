@@ -1,4 +1,6 @@
 'use client';
+import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, useDraggable, useDroppable, DragOverlay, pointerWithin, rectIntersection, type DragEndEvent } from '@dnd-kit/core';
+import { GripVertical } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 import { FileLanguage, TreeNode, Workspace } from '@/types';
 import { buildFileTree } from '@/filesystem/virtualFs';
@@ -94,6 +96,8 @@ function TreeItem({
   onRenameFolder,
   onDeleteFolder,
 }: TreeItemProps) {
+  const drag = useDraggable({ id: node.id, data: { node } });
+  const drop = useDroppable({ id: 'drop:' + node.path, data: { path: node.path }, disabled: node.type !== 'folder' });
   const [menuOpen, setMenuOpen] = useState(false);
   const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
   const start = useRef({ x: 0, y: 0 });
@@ -131,7 +135,8 @@ function TreeItem({
   return (
     <div>
       <div
-        className={`group relative flex items-center gap-1 rounded px-2 py-1 text-sm ${isActive ? 'bg-neutral-600/25 text-neutral-100' : 'text-neutral-300 hover:bg-neutral-800/80'}`}
+        ref={drop.setNodeRef}
+        className={`group relative flex items-center gap-1 rounded px-2 py-1 text-sm ${isActive ? 'bg-neutral-600/25 text-neutral-100' : 'text-neutral-300 hover:bg-neutral-800/80'} ${drop.isOver ? 'ring-2 ring-primary' : ''} ${drag.isDragging ? 'opacity-40' : ''}`}
         onContextMenu={event => { if (renaming) return; event.preventDefault(); setMenuOpen(true); }}
         onPointerDown={event => { if (event.pointerType !== 'touch' || renaming || (event.target as HTMLElement).closest('[data-file-actions]')) return; start.current = { x: event.clientX, y: event.clientY }; cancelHold(); hold.current = setTimeout(() => setMenuOpen(true), 550); }}
         onPointerMove={event => { if (Math.hypot(event.clientX - start.current.x, event.clientY - start.current.y) > 10) cancelHold(); }}
@@ -151,6 +156,7 @@ function TreeItem({
           <span className="w-4" />
         )}
 
+        <button type="button" ref={drag.setNodeRef} {...drag.attributes} {...drag.listeners} data-file-actions aria-label={'Mover ' + node.name} className="touch-none shrink-0 cursor-grab text-muted-foreground"><GripVertical className="size-4" /></button>
         <span>{getIcon(node)}</span>
         {renaming ? (
           <input
@@ -259,6 +265,18 @@ export default function FileTree({
   const uploadZipRef = useRef<HTMLInputElement>(null);
   const newFileInputRef = useRef<HTMLInputElement>(null);
   const tree = buildFileTree(workspace);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor));
+  const [dragged, setDragged] = useState<TreeNode | null>(null);
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    setDragged(null);
+    const node = active.data.current?.node as TreeNode | undefined;
+    const folder = over?.data.current?.path as string | undefined;
+    if (!node || folder === undefined) return;
+    const destination = folder ? folder + '/' + node.name : node.name;
+    if (destination === node.path || destination.startsWith(node.path + '/')) return;
+    if (node.type === 'folder') onRenameFolder(node.path, destination);
+    else onMoveFile(node.id, destination);
+  };
 
   useEffect(() => {
     if (creating) newFileInputRef.current?.focus();
@@ -401,7 +419,9 @@ export default function FileTree({
           />
         </div>
       )}
+      <DndContext sensors={sensors} collisionDetection={args => { const hits = pointerWithin(args); return hits.length ? hits : rectIntersection(args); }} onDragStart={event => setDragged(event.active.data.current?.node ?? null)} onDragCancel={() => setDragged(null)} onDragEnd={handleDragEnd}>
       <div className="flex-1 overflow-auto py-1">
+        <RootDropTarget />
         {isDragOver ? (
           <div className="mx-2 mb-2 rounded border border-dashed border-neutral-500/60 bg-neutral-500/10 px-2 py-1 text-[11px] text-neutral-300">
             Solte ZIP/arquivos aqui para importar
@@ -423,6 +443,13 @@ export default function FileTree({
           />
         ))}
       </div>
+      <DragOverlay>{dragged ? <div className="rounded border border-border bg-popover px-3 py-2 text-sm shadow-lg">{getIcon(dragged)} {dragged.name}</div> : null}</DragOverlay>
+      </DndContext>
     </div>
   );
+}
+
+function RootDropTarget() {
+  const { setNodeRef, isOver } = useDroppable({ id: 'drop:root', data: { path: '' } });
+  return <div ref={setNodeRef} className={`mx-2 mb-1 rounded border border-dashed px-2 py-1 text-xs text-muted-foreground ${isOver ? 'border-primary bg-accent' : 'border-border'}`}>Workspace /</div>;
 }
