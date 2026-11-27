@@ -12,7 +12,7 @@ import { defaultHighlightStyle, foldGutter, syntaxHighlighting } from '@codemirr
 import { lintGutter, linter, type Diagnostic as CMDiagnostic } from '@codemirror/lint';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView, hoverTooltip, keymap } from '@codemirror/view';
+import { EditorView, hoverTooltip, keymap, tooltips } from '@codemirror/view';
 import { Button } from '@/components/ui/button';
 import { Copy, Scissors, ClipboardPaste, TextSelect, Undo2, Redo2, X } from 'lucide-react';
 import { undo, redo, selectAll } from '@codemirror/commands';
@@ -222,6 +222,7 @@ export default function Editor({
     return [
       getLanguageExtension(file.language, file.path),
       fontExtension,
+      tooltips({ position: 'fixed', tooltipSpace: () => { const vv = window.visualViewport; const left = vv?.offsetLeft ?? 0; const top = vv?.offsetTop ?? 0; return { left: left + 4, top: top + 4, right: left + (vv?.width ?? window.innerWidth) - 4, bottom: top + (vv?.height ?? window.innerHeight) - 4 }; } }),
       EditorView.theme({ '.cm-tooltip-autocomplete': { border: '1px solid var(--border-default)', borderRadius: '8px', backgroundColor: 'var(--surface-2)', color: 'var(--app-fg)', boxShadow: '0 8px 24px #0005', maxWidth: 'min(90vw, 420px)' }, '.cm-tooltip-autocomplete > ul': { maxHeight: 'min(180px, 30dvh)', fontFamily: 'var(--font-sans)', fontSize: '12px' }, '.cm-tooltip-autocomplete > ul > li': { padding: '6px 8px' }, '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--surface-3)', color: 'var(--app-fg)' }, '.cm-completionIcon': { opacity: '0.75' } }),
       EditorView.contentAttributes.of({ autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' }),
       EditorState.tabSize.of(Math.max(1, Math.min(8, tabSize))),

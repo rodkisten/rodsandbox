@@ -982,7 +982,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }
 
   return (
-    <div data-theme={settings.theme} className="flex h-dvh flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] pt-[env(safe-area-inset-top)]">
+    <div data-theme={settings.theme} className="sandbox-workbench flex h-dvh flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] pt-[env(safe-area-inset-top)]">
       <Toolbar
         onRun={handleRun}
         onFormat={handleFormat}

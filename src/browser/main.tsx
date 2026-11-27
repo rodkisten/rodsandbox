@@ -12,6 +12,9 @@ for (const event of ['gesturestart', 'gesturechange', 'gestureend']) {
 }
 document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
+import { installVisualViewport } from './visualViewport';
+installVisualViewport();
+
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing application root');
 createRoot(root).render(<RouterProvider router={router} />);
