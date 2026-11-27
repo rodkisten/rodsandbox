@@ -27,3 +27,7 @@ Cross-project architecture: [Rodverse PR #262](https://github.com/rodverse/rodve
 - No second editor, no paid containers, no new Runtime repository. Browser preview remains isolated from the host.
 
 Status: shared feature extraction only; federation plugin, host wiring, CSS isolation and validation remain pending.
+
+### Embedded mode groundwork
+
+SandboxApp accepts embedded mode; Playground uses container dimensions, scopes global keyboard shortcuts to events originating in its root, avoids host redirects and disables legacy detached editor/terminal popups when embedded. Standalone defaults unchanged. The host must provide a bounded height. Global CSS/preflight, Radix portals, API origins, worker URLs and persistence isolation still require review before publishing a remote. Build/typecheck and browser smoke pending.
