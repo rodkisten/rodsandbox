@@ -356,6 +356,32 @@ declare function structuredClone<T>(value: T, options?: { transfer?: unknown[] }
 declare function eval(x: string): unknown;
 `;
 
+
+// Use TypeScript's own directory matcher against the virtual filesystem.
+function projectRoots(files: Map<string, string>): string[] {
+  const config = files.get('/tsconfig.json') ?? files.get('tsconfig.json');
+  const paths = new Map([...files.keys()].map(path => ['/' + path.replace(/^\/+/, ''), path]));
+  const sourcePaths = [...paths.keys()].filter(path => /\.[cm]?[jt]sx?$/.test(path));
+  if (!config) return sourcePaths.filter(path => !/(^|\/)(node_modules|\.git|dist|build)\//.test(path)).map(path => paths.get(path)!);
+  const parsed = ts.parseConfigFileTextToJson('/tsconfig.json', config);
+  if (parsed.error) return sourcePaths.map(path => paths.get(path)!);
+  type MatchFiles = (path: string, extensions: readonly string[] | undefined, excludes: readonly string[] | undefined, includes: readonly string[] | undefined, caseSensitive: boolean, cwd: string, depth: number | undefined, entries: (path: string) => { files: string[]; directories: string[] }, realpath: (path: string) => string) => string[];
+  const matchFiles = (ts as unknown as { matchFiles?: MatchFiles }).matchFiles;
+  const entries = (directory: string) => {
+    const prefix = '/' + directory.replace(/^\/+|\/+$/g, '') + '/';
+    const normalized = prefix === '//' ? '/' : prefix;
+    const children = [...paths.keys()].filter(path => path.startsWith(normalized)).map(path => path.slice(normalized.length));
+    return { files: children.filter(path => !path.includes('/')), directories: [...new Set(children.filter(path => path.includes('/')).map(path => path.split('/')[0]))] };
+  };
+  const result = ts.parseJsonConfigFileContent(parsed.config, {
+    useCaseSensitiveFileNames: true,
+    fileExists: path => paths.has(path),
+    readFile: path => files.get(paths.get(path) ?? path),
+    readDirectory: (path, extensions, excludes, includes, depth) => matchFiles ? matchFiles(path, extensions, excludes, includes, true, '/', depth, entries, path => path) : sourcePaths,
+  }, '/', DEFAULT_COMPILER_OPTIONS, '/tsconfig.json');
+  return result.fileNames.map(path => paths.get(path)).filter((path): path is string => path !== undefined);
+}
+
 function createLanguageServiceHost(
   files: Map<string, string>,
   getVersion: () => number,
@@ -369,7 +395,7 @@ function createLanguageServiceHost(
   return {
     directoryExists: (name) => name === '/' || allPaths().some(path => ('/' + path.replace(/^\//, '')).startsWith(directoryPrefix(name))),
     getDirectories: (name) => [...new Set(allPaths().map(path => '/' + path.replace(/^\//, '')).filter(path => path.startsWith(directoryPrefix(name))).map(path => path.slice(directoryPrefix(name).length)).filter(path => path.includes('/')).map(path => path.split('/')[0]))],
-    getScriptFileNames: () => [...(libraries.size ? [] : [VIRTUAL_LIB_NAME]), ...Array.from(files.keys())],
+    getScriptFileNames: () => [...(libraries.size ? [] : [VIRTUAL_LIB_NAME]), ...projectRoots(files)],
     getScriptVersion: () => String(getVersion()),
     getScriptSnapshot: (fileName) => {
       if (fileName === VIRTUAL_LIB_NAME) {
@@ -384,7 +410,7 @@ function createLanguageServiceHost(
       fileName === VIRTUAL_LIB_NAME || lookup(fileName) !== undefined,
     readFile: (fileName) => {
       if (fileName === VIRTUAL_LIB_NAME) return MINIMAL_LIB_D_TS;
-      return libraries.get(fileName) ?? files.get(fileName);
+      return lookup(fileName);
     },
     readDirectory: () => [],
     getCurrentDirectory: () => '/',
@@ -592,7 +618,7 @@ export class BrowserTypeScriptCompiler {
 
   collectDiagnostics(): Diagnostic[] {
     const diagnostics: Diagnostic[] = [];
-    for (const path of this.files.keys()) {
+    for (const path of projectRoots(this.files)) {
       if (!/\.[jt]sx?$/.test(path) || path.endsWith('.d.ts')) continue;
       diagnostics.push(...this.languageService.getSyntacticDiagnostics(path).map(d => normalizeTsDiagnosticToModel(d, path)));
       diagnostics.push(...this.getSemanticDiagnostics(path));
