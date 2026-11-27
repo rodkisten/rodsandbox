@@ -2,6 +2,7 @@ import ts from 'typescript';
 import { resolveManifestVersions } from '@/bundler/moduleResolver';
 import { readDeclarations, writeDeclarations } from './typeCache';
 
+export type TypeAttempt = { name: string; version: string; status: 'loading' | 'loaded' | 'unavailable'; count: number; durationMs: number };
 type Source = { path: string; content: string };
 const pending = new Map<string, Promise<Map<string, string>>>();
 
@@ -107,7 +108,7 @@ function acquireOnce(name: string, version: string): Promise<Map<string, string>
   return task;
 }
 
-export async function acquireWorkspaceTypes(files: Source[]): Promise<Map<string, string>> {
+export async function acquireWorkspaceTypes(files: Source[], report?: (attempt: TypeAttempt) => void): Promise<Map<string, string>> {
   const requested = await packages(files);
   const result = new Map<string, string>();
   const visited = new Set<string>();
@@ -115,7 +116,14 @@ export async function acquireWorkspaceTypes(files: Source[]): Promise<Map<string
   for (let depth = 0; depth < 3 && frontier.length && visited.size < 24; depth++) {
     const batch = frontier.filter(([name]) => !visited.has(name)).slice(0, 24 - visited.size);
     for (const [name] of batch) visited.add(name);
-    const acquired = await Promise.all(batch.map(([name, version]) => acquireOnce(name, version)));
+    const acquired = await Promise.all(batch.map(async ([name, version]) => {
+      const started = performance.now();
+      report?.({ name, version, status: 'loading', count: 0, durationMs: 0 });
+      const entries = await acquireOnce(name, version).catch(() => new Map<string, string>());
+      const count = [...entries.keys()].filter(path => /\.d\.[cm]?ts$/.test(path)).length;
+      report?.({ name, version, status: count ? 'loaded' : 'unavailable', count, durationMs: Math.round(performance.now() - started) });
+      return entries;
+    }));
     const next = new Map<string, string>();
     for (const entries of acquired) {
       const declared = new Map<string, string>();

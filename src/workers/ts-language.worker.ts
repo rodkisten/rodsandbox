@@ -33,7 +33,8 @@ async function syncFiles(files: Array<{ path: string; content: string }>) {
   const service = await ensureCompiler();
   const key = JSON.stringify(files.map(file => [file.path, /(?:^|\/)package\.json$/.test(file.path) ? file.content : (file.content.match(/(?:from\s*|import\s*\(?\s*|require\s*\(\s*)['"][^'"]+['"]/g) ?? [])]));
   if (key !== dependencyKey || Date.now() - dependencyRefresh > 60_000) {
-    const dependencies = await acquireWorkspaceTypes(files);
+    self.postMessage({ type: 'TS_TYPES_RESET' });
+    const dependencies = await acquireWorkspaceTypes(files, attempt => self.postMessage({ type: 'TS_TYPES_ATTEMPT', attempt }));
     service.setDependencyFiles(dependencies);
     self.postMessage({ type: 'TS_TYPES_SNAPSHOT', paths: [...dependencies.keys()].filter(path => /\.d\.[cm]?ts$/.test(path)) });
     dependencyKey = key;

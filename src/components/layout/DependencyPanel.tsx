@@ -1,4 +1,5 @@
 'use client';
+import type { TypeAttempt } from '@/compiler/typeAcquisition';
 import React, { useMemo, useState } from 'react';
 import NpmSearchPanel from './NpmSearchPanel';
 import { Button } from '@/components/ui/button';
@@ -8,12 +9,13 @@ import { manifestVersions, packageName } from '@/bundler/moduleResolver';
 interface DependencyPanelProps {
   dependencies: string[];
   typePaths?: string[];
+  typeAttempts?: TypeAttempt[];
   importMap?: Record<string, string>;
   packageJsonContent?: string;
   onAddPackage?: (name: string, version: string) => void;
 }
 
-export default function DependencyPanel({ dependencies, typePaths = [], importMap = {}, packageJsonContent, onAddPackage }: DependencyPanelProps) {
+export default function DependencyPanel({ dependencies, typePaths = [], typeAttempts = [], importMap = {}, packageJsonContent, onAddPackage }: DependencyPanelProps) {
   const [showTypes, setShowTypes] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [filter, setFilter] = useState('');
@@ -40,6 +42,7 @@ export default function DependencyPanel({ dependencies, typePaths = [], importMa
     <div className="flex gap-2 px-3 pb-2"><Button size="sm" variant={!showTypes ? 'secondary' : 'ghost'} onClick={() => setShowTypes(false)}>Runtime</Button><Button size="sm" variant={showTypes ? 'secondary' : 'ghost'} onClick={() => setShowTypes(true)}>Types ({typePaths.length})</Button></div>
     {showTypes ? <div className="max-h-80 overflow-auto">
       <p className="px-3 py-2 text-xs text-muted-foreground">Declarations loaded into the TypeScript worker. This does not guarantee successful module resolution.</p>
+      {typeAttempts.filter(item => item.name.toLowerCase().includes(filter.toLowerCase())).map(item => <div key={item.name + '@' + item.version} className="flex items-start gap-2 border-t border-border px-3 py-2 text-xs"><div className="min-w-0 flex-1"><div className="break-all font-medium">{item.name}@{item.version}</div><div className="text-muted-foreground">{item.count} declarations · {item.durationMs} ms</div></div><span className={item.status === 'unavailable' ? 'text-red-400' : item.status === 'loaded' ? 'text-green-400' : 'text-muted-foreground'}>{item.status}</span></div>)}
       {typePaths.filter(path => path.toLowerCase().includes(filter.toLowerCase())).sort().map(path => <div key={path} className="border-t border-border px-3 py-2 text-xs [overflow-wrap:anywhere]">{path.replace(/^\/node_modules\//, '')}</div>)}
       {!typePaths.length && <p className="px-3 py-3 text-xs text-muted-foreground">No declarations reported yet.</p>}
     </div> : <div className="max-h-48 overflow-auto">
