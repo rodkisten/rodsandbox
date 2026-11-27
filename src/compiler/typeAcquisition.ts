@@ -24,7 +24,7 @@ async function packages(files: Source[]): Promise<Map<string, string>> {
 }
 
 async function acquire(name: string, version: string): Promise<Map<string, string>> {
-  const key = name + '@' + version;
+  const key = 'exports-v2:' + name + '@' + version;
   const cached = await readDeclarations(key);
   if (cached) return cached;
   const root = 'https://cdn.jsdelivr.net/npm/' + name + '@' + encodeURIComponent(version) + '/';
@@ -65,7 +65,27 @@ async function acquire(name: string, version: string): Promise<Map<string, strin
         }
       }));
     };
-    await visit(path);
+    // Include explicit declaration exports (including React JSX runtime).
+    const exportPaths = new Set<string>();
+    const scanExports = (value: unknown, depth = 0): void => {
+      if (depth > 8 || exportPaths.size >= 24) return;
+      if (typeof value === 'string') {
+        const target = value.replace(/^\.\//, '');
+        if (/^[\w./-]+\.d\.[cm]?ts$/.test(target) && !target.split('/').includes('..')) exportPaths.add(target);
+      } else if (value && typeof value === 'object') {
+        for (const child of Object.values(value)) scanExports(child, depth + 1);
+      }
+    };
+    scanExports(data.exports);
+    if (name === '@types/react') {
+      exportPaths.add('jsx-runtime.d.ts');
+      exportPaths.add('jsx-dev-runtime.d.ts');
+    }
+    if (name === '@types/react-dom') {
+      exportPaths.add('client.d.ts');
+      exportPaths.add('server.d.ts');
+    }
+    await Promise.all([visit(path), ...[...exportPaths].map(visit)]);
     if (!files.size) return files;
     files.set('/node_modules/' + name + '/package.json', manifest);
     await writeDeclarations(key, files);
