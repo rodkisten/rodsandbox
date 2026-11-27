@@ -17,6 +17,7 @@ interface EsbuildApi {
   initialize(options: { wasmURL: string; worker: boolean }): Promise<void>;
   build(options: {
     stdin: { contents: string; sourcefile: string; resolveDir: string; loader: 'ts' | 'tsx' | 'js' | 'jsx' };
+    outfile: string;
     bundle: boolean;
     write: boolean;
     format: 'esm';
@@ -25,7 +26,7 @@ interface EsbuildApi {
   }): Promise<EsbuildBuildResult>;
 }
 
-let esbuild: EsbuildApi | null = null;
+let initialization: Promise<EsbuildApi> | undefined;
 let latestRequestId = 0;
 
 
@@ -52,17 +53,16 @@ function buildFileLookup(files: WorkerFileInput[]): Map<string, WorkerFileInput>
   return map;
 }
 
-async function ensureEsbuild(): Promise<EsbuildApi> {
-  if (esbuild) return esbuild;
-  try {
+function ensureEsbuild(): Promise<EsbuildApi> {
+  return initialization ??= (async () => {
     const loaded = localEsbuild as unknown as EsbuildApi;
-    await loaded.initialize({ wasmURL, worker: false });
-    esbuild = loaded;
-    return loaded;
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : 'unknown error';
-    throw new Error(`Failed to initialize local esbuild-wasm. Check asset availability and CSP. ${reason}`);
-  }
+    try {
+      await loaded.initialize({ wasmURL, worker: false });
+      return loaded;
+    } catch (error) {
+      throw new Error('Failed to initialize local esbuild-wasm: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  })();
 }
 
 function normalizeBuildError(error: unknown, fileId: string): Diagnostic {
@@ -86,10 +86,10 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
   const fileLookup = buildFileLookup(req.files);
   const entryFile = normalizeVirtualPath(req.entryFile);
   const dependencies = extractDependencies(req.files);
-  const pkgDeps = await resolveManifestVersions(req.files);
   const importMap: Record<string, string> = Object.create(null);
 
   try {
+    const pkgDeps = await resolveManifestVersions(req.files);
     if (req.requestId !== latestRequestId) return;
     const buildApi = await ensureEsbuild();
     const entryContent = fileLookup.get(entryFile)?.content ?? '';
@@ -105,6 +105,7 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
         resolveDir: '/',
         loader: entryLoader,
       },
+      outfile: 'bundle.js',
       bundle: true,
       write: false,
       format: 'esm',
@@ -142,7 +143,9 @@ self.onmessage = async (event: MessageEvent<BundlerMessage>) => {
     });
 
     if (req.requestId === latestRequestId) {
-      const code = result.outputFiles?.find((file) => file.path.endsWith('.js'))?.text ?? '';
+      const output = result.outputFiles?.find((file) => file.path.endsWith('.js'));
+      if (!output) throw new Error('Compiler returned no JavaScript output');
+      const code = output.text;
       const cssText = result.outputFiles?.find((file) => file.path.endsWith('.css'))?.text ?? '';
       self.postMessage({ type: 'BUNDLE_RESULT', requestId: req.requestId, success: true, code, cssText, dependencies, importMap });
     }
