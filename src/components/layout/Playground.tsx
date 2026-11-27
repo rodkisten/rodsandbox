@@ -898,6 +898,15 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }, [activeFile, settings.editorAutocomplete, workspace, localCompletionSource]);
 
 
+  const tsSignatureProvider = useCallback(async (position: number, content: string) => {
+    if (!activeFile || !['typescript', 'javascript'].includes(activeFile.language)) return null;
+    const files = listFiles(workspace).filter(file => ['typescript', 'javascript', 'json'].includes(file.language)).map(file => ({ path: file.path, content: file.id === activeFile.id ? content : file.content }));
+    for (const [path, content] of Object.entries(pluginCompilerVirtualFilesRef.current)) files.push({ path, content });
+    const worker = tsWorkerRef.current ?? new TypeScriptWorkerClient();
+    tsWorkerRef.current = worker;
+    return worker.getSignatureHelp(files, activeFile.path, position);
+  }, [activeFile, workspace]);
+
   const tsLanguageHoverProvider = useCallback(async (position: number) => {
     if (!activeFile) return null;
     if (activeFile.language !== 'typescript' && activeFile.language !== 'javascript') return null;
@@ -1075,6 +1084,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                   linterEnabled={settings.editorLinterEnabled}
                   tabSize={settings.editorTabSize}
                   hoverProvider={tsLanguageHoverProvider}
+                  signatureProvider={tsSignatureProvider}
                   jumpTo={editorJumpTarget}
                 />
               ) : (
@@ -1213,6 +1223,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                         linterEnabled={settings.editorLinterEnabled}
                         tabSize={settings.editorTabSize}
                         hoverProvider={tsLanguageHoverProvider}
+                  signatureProvider={tsSignatureProvider}
                         jumpTo={editorJumpTarget}
                       />
                     ) : (

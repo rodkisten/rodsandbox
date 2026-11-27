@@ -21,7 +21,10 @@ import type { Diagnostic, EditorTheme, FileLanguage, VirtualFile } from '@/types
 import { getDiagnosticRange } from './diagnosticRanges';
 import { getEditorTheme, type EditorThemeKey } from './themes';
 
+import type { TsSignatureHelp } from '@/types/tsLanguage';
+
 interface EditorProps {
+  signatureProvider?: (position: number, content: string) => Promise<TsSignatureHelp | null>;
   file: VirtualFile;
   onChange: (content: string) => void;
   onSave?: () => void;
@@ -90,9 +93,13 @@ export default function Editor({
   linterEnabled,
   tabSize,
   hoverProvider,
+  signatureProvider,
   jumpTo,
   onCursorPositionChange,
 }: EditorProps) {
+  const [signature, setSignature] = useState<TsSignatureHelp | null>(null);
+  const signatureRef = useRef(signatureProvider);
+  signatureRef.current = signatureProvider;
   const [menu, setMenu] = useState(false);
   const [clipboardError, setClipboardError] = useState('');
   const press = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
@@ -100,6 +107,21 @@ export default function Editor({
   useEffect(() => () => { if (press.current) clearTimeout(press.current.timer); }, []);
   useEffect(() => { setMenu(false); setClipboardError(''); }, [file.id]);
   const editorViewRef = useRef<EditorView | null>(null);
+
+  const signatureExtension = useMemo(() => EditorView.updateListener.of(update => {
+    if (!update.docChanged && !update.selectionSet && !update.focusChanged) return;
+    const view = update.view;
+    const snapshot = view.state;
+    setSignature(null);
+    if (!view.hasFocus || !signatureRef.current) return;
+    const position = snapshot.selection.main.head;
+    const content = snapshot.doc.toString();
+    if (!content.slice(0, position).includes('(')) return;
+    void signatureRef.current(position, content).then(result => {
+      if (editorViewRef.current === view && view.state.doc === snapshot.doc && view.state.selection.eq(snapshot.selection) && view.hasFocus) setSignature(result);
+    }).catch(() => undefined);
+  }), []);
+  useEffect(() => { setSignature(null); }, [file.id]);
 
   const safeDiagnostics = diagnostics ?? EMPTY_DIAGNOSTICS;
   const safeExtraExtensions = extraExtensions ?? EMPTY_EXTENSIONS;
@@ -222,6 +244,7 @@ export default function Editor({
     return [
       getLanguageExtension(file.language, file.path),
       fontExtension,
+      signatureExtension,
       tooltips({ position: 'fixed', tooltipSpace: () => { const vv = window.visualViewport; const left = vv?.offsetLeft ?? 0; const top = vv?.offsetTop ?? 0; return { left: left + 4, top: top + 4, right: left + (vv?.width ?? window.innerWidth) - 4, bottom: top + (vv?.height ?? window.innerHeight) - 4 }; } }),
       EditorView.theme({ '.cm-tooltip-autocomplete': { border: '1px solid var(--border-default)', borderRadius: '8px', backgroundColor: 'var(--surface-2)', color: 'var(--app-fg)', boxShadow: '0 8px 24px #0005', maxWidth: 'min(90vw, 420px)' }, '.cm-tooltip-autocomplete > ul': { maxHeight: 'min(180px, 30dvh)', fontFamily: 'var(--font-sans)', fontSize: '12px' }, '.cm-tooltip-autocomplete > ul > li': { padding: '6px 8px' }, '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--surface-3)', color: 'var(--app-fg)' }, '.cm-completionIcon': { opacity: '0.75' } }),
       EditorView.contentAttributes.of({ autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' }),
@@ -252,6 +275,7 @@ export default function Editor({
     ];
   }, [
     autocompleteEnabled,
+    signatureExtension,
     file.language,
     file.path,
     fontFamily,
@@ -306,6 +330,10 @@ export default function Editor({
           } catch { setClipboardError('Clipboard unavailable. Use the native selection menu.'); }
         }}><Icon className="size-4" aria-hidden="true" /></Button>)}
         {clipboardError && <span role="status" className="w-full px-2 text-xs text-muted-foreground">{clipboardError}</span>}
+      </div>}
+      {signature && <div role="status" className="sticky top-0 z-20 border-b border-border bg-popover px-3 py-2 text-xs text-popover-foreground">
+        <div className="break-words font-mono">{signature.prefix}{signature.parameters.map((parameter, index) => <React.Fragment key={index}>{index > 0 && signature.separator}<span className={index === signature.activeParameter ? 'rounded bg-accent font-semibold text-accent-foreground' : 'text-muted-foreground'}>{parameter.display}</span></React.Fragment>)}{signature.suffix}</div>
+        {signature.parameters[signature.activeParameter]?.documentation && <div className="mt-1 line-clamp-2 text-muted-foreground">{signature.parameters[signature.activeParameter].documentation}</div>}
       </div>}
       <CodeMirror
         onCreateEditor={(view) => {
