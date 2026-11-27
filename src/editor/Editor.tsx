@@ -351,9 +351,9 @@ export default function Editor({
         }}><Icon className="size-4" aria-hidden="true" /></Button>)}
         {clipboardError && <span role="status" className="w-full px-2 text-xs text-muted-foreground">{clipboardError}</span>}
       </div>}
-      {signature && <div role="status" className="sticky top-0 z-20 border-b border-border bg-popover px-3 py-2 text-xs text-popover-foreground">
-        <div className="break-words font-mono">{signature.prefix}{signature.parameters.map((parameter, index) => <React.Fragment key={index}>{index > 0 && signature.separator}<span className={index === signature.activeParameter ? 'rounded bg-accent font-semibold text-accent-foreground' : 'text-muted-foreground'}>{parameter.display}</span></React.Fragment>)}{signature.suffix}</div>
-        {signature.parameters[signature.activeParameter]?.documentation && <div className="mt-1 line-clamp-2 text-muted-foreground">{signature.parameters[signature.activeParameter].documentation}</div>}
+      {signature && <div role="status" className="sticky top-0 z-20 w-full min-w-0 max-w-full overflow-hidden border-b border-border bg-popover px-3 py-2 text-xs text-popover-foreground">
+        <div className="min-w-0 whitespace-normal [overflow-wrap:anywhere] font-mono">{signature.prefix}{signature.parameters.map((parameter, index) => <React.Fragment key={index}>{index > 0 && signature.separator}<span className={index === signature.activeParameter ? 'rounded bg-accent font-semibold text-accent-foreground' : 'text-muted-foreground'}>{parameter.display}</span></React.Fragment>)}{signature.suffix}</div>
+        {signature.parameters[signature.activeParameter]?.documentation && <div className="mt-1 line-clamp-2 [overflow-wrap:anywhere] text-muted-foreground">{signature.parameters[signature.activeParameter].documentation}</div>}
       </div>}
       <CodeMirror
         onCreateEditor={(view) => {

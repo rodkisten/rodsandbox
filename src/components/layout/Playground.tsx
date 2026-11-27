@@ -27,7 +27,6 @@ import { exportWorkspaceJson, importWorkspaceJson } from '@/lib/workspaceTransfe
 import { createWorkspaceSnapshot, deleteWorkspaceSnapshot, diffSnapshotAgainstWorkspace, getWorkspaceSnapshot, listWorkspaceSnapshots } from '@/lib/snapshots';
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
 import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constants';
-import { loadConsoleLogs, saveConsoleLogs } from '@/persistence/db';
 import { inferLanguageFromPath, listFiles } from '@/filesystem/virtualFs';
 import { WORKSPACE_TEMPLATES, getTemplateById } from '@/filesystem/templates';
 import { TypeScriptWorkerClient } from '@/compiler/tsWorkerClient';
@@ -144,28 +143,8 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   const workspaceImportInputRef = useRef<HTMLInputElement | null>(null);
   const workspaceBundleImportInputRef = useRef<HTMLInputElement | null>(null);
   const editorCursorRef = useRef<{ fileId: string; position: number } | null>(null);
-  const consoleLogsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isMobilePortrait = useMobilePortrait();
-
-  // Load persisted console logs on mount.
-  useEffect(() => {
-    loadConsoleLogs().then((persisted) => {
-      if (persisted.length > 0) setLogs(persisted);
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Save console logs to DB (debounced) whenever they change.
-  useEffect(() => {
-    if (consoleLogsSaveTimer.current) clearTimeout(consoleLogsSaveTimer.current);
-    consoleLogsSaveTimer.current = setTimeout(() => {
-      saveConsoleLogs(logs.slice(-MAX_LOG_ENTRIES)).catch(() => {});
-    }, 1000);
-    return () => {
-      if (consoleLogsSaveTimer.current) clearTimeout(consoleLogsSaveTimer.current);
-    };
-  }, [logs]);
 
   useEffect(() => {
     tsWorkerRef.current = new TypeScriptWorkerClient();
@@ -361,6 +340,8 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     const revision = ++runRevision.current;
     const started = performance.now();
     setBuildStatus({ phase: 'building' });
+    if (!preserveLogsRef.current) setLogs([]);
+    setDiagnostics(prev => prev.filter(d => d.source !== 'runtime'));
     void compileWorkspace(revision).then((result) => {
       if (result.cancelled || revision !== runRevision.current) return;
       const durationMs = Math.round(performance.now() - started);

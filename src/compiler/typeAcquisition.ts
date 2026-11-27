@@ -15,7 +15,12 @@ async function packages(files: Source[]): Promise<Map<string, string>> {
       if (match) imports.add(match[1]);
     }
   }
-  return new Map([...versions].filter(([name]) => imports.has(name)));
+  const requested = new Map([...versions].filter(([name]) => imports.has(name) || name.startsWith('@types/')));
+  if (files.some(file => /\.[jt]sx$/.test(file.path)) && versions.has('react')) {
+    requested.set('react', versions.get('react')!);
+    if (!requested.has('@types/react')) requested.set('@types/react', versions.get('@types/react') ?? 'latest');
+  }
+  return requested;
 }
 
 async function acquire(name: string, version: string): Promise<Map<string, string>> {

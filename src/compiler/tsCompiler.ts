@@ -21,7 +21,7 @@ const DEFAULT_COMPILER_OPTIONS: ts.CompilerOptions = {
   esModuleInterop: true,
   skipLibCheck: true,
   noEmitOnError: false,
-  jsx: ts.JsxEmit.React,
+  jsx: ts.JsxEmit.ReactJSX,
   moduleResolution: ts.ModuleResolutionKind.Bundler,
 };
 
@@ -506,7 +506,7 @@ export class BrowserTypeScriptCompiler {
    * Increments version so the language service picks up the change.
    */
   setCompilerOptions(options: ts.CompilerOptions): void {
-    this.compilerOptions = options;
+    this.compilerOptions = { ...DEFAULT_COMPILER_OPTIONS, ...options };
     this.version++;
   }
 
