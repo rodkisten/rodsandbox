@@ -1,7 +1,7 @@
 import type { Diagnostic } from '@/types';
 import type { WorkerFileInput, BundlerMessage } from '@/workers/messages';
 export interface BundleResult { code: string; cssText: string; dependencies: string[]; importMap?: Record<string, string>; diagnostics: Diagnostic[]; }
-const WORKER_REQUEST_TIMEOUT_MS = 20_000;
+const WORKER_REQUEST_TIMEOUT_MS = 45_000;
 
 function createBundlerFailureDiagnostic(fileId: string, message: string): Diagnostic {
   return {
@@ -18,8 +18,16 @@ function createBundlerFailureDiagnostic(fileId: string, message: string): Diagno
 export class EsbuildBundlerService {
   private worker: Worker | null = null;
   private requestId = 0;
+  private queue: Promise<unknown> = Promise.resolve();
+  private generation = 0;
   private ensureWorker() { this.worker ??= new Worker(new URL('../workers/bundler.worker.ts', import.meta.url), { type: 'module' }); return this.worker; }
   build(files: WorkerFileInput[], entryFile: string): Promise<BundleResult> {
+    const generation = this.generation;
+    const task = this.queue.then(() => generation === this.generation ? this.execute(files, entryFile) : { code: '', cssText: '', dependencies: [], diagnostics: [] });
+    this.queue = task.catch(() => undefined);
+    return task;
+  }
+  private execute(files: WorkerFileInput[], entryFile: string): Promise<BundleResult> {
     const worker = this.ensureWorker();
     const id = ++this.requestId;
     return new Promise((resolve) => {
@@ -31,7 +39,7 @@ export class EsbuildBundlerService {
         worker.removeEventListener('message', onMessage);
         worker.removeEventListener('error', onError);
         worker.removeEventListener('messageerror', onMessageError);
-        if (shouldResetWorker) {
+        if (shouldResetWorker && this.worker === worker) {
           this.worker?.terminate();
           this.worker = null;
         }
@@ -66,6 +74,7 @@ export class EsbuildBundlerService {
   }
 
   terminate(): void {
+    this.generation++;
     this.worker?.terminate();
     this.worker = null;
   }

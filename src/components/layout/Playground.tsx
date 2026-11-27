@@ -351,8 +351,12 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     });
   }, [workspace]);
 
+  const runRevision = useRef(0);
   const handleRun = useCallback(() => {
+    const revision = ++runRevision.current;
     void compileWorkspace().then((result) => {
+      if (revision !== runRevision.current) return;
+      if (!result.bundledCode && result.diagnosticsCount > 0) return;
       setPreviewHtml(buildPreviewHtml({
         files: workspace.files,
         compiledFiles: result.files,
