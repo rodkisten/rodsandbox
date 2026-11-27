@@ -4,7 +4,15 @@ import { deserializeForDisplay } from '@/logs/serializer';
 export function ConsoleValue({ value, depth = 0 }: { value: SerializedValue; depth?: number }) {
   if (depth >= 12) return <span className="text-muted-foreground">[Depth limit]</span>;
   if (value.type === 'object' || value.type === 'array' || value.type === 'error') {
-    const entries: Array<[string, SerializedValue]> = value.type === 'object' ? value.entries : value.type === 'array' ? value.items.map((item, index) => [String(index), item]) : [['message', { type: 'string', value: value.message }], ...(value.stack ? [['stack', { type: 'string', value: value.stack }] as Array<[string, SerializedValue]> : [])];
+    let entries: Array<[string, SerializedValue]>;
+    if (value.type === 'object') {
+      entries = value.entries;
+    } else if (value.type === 'array') {
+      entries = value.items.map((item, index) => [String(index), item]);
+    } else {
+      entries = [['message', { type: 'string', value: value.message }]];
+      if (value.stack) entries.push(['stack', { type: 'string', value: value.stack }]);
+    }
     const label = value.type === 'object' ? value.preview : value.type === 'array' ? `Array(${value.length})` : `${value.name}: ${value.message}`;
     return <details className="min-w-0">
       <summary className="cursor-pointer select-none break-words py-0.5 text-foreground">{label}</summary>
