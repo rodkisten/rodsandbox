@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { autocompletion, completionKeymap, type CompletionSource } from '@codemirror/autocomplete';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { css } from '@codemirror/lang-css';
@@ -13,6 +13,8 @@ import { lintGutter, linter, type Diagnostic as CMDiagnostic } from '@codemirror
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, hoverTooltip, keymap } from '@codemirror/view';
+import { Button } from '@/components/ui/button';
+import { undo, redo, selectAll } from '@codemirror/commands';
 import CodeMirror from '@uiw/react-codemirror';
 import type { Diagnostic, EditorTheme, FileLanguage, VirtualFile } from '@/types';
 import { getDiagnosticRange } from './diagnosticRanges';
@@ -86,6 +88,12 @@ export default function Editor({
   jumpTo,
   onCursorPositionChange,
 }: EditorProps) {
+  const [menu, setMenu] = useState(false);
+  const [clipboardError, setClipboardError] = useState('');
+  const press = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const cancelPress = () => { if (press.current) clearTimeout(press.current.timer); press.current = null; };
+  useEffect(() => () => { if (press.current) clearTimeout(press.current.timer); }, []);
+  useEffect(() => { setMenu(false); setClipboardError(''); }, [file.id]);
   const editorViewRef = useRef<EditorView | null>(null);
 
   const safeDiagnostics = diagnostics ?? EMPTY_DIAGNOSTICS;
@@ -150,6 +158,7 @@ export default function Editor({
         fontSize: `${fontSize}px`,
         fontFamily,
       },
+      '.cm-content, .cm-gutters': { fontSize: 'inherit', fontFamily: 'inherit' },
     });
 
     const saveKeymap = keymap.of([
@@ -252,14 +261,50 @@ export default function Editor({
   ]);
 
   return (
-    <div className="h-full w-full overflow-auto">
+    <div className="relative h-full w-full overflow-auto" style={{ '--editor-font-size': fontSize + 'px' } as React.CSSProperties}
+      onTouchStart={event => {
+        cancelPress();
+        if (event.touches.length !== 1 || !(event.target as HTMLElement).closest('.cm-content')) return;
+        const { clientX: x, clientY: y } = event.touches[0];
+        press.current = { x, y, timer: setTimeout(() => { setClipboardError(''); setMenu(true); }, 550) };
+      }}
+      onTouchMove={event => { const t = event.touches[0]; if (press.current && (!t || Math.hypot(t.clientX - press.current.x, t.clientY - press.current.y) > 10)) cancelPress(); }}
+      onTouchEnd={cancelPress} onTouchCancel={cancelPress}
+      onContextMenu={event => { if ((event.target as HTMLElement).closest('.cm-content')) { setClipboardError(''); setMenu(true); } }}>
+      {menu && <div role="toolbar" aria-label="Editor actions" className="sticky top-0 z-30 flex flex-wrap items-center gap-1 border-b border-border bg-popover p-1 text-popover-foreground shadow-md">
+        {(['Copy', 'Cut', 'Paste', 'Select all', 'Undo', 'Redo', 'Close'] as const).map(action => <Button key={action} size="sm" variant="ghost" onPointerDown={event => event.preventDefault()} onClick={async () => {
+          const view = editorViewRef.current;
+          if (!view) return;
+          setClipboardError('');
+          try {
+            if (action === 'Close') { setMenu(false); return; }
+            if (action === 'Select all') selectAll(view);
+            if (action === 'Undo') undo(view);
+            if (action === 'Redo') redo(view);
+            if (action === 'Copy' || action === 'Cut') {
+              const selection = view.state.selection.main;
+              if (selection.empty) { setClipboardError('Select text first.'); return; }
+              const snapshot = view.state;
+              await navigator.clipboard.writeText(snapshot.sliceDoc(selection.from, selection.to));
+              if (action === 'Cut' && view.state === snapshot) view.dispatch(view.state.replaceSelection(''));
+            }
+            if (action === 'Paste') {
+              const snapshot = view.state;
+              const value = await navigator.clipboard.readText();
+              if (view.state === snapshot) view.dispatch(view.state.replaceSelection(value));
+            }
+            view.focus();
+          } catch { setClipboardError('Clipboard unavailable. Use the native selection menu.'); }
+        }}>{action}</Button>)}
+        {clipboardError && <span role="status" className="w-full px-2 text-xs text-muted-foreground">{clipboardError}</span>}
+      </div>}
       <CodeMirror
         onCreateEditor={(view) => {
           editorViewRef.current = view;
           onCursorPositionChange?.(view.state.selection.main.head);
         }}
         value={file.content}
-        height="auto"
+        height="100%"
         extensions={extensions}
         onChange={forwardContentChange}
         theme={selectedTheme}

@@ -1,5 +1,9 @@
 @media (pointer: coarse) {
   html, body, #root { touch-action: pan-x pan-y; overscroll-behavior: none; }
-  input, textarea, select, [contenteditable="true"], .cm-content, .xterm-helper-textarea { font-size: 16px !important; }
+  input, textarea, select, .xterm-helper-textarea { font-size: 16px !important; }
   button, a, [role="button"] { touch-action: manipulation; }
 }
+
+/* CodeMirror preferences override the generic iOS input guard. */
+.cm-editor .cm-content, .cm-editor .cm-gutters { font-size: var(--editor-font-size, 14px) !important; }
+.cm-editor .cm-content { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
