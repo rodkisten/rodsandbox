@@ -10,6 +10,6 @@
 
 @media (pointer: coarse) {
   #root { height: var(--visible-height, 100dvh); overflow: hidden; }
-  .sandbox-workbench { height: var(--visible-height, 100dvh); }
+  .sandbox-workbench:not([data-sandbox-mode="embedded"]) { height: var(--visible-height, 100dvh); }
   .cm-tooltip-autocomplete > ul { max-height: var(--completion-height, 180px) !important; }
 }
