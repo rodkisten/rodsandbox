@@ -72,6 +72,9 @@ function guessLanguage(name: string): FileLanguage {
 }
 
 interface TreeItemProps {
+  selectionMode: boolean;
+  selected: Set<string>;
+  onToggleSelection: (id: string) => void;
   node: TreeNode;
   activeFileId: string | null;
   depth: number;
@@ -85,6 +88,7 @@ interface TreeItemProps {
 }
 
 function TreeItem({
+  selectionMode, selected, onToggleSelection,
   node,
   activeFileId,
   depth,
@@ -157,6 +161,7 @@ function TreeItem({
         )}
 
         <button type="button" ref={drag.setNodeRef} {...drag.attributes} {...drag.listeners} data-file-actions aria-label={'Mover ' + node.name} className="touch-none shrink-0 cursor-grab text-muted-foreground"><GripVertical className="size-4" /></button>
+        {selectionMode && node.type === 'file' && <input type="checkbox" aria-label={'Selecionar ' + node.name} checked={selected.has(node.id)} onChange={() => onToggleSelection(node.id)} className="size-4 shrink-0 accent-primary" data-file-actions />}
         <span>{getIcon(node)}</span>
         {renaming ? (
           <input
@@ -176,7 +181,8 @@ function TreeItem({
             className="min-w-0 flex-1 truncate text-left text-xs"
             onClick={() => {
               if (menuOpen) return;
-              if (node.type === 'file') onSelect(node.id);
+              if (node.type === 'file' && selectionMode) onToggleSelection(node.id);
+              else if (node.type === 'file') onSelect(node.id);
               else setExpanded((value) => !value);
             }}
           >
@@ -229,6 +235,7 @@ function TreeItem({
           key={child.id}
           node={child}
           activeFileId={activeFileId}
+          selectionMode={selectionMode} selected={selected} onToggleSelection={onToggleSelection}
           depth={depth + 1}
           onSelect={onSelect}
           onRenameFile={onRenameFile}
@@ -264,6 +271,10 @@ export default function FileTree({
   const uploadFolderRef = useRef<HTMLInputElement>(null);
   const uploadZipRef = useRef<HTMLInputElement>(null);
   const newFileInputRef = useRef<HTMLInputElement>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const onToggleSelection = (id: string) => setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const selectedFiles = Object.values(workspace.files).filter(file => selected.has(file.id) && file.name !== '.keep');
   const tree = buildFileTree(workspace);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }), useSensor(KeyboardSensor));
   const [dragged, setDragged] = useState<TreeNode | null>(null);
@@ -324,8 +335,9 @@ export default function FileTree({
       }}
     >
       <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Files</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{selectionMode ? selectedFiles.length + ' selecionados' : 'Files'}</span>
         <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => { setSelectionMode(value => !value); setSelected(new Set()); }}>{selectionMode ? 'Cancelar' : 'Selecionar'}</Button>
           <Button
             onClick={() => setCreating(true)}
             variant="ghost"
@@ -400,6 +412,10 @@ export default function FileTree({
         }}
       />
 
+      {selectionMode && <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
+        <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(Object.values(workspace.files).filter(file => file.name !== '.keep').map(file => file.id)))}>Todos</Button>
+        <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Limpar</Button>
+      </div>}
       {creating && (
         <div className="border-b border-neutral-800 px-2 py-1">
           <input
@@ -432,6 +448,7 @@ export default function FileTree({
             key={node.id}
             node={node}
             activeFileId={activeFileId}
+          selectionMode={selectionMode} selected={selected} onToggleSelection={onToggleSelection}
             depth={0}
             onSelect={onSelectFile}
             onRenameFile={onRenameFile}
