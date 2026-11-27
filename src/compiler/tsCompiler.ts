@@ -619,10 +619,11 @@ export class BrowserTypeScriptCompiler {
     try {
       const completions = this.languageService.getCompletionsAtPosition(path, position, {});
       if (!completions) return [];
-      const prefix = (this.files.get(path)?.slice(0, position).match(/[\\w$]*$/)?.[0] ?? '').toLowerCase();
+      const prefix = (this.files.get(path)?.slice(0, position).match(/[\w$]*$/)?.[0] ?? '').toLowerCase();
       const rank = (name: string) => name.toLowerCase().startsWith(prefix) ? 0 : name.toLowerCase().includes(prefix) ? 1 : 2;
       return completions.entries.filter(entry => !entry.source && !entry.hasAction).sort((a, b) => rank(a.name) - rank(b.name) || a.sortText.localeCompare(b.sortText)).slice(0, 500).map((entry, index) => {
-        const details = index < 12 ? this.languageService.getCompletionEntryDetails(path, position, entry.name, undefined, entry.source, undefined, entry.data) : undefined;
+        let details: ts.CompletionEntryDetails | undefined;
+        if (index < 12) { try { details = this.languageService.getCompletionEntryDetails(path, position, entry.name, undefined, entry.source, undefined, entry.data); } catch { /* Documentation must not discard valid completions. */ } }
         return {
         name: entry.name,
         kind: entry.kind,
