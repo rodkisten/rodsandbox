@@ -1,6 +1,6 @@
 import type { Diagnostic } from '@/types';
 import type { WorkerFileInput, BundlerMessage } from '@/workers/messages';
-export interface BundleResult { code: string; cssText: string; dependencies: string[]; importMap?: Record<string, string>; diagnostics: Diagnostic[]; }
+export interface BundleResult { cancelled?: boolean; code: string; cssText: string; dependencies: string[]; importMap?: Record<string, string>; diagnostics: Diagnostic[]; }
 const WORKER_REQUEST_TIMEOUT_MS = 45_000;
 
 function createBundlerFailureDiagnostic(fileId: string, message: string): Diagnostic {
@@ -18,14 +18,33 @@ function createBundlerFailureDiagnostic(fileId: string, message: string): Diagno
 export class EsbuildBundlerService {
   private worker: Worker | null = null;
   private requestId = 0;
-  private queue: Promise<unknown> = Promise.resolve();
-  private generation = 0;
+  private running = false;
+  private pending: { files: WorkerFileInput[]; entryFile: string; resolve: (result: BundleResult) => void } | null = null;
+  private cancelActive: (() => void) | null = null;
+  private cancelled(): BundleResult { return { cancelled: true, code: '', cssText: '', dependencies: [], diagnostics: [] }; }
   private ensureWorker() { this.worker ??= new Worker(new URL('../workers/bundler.worker.ts', import.meta.url), { type: 'module' }); return this.worker; }
   build(files: WorkerFileInput[], entryFile: string): Promise<BundleResult> {
-    const generation = this.generation;
-    const task = this.queue.then(() => generation === this.generation ? this.execute(files, entryFile) : { code: '', cssText: '', dependencies: [], diagnostics: [] });
-    this.queue = task.catch(() => undefined);
-    return task;
+    return new Promise(resolve => {
+      this.pending?.resolve(this.cancelled());
+      this.pending = { files, entryFile, resolve };
+      void this.drain();
+    });
+  }
+  private async drain(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      while (this.pending) {
+        const task = this.pending;
+        this.pending = null;
+        let result: BundleResult;
+        try { result = await this.execute(task.files, task.entryFile); }
+        catch (error) {
+          result = { code: '', cssText: '', dependencies: [], diagnostics: [createBundlerFailureDiagnostic(task.entryFile, String(error))] };
+        }
+        task.resolve(this.pending ? this.cancelled() : result);
+      }
+    } finally { this.running = false; }
   }
   private execute(files: WorkerFileInput[], entryFile: string): Promise<BundleResult> {
     const worker = this.ensureWorker();
@@ -35,6 +54,7 @@ export class EsbuildBundlerService {
       const settle = (result: BundleResult, shouldResetWorker = false) => {
         if (isSettled) return;
         isSettled = true;
+        this.cancelActive = null;
         clearTimeout(timeout);
         worker.removeEventListener('message', onMessage);
         worker.removeEventListener('error', onError);
@@ -69,12 +89,16 @@ export class EsbuildBundlerService {
       worker.addEventListener('message', onMessage);
       worker.addEventListener('error', onError);
       worker.addEventListener('messageerror', onMessageError);
-      worker.postMessage({ type: 'BUNDLE_BUILD', requestId: id, files, entryFile });
+      this.cancelActive = () => settle(this.cancelled(), true);
+      try { worker.postMessage({ type: 'BUNDLE_BUILD', requestId: id, files, entryFile }); }
+      catch (error) { fail(String(error), true); }
     });
   }
 
   terminate(): void {
-    this.generation++;
+    this.pending?.resolve(this.cancelled());
+    this.pending = null;
+    this.cancelActive?.();
     this.worker?.terminate();
     this.worker = null;
   }

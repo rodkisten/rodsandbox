@@ -247,7 +247,8 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     }));
   }, [activeFile?.id, updateSettings]);
 
-  const compileWorkspace = useCallback(async (): Promise<{ files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string; dependencies: string[]; importMap?: Record<string, string> }> => {
+  const runRevision = useRef(0);
+  const compileWorkspace = useCallback(async (revision: number): Promise<{ cancelled?: boolean; files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string; dependencies: string[]; importMap?: Record<string, string> }> => {
     const files = listFiles(workspace);
     const fileIdByPath = new Map(files.map((file) => [file.path, file.id]));
     let hasRunnableSource = false;
@@ -289,6 +290,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     const bundler = bundlerRef.current ?? new EsbuildBundlerService();
     bundlerRef.current = bundler;
     const bundleResult = await bundler.build(runtimeFiles, entryFile);
+    if (bundleResult.cancelled || revision !== runRevision.current) return { cancelled: true, files: {}, diagnosticsCount: 0, bundledCode: '', bundledCssText: '', dependencies: [] };
     setDependencies(bundleResult.dependencies);
     setResolvedImports(bundleResult.importMap ?? {});
 
@@ -351,11 +353,10 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     });
   }, [workspace]);
 
-  const runRevision = useRef(0);
   const handleRun = useCallback(() => {
     const revision = ++runRevision.current;
-    void compileWorkspace().then((result) => {
-      if (revision !== runRevision.current) return;
+    void compileWorkspace(revision).then((result) => {
+      if (result.cancelled || revision !== runRevision.current) return;
       if (!result.bundledCode && result.diagnosticsCount > 0) return;
       setPreviewHtml(buildPreviewHtml({
         files: workspace.files,
