@@ -966,7 +966,13 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
     }
     if (settings.bottomTab === 'diagnostics') {
-      return <div className="flex h-full flex-col overflow-hidden"><DependencyPanel importMap={resolvedImports} dependencies={dependencies} packageJsonContent={packageJsonContent} onAddPackage={handleAddPackage} /><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /><div className="flex-1 overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div></div>;
+      return <div className="h-full overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div>;
+    }
+    if (settings.bottomTab === 'dependencies') {
+      return <div className="h-full overflow-auto"><DependencyPanel importMap={resolvedImports} dependencies={dependencies} packageJsonContent={packageJsonContent} onAddPackage={handleAddPackage} /></div>;
+    }
+    if (settings.bottomTab === 'plugins') {
+      return <div className="h-full overflow-auto"><PluginManagerPanel plugins={pluginManagerItems} onTogglePlugin={handleTogglePlugin} /></div>;
     }
     if (settings.bottomTab === 'terminal' && FEATURE_FLAGS.ENABLE_TERMINAL) {
       return <TerminalPanel workspace={workspace} onDetach={handleDetachTerminal} />;
@@ -1114,10 +1120,12 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
           <section aria-hidden={mobilePane !== 'bottom'} className={mobilePane === 'bottom' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
             <div className="flex h-full flex-col overflow-hidden border-t border-border">
               <div className="flex flex-shrink-0 items-center border-b border-border bg-muted/40 px-1 py-1">
-                <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
-                  <TabsList className="bg-transparent p-0 max-w-full overflow-x-auto">
+                <Tabs className="min-w-0 flex-1 overflow-x-auto" value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
+                  <TabsList className="w-max min-w-full justify-start bg-transparent p-0">
                     <TabsTrigger value="console">{t('tabs.console')}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')} {errorCount > 0 ? <span className="ml-1 text-red-400">{errorCount}</span> : null} {warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
+                    <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
+                    {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM && <TabsTrigger value="plugins">Plugins</TabsTrigger>}
                     {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger> : null}
                     {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}
                     {FEATURE_FLAGS.ENABLE_GIT ? <TabsTrigger value="git">{t('tabs.git')}</TabsTrigger> : null}
@@ -1262,10 +1270,12 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
           <Panel id="d-bottom" defaultSize={settings.layoutSizes.bottomPanelHeight} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
             <div className="flex h-full flex-col overflow-hidden border-t border-border">
               <div className="flex flex-shrink-0 items-center border-b border-border bg-muted/40 px-1 py-1">
-                <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
-                  <TabsList className="bg-transparent p-0">
+                <Tabs className="min-w-0 flex-1 overflow-x-auto" value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
+                  <TabsList className="w-max min-w-full justify-start bg-transparent p-0">
                     <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-muted-foreground">{logs.length}</span> : null}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
+                    <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
+                    {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM && <TabsTrigger value="plugins">Plugins</TabsTrigger>}
                     <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger>
                     {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}
                     {FEATURE_FLAGS.ENABLE_GIT ? <TabsTrigger value="git">{t('tabs.git')}</TabsTrigger> : null}
