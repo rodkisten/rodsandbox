@@ -21,7 +21,8 @@
     "prebuild": "node scripts/generate-typescript-libs.mjs",
     "typecheck": "tsc --noEmit",
     "build:browser": "node scripts/generate-typescript-libs.mjs && vite build",
-    "dev:browser": "node scripts/generate-typescript-libs.mjs && vite"
+    "dev:browser": "node scripts/generate-typescript-libs.mjs && vite",
+    "build:module": "node scripts/generate-typescript-libs.mjs && vite build --mode federation && node scripts/package-module.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.2",
@@ -62,7 +63,8 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-resizable-panels": "^4.11.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "@rodverse/module-sdk": "file:vendor/rodverse-module-sdk-0.1.0.tgz"
   },
   "devDependencies": {
     "@lezer/highlight": "latest",
@@ -80,7 +82,8 @@
     "jsdom": "^29.1.1",
     "tailwindcss": "^4",
     "vite": "8.0.14",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "@module-federation/vite": "1.25.1"
   },
   "optionalDependencies": {
     "node-gyp": "^12.3.0"

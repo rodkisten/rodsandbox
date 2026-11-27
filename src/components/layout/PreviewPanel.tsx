@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useRef, useImperativeHandle } from 'react';
 import { PREVIEW_SANDBOX_ATTRS } from '@/constants';
 import { PreviewMessage } from '@/types';
+import { useSandboxRuntime } from '@/browser/RuntimeContext';
 import { Button } from '@/components/ui/button';
 
 export type BuildStatus = { phase: 'idle' | 'building' | 'built' | 'failed'; durationMs?: number };
@@ -28,11 +29,14 @@ function isPreviewMessage(data: unknown): data is PreviewMessage {
   return (d.type === 'CONSOLE_LOG' || d.type === 'RUNTIME_ERROR' || d.type === 'REPL_RESULT') && typeof d.timestamp === 'number';
 }
 
+const PREVIEW_FRAME_URL = new URL((import.meta.env?.BASE_URL ?? '/') + 'preview-frame.html', import.meta.url).href;
+
 const DETACHED_PREVIEW_PLACEHOLDER = '<html><body style="background:#111;color:#666;font-family:sans-serif;padding:2rem"><p>Run to see preview</p></body></html>';
 
 function PreviewPanel(
   { previewHtml, onMessage, onDetachedChange, ref, buildStatus }: PreviewPanelProps,
 ) {
+  const { embedded } = useSandboxRuntime();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const detachedWindowRef = useRef<Window | null>(null);
 
@@ -46,6 +50,7 @@ function PreviewPanel(
   }, [previewHtml]);
 
   const openDetachedWindow = useCallback(() => {
+    if (embedded) return;
     if (detachedWindowRef.current && !detachedWindowRef.current.closed) {
       detachedWindowRef.current.focus();
       onDetachedChange?.(true);
@@ -56,12 +61,12 @@ function PreviewPanel(
     detachedWindowRef.current = detachedWindow;
     // Content is sent when we receive RODSANDBOX_DETACHED_PREVIEW_READY
     onDetachedChange?.(true);
-  }, [onDetachedChange]);
+  }, [onDetachedChange, embedded]);
 
   useImperativeHandle(ref, () => ({
     reload() {
       if (iframeRef.current) {
-        iframeRef.current.srcdoc = previewHtml ?? '';
+        iframeRef.current.src = PREVIEW_FRAME_URL + '?reload=' + Date.now();
       }
       syncDetachedContent();
     },
@@ -96,6 +101,10 @@ function PreviewPanel(
       const iframeWindow = iframeRef.current?.contentWindow;
       const detachedWindow = detachedWindowRef.current;
 
+      if (event.source === iframeWindow && event.data?.type === 'RODSANDBOX_FRAME_READY') {
+        iframeWindow?.postMessage({ type: 'RODSANDBOX_FRAME_HTML', html: previewHtml ?? DETACHED_PREVIEW_PLACEHOLDER }, '*');
+        return;
+      }
       // Handle ready signal from detached preview page — send initial HTML
       if (event.source === detachedWindow && event.data?.type === 'RODSANDBOX_DETACHED_PREVIEW_READY') {
         syncDetachedContent();
@@ -110,7 +119,9 @@ function PreviewPanel(
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [onMessage, syncDetachedContent]);
+  }, [onMessage, syncDetachedContent, previewHtml]);
+
+  useEffect(() => () => detachedWindowRef.current?.close(), []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -121,13 +132,14 @@ function PreviewPanel(
       }
     }, 600);
     return () => window.clearInterval(timer);
-  }, [onDetachedChange]);
+  }, [onDetachedChange, embedded]);
 
   return (
     <div className="h-full w-full bg-white dark:bg-neutral-950 flex flex-col">
       <div className="flex items-center px-3 py-1 bg-neutral-800 border-b border-neutral-700 text-xs text-neutral-400">
         <span>Preview</span>
         <Button
+          disabled={embedded}
           onClick={openDetachedWindow}
           variant="secondary"
           size="sm"
@@ -142,9 +154,10 @@ function PreviewPanel(
         </div>
       </div>
       <iframe
+        key={previewHtml}
         ref={iframeRef}
         sandbox={PREVIEW_SANDBOX_ATTRS}
-        srcDoc={previewHtml ?? '<html><body style="background:#111;color:#666;font-family:sans-serif;padding:2rem"><p>Run to see preview</p></body></html>'}
+        src={PREVIEW_FRAME_URL}
         className="flex-1 w-full border-0"
         title="Preview"
       />

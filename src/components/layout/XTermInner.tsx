@@ -9,7 +9,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
+import xtermCss from '@xterm/xterm/css/xterm.css?inline';
 import { TerminalAdapter } from '@/services/terminal/adapter';
 
 interface XTermInnerProps {
@@ -22,6 +22,13 @@ export default function XTermInner({ adapter, scrollbackLines }: XTermInnerProps
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
 
+  useEffect(() => {
+    const root = containerRef.current?.getRootNode();
+    const style = document.createElement('style');
+    style.textContent = xtermCss;
+    (root instanceof ShadowRoot ? root : document.head).append(style);
+    return () => style.remove();
+  }, []);
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -63,7 +70,7 @@ export default function XTermInner({ adapter, scrollbackLines }: XTermInnerProps
     term.open(containerRef.current);
 
     // Fit terminal to container size.
-    requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       try {
         fit.fit();
       } catch {
@@ -102,6 +109,7 @@ export default function XTermInner({ adapter, scrollbackLines }: XTermInnerProps
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      cancelAnimationFrame(frame);
       inputDisposable.dispose();
       resizeObserver.disconnect();
       term.dispose();

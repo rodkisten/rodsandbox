@@ -73,12 +73,12 @@ export interface TerminalAdapter {
  */
 export function createTerminalAdapter(workspace?: Workspace, initialHistory?: string[], onHistorySave?: (history: string[]) => void): TerminalAdapter {
   // On Vercel or edge runtimes, native execution is unavailable.
-  if (process.env['VERCEL'] || process.env['NEXT_RUNTIME'] === 'edge' || process.env['NEXT_RUNTIME'] === 'experimental-edge') {
+  if (typeof process !== 'undefined' && (process.env['VERCEL'] || process.env['NEXT_RUNTIME'] === 'edge' || process.env['NEXT_RUNTIME'] === 'experimental-edge')) {
     return new VercelFallbackAdapter();
   }
   // In the browser, try the node-pty API first, then fall back to BrowserShell.
   if (typeof window !== 'undefined') {
-    return new NodePtyAdapter(workspace, initialHistory, onHistorySave);
+    return new BrowserShellAdapter(workspace, initialHistory, onHistorySave);
   }
   return new BrowserShellAdapter(workspace, initialHistory, onHistorySave);
 }

@@ -6,12 +6,6 @@ import '../app/globals.css';
 
 import './mobile-viewport.css';
 
-// Safari can ignore viewport scale restrictions for gestures.
-for (const event of ['gesturestart', 'gesturechange', 'gestureend']) {
-  document.addEventListener(event, e => e.preventDefault(), { passive: false });
-}
-document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
-
 import { installVisualViewport } from './visualViewport';
 installVisualViewport();
 

@@ -18,6 +18,7 @@ interface CommandPaletteProps {
 export default function CommandPalette({ open, onClose, commands }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const paletteRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const filteredCommands = useMemo(() => {
@@ -34,21 +35,25 @@ export default function CommandPalette({ open, onClose, commands }: CommandPalet
     if (!open) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!paletteRef.current || !event.composedPath().includes(paletteRef.current)) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
         return;
       }
+      if (!paletteRef.current || !event.composedPath().includes(paletteRef.current)) return;
       if (event.key === 'ArrowDown') {
         event.preventDefault();
         setSelectedIndex((current) => Math.min(current + 1, filteredCommands.length - 1));
         return;
       }
+      if (!paletteRef.current || !event.composedPath().includes(paletteRef.current)) return;
       if (event.key === 'ArrowUp') {
         event.preventDefault();
         setSelectedIndex((current) => Math.max(current - 1, 0));
         return;
       }
+      if (!paletteRef.current || !event.composedPath().includes(paletteRef.current)) return;
       if (event.key === 'Enter') {
         event.preventDefault();
         const selected = filteredCommands[selectedIndex];
@@ -66,6 +71,7 @@ export default function CommandPalette({ open, onClose, commands }: CommandPalet
 
   return (
     <div
+      ref={paletteRef}
       role="presentation"
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-20"
       onClick={onClose}

@@ -31,3 +31,11 @@ Status: shared feature extraction only; federation plugin, host wiring, CSS isol
 ### Embedded mode groundwork
 
 SandboxApp accepts embedded mode; Playground uses container dimensions, scopes global keyboard shortcuts to events originating in its root, avoids host redirects and disables legacy detached editor/terminal popups when embedded. Standalone defaults unchanged. The host must provide a bounded height. Global CSS/preflight, Radix portals, API origins, worker URLs and persistence isolation still require review before publishing a remote. Build/typecheck and browser smoke pending.
+
+## Federation increment (2026-11-27)
+
+Experimental `./App` now reuses SandboxApp with the Rod Module SDK. Embedded mode uses a Shadow DOM boundary, contained Radix portals, identity/workspace-scoped persistence and origin-safe workers/WASM. Browser shell does not probe a host PTY API or evaluate JavaScript in the host realm; use the isolated Preview REPL. Package `build` remains legacy Next until CDN/API parity is proven; `build:browser` and `build:module` are the verified migration paths.
+
+CI builds standalone plus a SHA-addressed module, emits `rod-module.json` and official `mf-manifest.json`, retains two earlier bundles from the same PR/main lane, and uses the existing single PR preview. Cache headers distinguish mutable pointer and immutable artifacts. No production activation in Manage by default. The versioned SDK tarball comes from Rodverse's canonical package (`npm pack`); independent public package publishing is pending.
+
+Local evidence and remaining gates: [canonical STATUS](https://github.com/rodverse/rodverse/blob/docs/module-federation-architecture/docs/module/federation/STATUS.md). Built standalone and actual Manage federation were exercised in Chromium with an iPhone-sized viewport, real CodeMirror, workers, esbuild WASM and preview logs; host identity/catalog mocked for this smoke. No Safari/physical iPhone or authenticated deployment claimed. Previous notes about CSS/portals/workers being pending describe the prior extraction-only increment; live Access/CORS, public SDK release, API/CDN parity, production rollback and VPS/Ports remain pending.

@@ -41,3 +41,9 @@ yarn-error.log*
 next-env.d.ts
 
 /public/typescript-libs.json
+
+/dist/
+/dist-module/
+/wrangler.generated.json
+/.wrangler/
+/module-archive/

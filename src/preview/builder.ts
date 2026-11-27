@@ -192,7 +192,19 @@ export function buildPreviewHtml(input: PreviewBuildInput): string {
     (f) => f.language === 'typescript' || f.language === 'javascript'
   );
 
-  const rawHtml = htmlFile?.content ?? '<!DOCTYPE html><html><head></head><body></body></html>';
+  let rawHtml = htmlFile?.content ?? '<!DOCTYPE html><html><head></head><body></body></html>';
+
+  // Bundled virtual scripts must not also resolve against the deployed asset origin.
+  // DOMParser keeps external scripts and inline user HTML intact without regex HTML parsing.
+  const document = new DOMParser().parseFromString(rawHtml, 'text/html');
+  const outputs = new Set(Object.keys(compiledFiles));
+  for (const script of document.querySelectorAll('script[src]')) {
+    const source = script.getAttribute('src') ?? '';
+    const path = source.replace(/^\.\//, '').split(/[?#]/, 1)[0];
+    if (outputs.has(path) || outputs.has(path.replace(/\.tsx?$/, '.js'))) script.remove();
+  }
+  const originalDoctype = /^(<!DOCTYPE[^>]*>)/i.exec(rawHtml.trimStart())?.[1] ?? '';
+  rawHtml = originalDoctype + document.documentElement.outerHTML;
 
   const bodyMatch = /<body[^>]*>([\s\S]*)<\/body\s*>/i.exec(rawHtml);
   const headMatch = /<head[^>]*>([\s\S]*)<\/head\s*>/i.exec(rawHtml);

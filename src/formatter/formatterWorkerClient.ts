@@ -1,3 +1,5 @@
+import formatterWorkerUrl from '@/workers/formatter.worker.ts?worker&url';
+import { createModuleWorker } from '@/browser/moduleWorker';
 import type { FileLanguage } from '@/types';
 import type { FormatterMessage } from '@/workers/messages';
 
@@ -6,9 +8,10 @@ const WORKER_REQUEST_TIMEOUT_MS = 20_000;
 export class FormatterWorkerClient {
   private worker: Worker | null = null;
   private requestId = 0;
+  private pending = new Set<() => void>();
 
   private getWorker(): Worker {
-    this.worker ??= new Worker(new URL('../workers/formatter.worker.ts', import.meta.url), { type: 'module' });
+    this.worker ??= createModuleWorker(formatterWorkerUrl);
     return this.worker;
   }
 
@@ -21,6 +24,7 @@ export class FormatterWorkerClient {
       const settleWithError = (error: Error) => {
         if (isSettled) return;
         isSettled = true;
+        this.pending.delete(cancel);
         clearTimeout(timeout);
         worker.removeEventListener('message', onMessage);
         worker.removeEventListener('error', onError);
@@ -30,11 +34,14 @@ export class FormatterWorkerClient {
         reject(error);
       };
 
+      const cancel = () => settleWithError(new Error('Formatter disposed'));
+      this.pending.add(cancel);
       const onMessage = (event: MessageEvent<FormatterMessage>) => {
         const msg = event.data;
         if (msg.type !== 'FORMAT_RESULT' || msg.requestId !== requestId) return;
         if (isSettled) return;
         isSettled = true;
+        this.pending.delete(cancel);
         clearTimeout(timeout);
         worker.removeEventListener('message', onMessage);
         worker.removeEventListener('error', onError);
@@ -55,6 +62,7 @@ export class FormatterWorkerClient {
   }
 
   terminate(): void {
+    for (const cancel of this.pending) cancel();
     this.worker?.terminate();
     this.worker = null;
   }
