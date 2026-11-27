@@ -14,6 +14,7 @@ import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { EditorState, type Extension } from '@codemirror/state';
 import { EditorView, hoverTooltip, keymap } from '@codemirror/view';
 import { Button } from '@/components/ui/button';
+import { Copy, Scissors, ClipboardPaste, TextSelect, Undo2, Redo2, X } from 'lucide-react';
 import { undo, redo, selectAll } from '@codemirror/commands';
 import CodeMirror from '@uiw/react-codemirror';
 import type { Diagnostic, EditorTheme, FileLanguage, VirtualFile } from '@/types';
@@ -29,6 +30,8 @@ interface EditorProps {
   extraAutocompleteProviders?: CompletionSource[];
   theme: EditorTheme;
   fontSize: number;
+  historyDepth?: number;
+  historyGroupDelay?: number;
   fontFamily: string;
   lineNumbers: boolean;
   wordWrap: boolean;
@@ -78,6 +81,8 @@ export default function Editor({
   extraAutocompleteProviders = EMPTY_AUTOCOMPLETE_PROVIDERS,
   theme,
   fontSize,
+  historyDepth = 200,
+  historyGroupDelay = 500,
   fontFamily,
   lineNumbers,
   wordWrap,
@@ -219,7 +224,7 @@ export default function Editor({
       fontExtension,
       EditorView.contentAttributes.of({ autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' }),
       EditorState.tabSize.of(Math.max(1, Math.min(8, tabSize))),
-      history(),
+      history({ minDepth: Math.max(1, historyDepth), newGroupDelay: Math.max(0, historyGroupDelay) }),
       keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
       ...(autocompleteEnabled ? [keymap.of(completionKeymap)] : []),
       saveKeymap,
@@ -249,6 +254,8 @@ export default function Editor({
     file.path,
     fontFamily,
     fontSize,
+    historyDepth,
+    historyGroupDelay,
     hoverProvider,
     linterEnabled,
     linterSource,
@@ -272,7 +279,7 @@ export default function Editor({
       onTouchEnd={cancelPress} onTouchCancel={cancelPress}
       onContextMenu={event => { if ((event.target as HTMLElement).closest('.cm-content')) { setClipboardError(''); setMenu(true); } }}>
       {menu && <div role="toolbar" aria-label="Editor actions" className="sticky top-0 z-30 flex flex-wrap items-center gap-1 border-b border-border bg-popover p-1 text-popover-foreground shadow-md">
-        {(['Copy', 'Cut', 'Paste', 'Select all', 'Undo', 'Redo', 'Close'] as const).map(action => <Button key={action} size="sm" variant="ghost" onPointerDown={event => event.preventDefault()} onClick={async () => {
+        {([['Copy', Copy], ['Cut', Scissors], ['Paste', ClipboardPaste], ['Select all', TextSelect], ['Undo', Undo2], ['Redo', Redo2], ['Close', X]] as const).map(([action, Icon]) => <Button key={action} size="icon" className="size-9" title={action} aria-label={action} variant="ghost" onPointerDown={event => event.preventDefault()} onClick={async () => {
           const view = editorViewRef.current;
           if (!view) return;
           setClipboardError('');
@@ -295,7 +302,7 @@ export default function Editor({
             }
             view.focus();
           } catch { setClipboardError('Clipboard unavailable. Use the native selection menu.'); }
-        }}>{action}</Button>)}
+        }}><Icon className="size-4" aria-hidden="true" /></Button>)}
         {clipboardError && <span role="status" className="w-full px-2 text-xs text-muted-foreground">{clipboardError}</span>}
       </div>}
       <CodeMirror
