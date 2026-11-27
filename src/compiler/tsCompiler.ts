@@ -390,7 +390,10 @@ function createLanguageServiceHost(
   dependencies: Map<string, string>
 ): ts.LanguageServiceHost {
   const allPaths = () => [...files.keys(), ...libraries.keys(), ...dependencies.keys()];
-  const lookup = (name: string) => files.get(name) ?? files.get(name.replace(/^\//, '')) ?? libraries.get(name) ?? dependencies.get(name);
+  const lookup = (name: string) => {
+    const absolute = '/' + name.replace(/^\/+/, '');
+    return files.get(name) ?? files.get(absolute) ?? files.get(absolute.slice(1)) ?? libraries.get(absolute) ?? dependencies.get(absolute);
+  };
   const directoryPrefix = (name: string) => name.replace(/\/$/, '') + '/';
   return {
     directoryExists: (name) => name === '/' || allPaths().some(path => ('/' + path.replace(/^\//, '')).startsWith(directoryPrefix(name))),
@@ -420,7 +423,12 @@ function createLanguageServiceHost(
     }),
     getNewLine: () => '\n',
     useCaseSensitiveFileNames: () => true,
-    resolveModuleNameLiterals: undefined,
+    resolveModuleNameLiterals: (literals, containingFile, _redirected, options) => literals.map(literal => ts.resolveModuleName(literal.text, '/' + containingFile.replace(/^\/+/, ''), options, {
+      fileExists: name => lookup(name) !== undefined,
+      readFile: lookup,
+      directoryExists: name => name === '/' || allPaths().some(path => ('/' + path.replace(/^\/+/, '')).startsWith(directoryPrefix('/' + name.replace(/^\/+/, '')))),
+      getCurrentDirectory: () => '/',
+    })),
   };
 }
 
@@ -431,7 +439,7 @@ function createLanguageServiceHost(
  */
 export function parseTsConfigCompilerOptions(raw: string): ts.CompilerOptions {
   try {
-    const json = JSON.parse(raw) as { compilerOptions?: Record<string, unknown> };
+    const json = ts.parseConfigFileTextToJson('/tsconfig.json', raw).config as { compilerOptions?: Record<string, unknown> };
     const co = json.compilerOptions ?? {};
 
     const targetMap: Record<string, ts.ScriptTarget> = {
@@ -501,7 +509,7 @@ export function parseTsConfigCompilerOptions(raw: string): ts.CompilerOptions {
     if (typeof co.noUncheckedIndexedAccess === 'boolean') result.noUncheckedIndexedAccess = co.noUncheckedIndexedAccess;
     if (typeof co.exactOptionalPropertyTypes === 'boolean') result.exactOptionalPropertyTypes = co.exactOptionalPropertyTypes;
 
-    return result;
+    return { ...result, ...ts.convertCompilerOptionsFromJson(co, '/').options };
   } catch {
     return { ...DEFAULT_COMPILER_OPTIONS };
   }
