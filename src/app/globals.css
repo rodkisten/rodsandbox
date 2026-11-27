@@ -7,14 +7,14 @@
 
 :root {
   /* Core background / foreground */
-  --app-bg: #020617;
-  --app-fg: #e2e8f0;
+  --app-bg: #101010;
+  --app-fg: #ededed;
 
   /* Surface layers (panel backgrounds) */
-  --surface-0: #020617;   /* page background */
-  --surface-1: #0b1120;   /* panel background */
-  --surface-2: #111827;   /* card / toolbar */
-  --surface-3: #1e293b;   /* hover / selected */
+  --surface-0: #101010;   /* page background */
+  --surface-1: #161616;   /* panel background */
+  --surface-2: #202020;   /* card / toolbar */
+  --surface-3: #292929;   /* hover / selected */
 
   /* Border colors */
   --border-subtle: rgba(255,255,255,0.06);
@@ -157,4 +157,34 @@ select {
   background: rgba(11, 17, 32, 0.75);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+/* UAI / shadcn semantic contract. Legacy theme variables remain the source. */
+@theme inline {
+  --color-background: var(--app-bg);
+  --color-foreground: var(--app-fg);
+  --color-card: var(--surface-1);
+  --color-card-foreground: var(--app-fg);
+  --color-popover: var(--surface-2);
+  --color-popover-foreground: var(--app-fg);
+  --color-primary: var(--app-fg);
+  --color-primary-foreground: var(--app-bg);
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--app-fg);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--ui-muted-fg);
+  --color-accent: var(--surface-3);
+  --color-accent-foreground: var(--app-fg);
+  --color-border: var(--border-default);
+  --color-input: var(--border-strong);
+  --color-ring: var(--accent);
+  --color-destructive: var(--status-error);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+:root { --ui-muted-fg: #a3a3a3; }
+[data-theme="light"] { --ui-muted-fg: #525252; }
+@layer base {
+  * { border-color: var(--border-default); }
 }
