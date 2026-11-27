@@ -92,6 +92,20 @@ export function useWorkspace(workspaceId?: string) {
     updateWorkspace(VirtualFs.moveFile(workspace, fileId, newPath));
   }, [workspace, updateWorkspace]);
 
+  const moveFiles = useCallback((ids: FileId[], folder: string): boolean => {
+    const next = VirtualFs.moveFiles(workspace, ids, folder);
+    if (next === workspace) return false;
+    updateWorkspace(next);
+    return true;
+  }, [workspace, updateWorkspace]);
+
+  const copyFiles = useCallback((ids: FileId[], folder: string): boolean => {
+    const next = VirtualFs.copyFiles(workspace, ids, folder);
+    if (next === workspace) return false;
+    updateWorkspace(next);
+    return true;
+  }, [workspace, updateWorkspace]);
+
   const createFolder = useCallback((folderPath: string) => {
     updateWorkspace(VirtualFs.createFolder(workspace, folderPath));
   }, [workspace, updateWorkspace]);
@@ -128,6 +142,8 @@ export function useWorkspace(workspaceId?: string) {
     deleteFiles,
     duplicateFile,
     moveFile,
+    moveFiles,
+    copyFiles,
     createFolder,
     deleteFolder,
     renameFolder,
