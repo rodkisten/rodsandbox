@@ -248,6 +248,9 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }, [activeFile?.id, updateSettings]);
 
   const runRevision = useRef(0);
+  const consoleRunId = useRef<string | undefined>(undefined);
+  const preserveLogsRef = useRef(settings.preserveLogs ?? false);
+  preserveLogsRef.current = settings.preserveLogs ?? false;
   const compileWorkspace = useCallback(async (revision: number): Promise<{ cancelled?: boolean; files: Record<string, string>; diagnosticsCount: number; bundledCode: string; bundledCssText: string; dependencies: string[]; importMap?: Record<string, string> }> => {
     const files = listFiles(workspace);
     const fileIdByPath = new Map(files.map((file) => [file.path, file.id]));
@@ -358,6 +361,9 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     void compileWorkspace(revision).then((result) => {
       if (result.cancelled || revision !== runRevision.current) return;
       if (!result.bundledCode && result.diagnosticsCount > 0) return;
+      consoleRunId.current = generateId();
+      if (!preserveLogsRef.current) setLogs([]);
+      setDiagnostics(prev => prev.filter(d => d.source !== 'runtime'));
       setPreviewHtml(buildPreviewHtml({
         files: workspace.files,
         compiledFiles: result.files,
@@ -380,6 +386,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         args: msg.args ?? [],
         timestamp: msg.timestamp,
         groupDepth: 0,
+        runId: consoleRunId.current,
       }]);
       return;
     }
@@ -395,6 +402,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         args,
         timestamp: msg.timestamp,
         groupDepth: 0,
+        runId: consoleRunId.current,
       }]);
       return;
     }
@@ -407,6 +415,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       args,
       timestamp: msg.timestamp,
       groupDepth: 0,
+        runId: consoleRunId.current,
     }]);
     if (activeFile) {
       setDiagnostics((prev) => [...prev, createDiagnostic({
@@ -963,7 +972,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
 
   const renderBottomPanelContent = () => {
     if (settings.bottomTab === 'console') {
-      return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} />;
+      return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} preserveLogs={settings.preserveLogs ?? false} onPreserveLogsChange={value => updateSettings(prev => ({ ...prev, preserveLogs: value }))} />;
     }
     if (settings.bottomTab === 'diagnostics') {
       return <div className="h-full overflow-auto"><DiagnosticsPanel diagnostics={diagnostics} fileNames={fileNames} onSelectDiagnostic={handleSelectDiagnostic} /></div>;

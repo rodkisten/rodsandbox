@@ -13,6 +13,8 @@ type CustomFormatter = {
 interface LogsPanelProps {
   logs: LogEntry[];
   onClear: () => void;
+  preserveLogs?: boolean;
+  onPreserveLogsChange?: (value: boolean) => void;
   customFormatters?: CustomFormatter[];
 }
 
@@ -56,7 +58,7 @@ function formatTime(ts: number): string {
   ).padStart(2, '0')}.${String(d.getMilliseconds()).padStart(3, '0')}`;
 }
 
-export default function LogsPanel({ logs, onClear, customFormatters = EMPTY_FORMATTERS }: LogsPanelProps) {
+export default function LogsPanel({ logs, onClear, customFormatters = EMPTY_FORMATTERS, preserveLogs = false, onPreserveLogsChange }: LogsPanelProps) {
   const safeCustomFormatters = customFormatters ?? EMPTY_FORMATTERS;
   const [enabledLevels, setEnabledLevels] = useState<Set<LogLevel>>(new Set(ALL_LEVELS));
   const [search, setSearch] = useState('');
@@ -99,7 +101,7 @@ export default function LogsPanel({ logs, onClear, customFormatters = EMPTY_FORM
 
   return (
     <div className="flex h-full flex-col bg-neutral-950 font-mono text-xs">
-      <div className="flex flex-shrink-0 items-center gap-2 border-b border-neutral-800 bg-neutral-900 px-3 py-1.5">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-b border-neutral-800 bg-neutral-900 px-3 py-1.5">
         <span className="font-sans text-xs font-semibold uppercase tracking-wide text-neutral-400">Console</span>
 
         <div className="ml-2 flex gap-2">
@@ -124,6 +126,7 @@ export default function LogsPanel({ logs, onClear, customFormatters = EMPTY_FORM
           className="ml-2 flex-1 rounded border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 outline-none focus:border-neutral-500"
         />
 
+        <label className="flex items-center gap-1.5 font-sans text-muted-foreground"><input type="checkbox" checked={preserveLogs} onChange={event => onPreserveLogsChange?.(event.target.checked)} /> Preserve logs</label>
         <button
           onClick={onClear}
           className="ml-2 rounded px-2 py-0.5 text-xs text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
@@ -136,7 +139,9 @@ export default function LogsPanel({ logs, onClear, customFormatters = EMPTY_FORM
         {filtered.length === 0 ? (
           <div className="p-4 text-center text-neutral-600">No console output</div>
         ) : (
-          filtered.map((entry) => (
+          filtered.map((entry, index) => (
+            <React.Fragment key={entry.id}>
+            {entry.runId && entry.runId !== filtered[index - 1]?.runId && <div className="border-y border-border bg-muted/40 px-3 py-1 font-sans text-muted-foreground">Run · {formatTime(entry.timestamp)}</div>}
             <div
               key={entry.id}
               className={`flex gap-2 border-b border-neutral-900 px-3 py-0.5 hover:bg-neutral-900 ${
@@ -148,6 +153,7 @@ export default function LogsPanel({ logs, onClear, customFormatters = EMPTY_FORM
               <span className="w-12 flex-shrink-0 select-none uppercase text-neutral-600">{entry.level}</span>
               <span className="flex-1 whitespace-pre-wrap break-all">{formatArgs(entry.args, safeCustomFormatters)}</span>
             </div>
+            </React.Fragment>
           ))
         )}
       </div>

@@ -70,6 +70,7 @@ export interface Diagnostic {
 export type LogLevel = 'log' | 'info' | 'warn' | 'error' | 'debug' | 'table' | 'group' | 'groupEnd' | 'time' | 'timeEnd' | 'assert';
 
 export interface LogEntry {
+  runId?: string;
   id: string;
   level: LogLevel;
   args: SerializedValue[];
@@ -106,6 +107,7 @@ export type ReplRuntimeTarget = 'iframe' | 'detached' | 'auto';
 export type EditorTheme = 'github-dark' | 'github-light' | 'dracula' | 'monokai' | 'nord' | 'solarized-dark' | 'solarized-light' | 'one-dark' | 'tokyo-night' | 'midnight';
 
 export interface AppSettings {
+  preserveLogs?: boolean;
   theme: 'dark' | 'light' | 'oled' | 'tokyo' | 'midnight' | 'high-contrast';
   autoRun: boolean;
   formatOnSave: boolean;
