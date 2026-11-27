@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import { resolveManifestVersions } from '@/bundler/moduleResolver';
+import { manifestVersions, resolvePackageVersion } from '@/bundler/moduleResolver';
 import { readDeclarations, writeDeclarations } from './typeCache';
 
 export type TypeAttempt = { name: string; version: string; status: 'loading' | 'loaded' | 'unavailable'; count: number; durationMs: number };
@@ -7,7 +7,7 @@ type Source = { path: string; content: string };
 const pending = new Map<string, Promise<Map<string, string>>>();
 
 async function packages(files: Source[]): Promise<Map<string, string>> {
-  const versions = new Map(Object.entries(await resolveManifestVersions(files)));
+  const versions = new Map(Object.entries(manifestVersions(files)));
   const imports = new Set<string>();
   for (const file of files) {
     if (!/\.[cm]?[jt]sx?$/.test(file.path)) continue;
@@ -21,7 +21,7 @@ async function packages(files: Source[]): Promise<Map<string, string>> {
     requested.set('react', versions.get('react')!);
     if (!requested.has('@types/react')) requested.set('@types/react', versions.get('@types/react') ?? 'latest');
   }
-  return requested;
+  return new Map(await Promise.all([...requested].map(async ([name, range]) => [name, await resolvePackageVersion(name, range)] as const)));
 }
 
 async function acquire(name: string, version: string): Promise<Map<string, string>> {
@@ -112,7 +112,7 @@ export async function acquireWorkspaceTypes(files: Source[], report?: (attempt: 
   const requested = await packages(files);
   const result = new Map<string, string>();
   const visited = new Set<string>();
-  let frontier = [...requested];
+  let frontier = [...requested].sort(([a], [b]) => Number(!a.startsWith('@types/')) - Number(!b.startsWith('@types/')));
   for (let depth = 0; depth < 3 && frontier.length && visited.size < 24; depth++) {
     const batch = frontier.filter(([name]) => !visited.has(name)).slice(0, 24 - visited.size);
     for (const [name] of batch) visited.add(name);
