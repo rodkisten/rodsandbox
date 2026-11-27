@@ -25,7 +25,8 @@ import { buildPreviewHtml } from '@/preview/builder';
 import { downloadFile } from '@/lib/download';
 import { exportWorkspaceAsZip, importZipFile } from '@/lib/archive';
 import { exportWorkspaceJson, importWorkspaceJson } from '@/lib/workspaceTransfer';
-import { createWorkspaceSnapshot, deleteWorkspaceSnapshot, diffSnapshotAgainstWorkspace, getWorkspaceSnapshot, listWorkspaceSnapshots } from '@/lib/snapshots';
+import { createSnapshotStorage, diffSnapshotAgainstWorkspace } from '@/lib/snapshots';
+import { useSandboxRuntime } from '@/browser/RuntimeContext';
 import { Diagnostic, LogEntry, PreviewMessage, SerializedValue } from '@/types';
 import { AUTO_RUN_DEBOUNCE_MS, FEATURE_FLAGS, MAX_LOG_ENTRIES } from '@/constants';
 import { inferLanguageFromPath, listFiles } from '@/filesystem/virtualFs';
@@ -85,6 +86,8 @@ function ResizeGrip() {
 }
 
 export default function Playground({ workspaceId, userId, embedded = false }: { workspaceId?: string; userId?: string; embedded?: boolean }) {
+  const { storageScope, theme: hostTheme } = useSandboxRuntime();
+  const { createWorkspaceSnapshot, deleteWorkspaceSnapshot, getWorkspaceSnapshot, listWorkspaceSnapshots } = useMemo(() => createSnapshotStorage(storageScope), [storageScope]);
   const {
     workspace,
     activeFile,
@@ -164,6 +167,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
     formatterWorkerRef.current = new FormatterWorkerClient();
     bundlerRef.current = new EsbuildBundlerService();
     return () => {
+      ++runRevision.current;
       tsWorkerRef.current?.terminate();
       formatterWorkerRef.current?.terminate();
       bundlerRef.current?.terminate();
@@ -1028,7 +1032,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
   }
 
   return (
-    <div ref={workbenchRoot} data-theme={settings.theme} data-sandbox-mode={embedded ? "embedded" : "standalone"} className={`sandbox-workbench flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] ${embedded ? "h-full" : "h-dvh pt-[env(safe-area-inset-top)]"}`}>
+    <div ref={workbenchRoot} data-theme={hostTheme ?? settings.theme} data-sandbox-mode={embedded ? "embedded" : "standalone"} className={`sandbox-workbench flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] ${embedded ? "h-full" : "h-dvh pt-[env(safe-area-inset-top)]"}`}>
       <Toolbar
         onRun={handleRun}
         onFormat={handleFormat}

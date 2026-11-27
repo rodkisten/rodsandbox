@@ -14,7 +14,8 @@ export interface WorkspaceSnapshot {
   files: WorkspaceSnapshotFile[];
 }
 
-const SNAPSHOT_STORAGE_KEY = 'rodsandbox:snapshots:v1';
+export function createSnapshotStorage(scope = '') {
+const SNAPSHOT_STORAGE_KEY = scope ? `rodsandbox:${encodeURIComponent(scope)}:snapshots:v1` : 'rodsandbox:snapshots:v1';
 const VALID_FILE_LANGUAGES: ReadonlySet<FileLanguage> = new Set(['typescript', 'javascript', 'html', 'css', 'json', 'markdown']);
 
 function isSnapshotFile(value: unknown): value is WorkspaceSnapshotFile {
@@ -54,13 +55,13 @@ function saveSnapshots(snapshots: WorkspaceSnapshot[]): void {
   window.localStorage.setItem(SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshots));
 }
 
-export function listWorkspaceSnapshots(workspaceId: string): WorkspaceSnapshot[] {
+function listWorkspaceSnapshots(workspaceId: string): WorkspaceSnapshot[] {
   return loadSnapshots()
     .filter((snapshot) => snapshot.workspaceId === workspaceId)
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
-export function createWorkspaceSnapshot(workspace: Workspace, name: string): WorkspaceSnapshot {
+function createWorkspaceSnapshot(workspace: Workspace, name: string): WorkspaceSnapshot {
   const snapshot: WorkspaceSnapshot = {
     id: `snap-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     name: name.trim() || `Snapshot ${new Date().toLocaleString()}`,
@@ -79,14 +80,18 @@ export function createWorkspaceSnapshot(workspace: Workspace, name: string): Wor
   return snapshot;
 }
 
-export function deleteWorkspaceSnapshot(snapshotId: string): void {
+function deleteWorkspaceSnapshot(snapshotId: string): void {
   const snapshots = loadSnapshots().filter((snapshot) => snapshot.id !== snapshotId);
   saveSnapshots(snapshots);
 }
 
-export function getWorkspaceSnapshot(snapshotId: string): WorkspaceSnapshot | null {
+function getWorkspaceSnapshot(snapshotId: string): WorkspaceSnapshot | null {
   return loadSnapshots().find((snapshot) => snapshot.id === snapshotId) ?? null;
 }
+
+return { listWorkspaceSnapshots, createWorkspaceSnapshot, deleteWorkspaceSnapshot, getWorkspaceSnapshot };
+}
+export const { listWorkspaceSnapshots, createWorkspaceSnapshot, deleteWorkspaceSnapshot, getWorkspaceSnapshot } = createSnapshotStorage();
 
 export function diffSnapshotAgainstWorkspace(snapshot: WorkspaceSnapshot, workspace: Workspace): string[] {
   const workspaceMap = new Map(Object.values(workspace.files).map((file) => [file.path, file.content]));

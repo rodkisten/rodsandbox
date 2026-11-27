@@ -5,7 +5,7 @@ import { autocompletion, type Completion } from '@codemirror/autocomplete';
 import { javascript } from '@codemirror/lang-javascript';
 import { keymap } from '@codemirror/view';
 import CodeMirror from '@uiw/react-codemirror';
-import * as Db from '@/persistence/db';
+import { useSandboxRuntime } from '@/browser/RuntimeContext';
 import { ReplEntry, ReplManager } from '@/repl/repl';
 import type { ReplRuntimeTarget } from '@/types';
 
@@ -74,6 +74,7 @@ export default function ReplPanel({
   onRuntimeChange,
   autocompleteEnabled,
 }: ReplPanelProps) {
+  const { persistence: Db } = useSandboxRuntime();
   const safeCommandRegistrations = extraCommandRegistrations ?? EMPTY_COMMAND_REGISTRATIONS;
   const safeExternalEntries = externalEntries ?? EMPTY_REPL_ENTRIES;
 

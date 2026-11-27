@@ -17,9 +17,11 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      actions: read
       pull-requests: write
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
+      MODULE_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: rodkisten/github/setup-pnpm@main
@@ -33,6 +35,23 @@ jobs:
         run: |
           pnpm run build:browser
           test -f dist/index.html
+          export MODULE_ORIGIN=https://sandbox.migos.club
+          if [ -n "$PR_NUMBER" ]; then export MODULE_ORIGIN="https://pr$PR_NUMBER.sandbox.migos.club"; fi
+          pnpm run build:module
+          test -f "dist/modules/sandbox/$MODULE_SHA/mf-manifest.json"
+          mkdir -p module-archive/sandbox
+          cp -a "dist/modules/sandbox/$MODULE_SHA" module-archive/sandbox/
+      - name: Retain prior modules for rollback
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/retain-modules.mjs
+      - name: Archive current immutable module
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-${{ github.event.pull_request.number && format('pr{0}', github.event.pull_request.number) || 'main' }}-module-${{ env.MODULE_SHA }}
+          path: module-archive/
+          overwrite: true
+          retention-days: 30
       - name: Deploy
         if: (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
         env:
@@ -48,13 +67,14 @@ jobs:
           if [ -n "$PR_NUMBER" ]; then host="pr$PR_NUMBER.$host"; fi
           curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "https://$host/api/health"
           curl --fail --silent --show-error --retry 5 --retry-all-errors "https://$host/" -o /tmp/sandbox-preview.html
+          MODULE_ORIGIN="https://$host" node scripts/verify-module.mjs
       - name: Update preview comment
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           marker='<!-- rodsandbox-cloudflare-preview -->'
-          body="$(printf '%s\n☁️ RodSandbox preview\n\nhttps://pr%s.sandbox.migos.club\n\nSHA: `%s`' "$marker" "$PR_NUMBER" "$GITHUB_SHA")"
+          body=$(printf '%s\n☁️ RodSandbox preview\n\nhttps://pr%s.sandbox.migos.club\n\nSHA: %s\nBuild: https://github.com/%s/actions/runs/%s\nManifest: https://pr%s.sandbox.migos.club/rod-module.json' "$marker" "$PR_NUMBER" "$MODULE_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$PR_NUMBER")
           id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- rodsandbox-cloudflare-preview -->"))) | .id' | head -n 1)
           if [ -n "$id" ]; then
             gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body"

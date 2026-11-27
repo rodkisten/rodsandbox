@@ -395,26 +395,7 @@ export class BrowserShell {
       this.writeLine(`  ${CYAN}node files['main.ts'].length${R}`);
       return;
     }
-    try {
-      const fileMap = this.files().reduce<Record<string, string>>((acc, f) => {
-        acc[f.path] = f.content;
-        return acc;
-      }, {});
-      const logs: string[] = [];
-      const fakeConsole = {
-        log: (...a: unknown[]) => logs.push(a.map((x) => this.fmtValue(x)).join(' ')),
-        error: (...a: unknown[]) => logs.push(RED + a.map(String).join(' ') + R),
-        warn: (...a: unknown[]) => logs.push(YELLOW + a.map(String).join(' ') + R),
-        info: (...a: unknown[]) => logs.push(CYAN + a.map(String).join(' ') + R),
-      };
-      // eslint-disable-next-line no-new-func
-      const fn = new Function('files', 'console', `"use strict"; return (${expr})`);
-      const result = fn(fileMap, fakeConsole);
-      for (const l of logs) this.writeLine(l);
-      if (result !== undefined) this.writeLine(MAGENTA + '← ' + this.fmtValue(result) + R);
-    } catch (e) {
-      this.writeLine(RED + String(e) + R);
-    }
+    this.writeLine(`${DIM}Use the isolated Preview REPL to evaluate JavaScript.${R}`);
   }
 
   private fmtValue(v: unknown): string {

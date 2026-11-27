@@ -65,6 +65,9 @@ dependencies:
   '@radix-ui/react-tabs':
     specifier: ^1.1.13
     version: 1.1.13(@types/react-dom@19.2.3)(@types/react@19.2.15)(react-dom@19.2.4)(react@19.2.4)
+  '@rodverse/module-sdk':
+    specifier: file:vendor/rodverse-module-sdk-0.1.0.tgz
+    version: file:vendor/rodverse-module-sdk-0.1.0.tgz
   '@tanstack/react-router':
     specifier: ^1.170.46
     version: 1.170.46(@types/react@19.2.15)(react-dom@19.2.4)(react@19.2.4)
@@ -132,6 +135,9 @@ optionalDependencies:
     version: 12.3.0
 
 devDependencies:
+  '@module-federation/vite':
+    specifier: 1.25.1
+    version: 1.25.1(typescript@5.9.3)(vite@8.0.14)
   '@tailwindcss/postcss':
     specifier: ^4
     version: 4.3.0
@@ -2225,6 +2231,79 @@ packages:
   /@marijn/find-cluster-break@1.0.2:
     resolution: {integrity: sha512-l0h88YhZFyKdXIFNfSWpyjStDjGHwZ/U7iobcK1cQQD8sejsONdQtTVU+1wVN1PBw40PiiHB1vA5S7VTfQiP9g==}
 
+  /@module-federation/dts-plugin@2.9.4(typescript@5.9.3):
+    resolution: {integrity: sha512-vh2cVdYx356nFXdLDXsW4F5Eh4NWRZp92hfeX1v3kYEikQ0VsXaxVIY6i0zdDouOcT/+YNIahP9OEOI2agOXEg==}
+    peerDependencies:
+      typescript: ^4.9.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
+      vue-tsc: '>=1.0.24'
+    peerDependenciesMeta:
+      vue-tsc:
+        optional: true
+    dependencies:
+      '@module-federation/error-codes': 2.9.4
+      '@module-federation/managers': 2.9.4
+      '@module-federation/sdk': 2.9.4
+      '@module-federation/third-party-dts-extractor': 2.9.4
+      adm-zip: 0.6.1
+      isomorphic-ws: 5.0.0(ws@8.21.3)
+      typescript: 5.9.3
+      undici: 7.30.1
+      ws: 8.21.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+    dev: true
+
+  /@module-federation/error-codes@2.9.4:
+    resolution: {integrity: sha512-4JjaxBlQisDfkCTnMC4BaHphJRnlIYeobBNCgYSQY8xSnh1Y6rFFBHX7gyObDTJk66IrAB765G7xA9VYCcLB/g==}
+    dev: true
+
+  /@module-federation/managers@2.9.4:
+    resolution: {integrity: sha512-lUrZ0NNloZ29xqafwNah82a/1RgW+RRgpbPGnKaXUptENpGiH9Ky3wqmAGSrQCNtv2o9N+UbzLjGVyT4T+qJpA==}
+    dependencies:
+      '@module-federation/sdk': 2.9.4
+    dev: true
+
+  /@module-federation/runtime-core@2.9.4:
+    resolution: {integrity: sha512-i2uEHkJGliwRmjb5ZOzWkA9xzTPwYjPMReqO0ZnIkpp0JuHaE4nDme9vacMnU2P4qRC2xzhGD0/Tb7uGUsUMtg==}
+    dependencies:
+      '@module-federation/error-codes': 2.9.4
+      '@module-federation/sdk': 2.9.4
+    dev: true
+
+  /@module-federation/runtime@2.9.4:
+    resolution: {integrity: sha512-iU5CqFNkmNVZHprp/glbaSn46q4/6PhSlMefrrzCBPMpoTd/pul+d+JbzQVHRtLv4w44SoGS+kFe3x9JF1BGog==}
+    dependencies:
+      '@module-federation/error-codes': 2.9.4
+      '@module-federation/runtime-core': 2.9.4
+      '@module-federation/sdk': 2.9.4
+    dev: true
+
+  /@module-federation/sdk@2.9.4:
+    resolution: {integrity: sha512-o7VGOEXtM3ITWrYtFOiaB3y/ssFv6mLs5TBx6QEgwXVzm3URgVgqh1KR1husFa94GTheP4Ei8hq4/B6xMQpT8g==}
+    dev: true
+
+  /@module-federation/third-party-dts-extractor@2.9.4:
+    resolution: {integrity: sha512-eD8jYf7tiF1gg9v503xL4+VKIgza6RmQSQXUlYiFlR25h9JMQY1u6mmLWxJ4zuxYsd0lK51DaCJk7MyRBF3/ww==}
+    dev: true
+
+  /@module-federation/vite@1.25.1(typescript@5.9.3)(vite@8.0.14):
+    resolution: {integrity: sha512-E7LwnqlGppknIrvBwUAEhpV5GMtRvbuxrMFcZDHIwHL2N+BelMo8wFEYCSmOs8LLsbgA1+fTTxxaanePmK1oqg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    peerDependencies:
+      vite: ^5.1.0 || ^6.0.0 || ^7.0.0 || ^8.0.0
+    dependencies:
+      '@module-federation/dts-plugin': 2.9.4(typescript@5.9.3)
+      '@module-federation/runtime': 2.9.4
+      '@module-federation/sdk': 2.9.4
+      vite: 8.0.14(@types/node@20.19.41)(esbuild@0.28.0)
+    transitivePeerDependencies:
+      - bufferutil
+      - typescript
+      - utf-8-validate
+      - vue-tsc
+    dev: true
+
   /@napi-rs/wasm-runtime@1.1.4(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0):
     resolution: {integrity: sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow==}
     requiresBuild: true
@@ -4025,6 +4104,11 @@ packages:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  /adm-zip@0.6.1:
+    resolution: {integrity: sha512-Xwrja8nx9e5o2N1my4DsKCeKpdrnACyr1wtbPxBDgGzKzKyE9kRtBFA8mWldI+RVlD7CBZNWY/wQ2+ydwOR6kQ==}
+    engines: {node: '>=14.0'}
+    dev: true
 
   /ajv-formats@2.1.1(ajv@8.20.0):
     resolution: {integrity: sha512-Wx0Kx52hxE7C18hkMEggYlEifqWZtYaRgouJor+WMdPnQyEK13vgEWyVNup7SoeeoLMsr4kf5h6dOW11I15MUA==}
@@ -5963,6 +6047,14 @@ packages:
     dependencies:
       fast-text-encoding: 1.0.6
     dev: false
+
+  /isomorphic-ws@5.0.0(ws@8.21.3):
+    resolution: {integrity: sha512-muId7Zzn9ywDsyXgTIafTry2sV3nySZeUDe6YedVd1Hvuuep5AsIlqK+XefWpYTyJG5e503F2xIuT2lcU6rCSw==}
+    peerDependencies:
+      ws: '*'
+    dependencies:
+      ws: 8.21.3
+    dev: true
 
   /iterator.prototype@1.1.5:
     resolution: {integrity: sha512-H0dkQoCa3b2VEeKQBOxFph+JAbcrQdE7KC0UkqwpLmv2EC4P41QXP+rqo9wYodACiG5/WM5s9oDApTU8utwj9g==}
@@ -7929,6 +8021,11 @@ packages:
     engines: {node: '>=20.18.1'}
     dev: true
 
+  /undici@7.30.1:
+    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
+    engines: {node: '>=20.18.1'}
+    dev: true
+
   /unicode-canonical-property-names-ecmascript@2.0.1:
     resolution: {integrity: sha512-dA8WbNeb2a6oQzAQ55YlT5vQAWGV9WXOsi3SskE3bcCdM0P4SDd+24zS/OCacdRq5BkdsRj9q3Pg6YyQoxIGqg==}
     engines: {node: '>=4'}
@@ -8540,6 +8637,19 @@ packages:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
     dev: false
 
+  /ws@8.21.3:
+    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+    dev: true
+
   /xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
@@ -8576,3 +8686,9 @@ packages:
   /zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
     dev: true
+
+  file:vendor/rodverse-module-sdk-0.1.0.tgz:
+    resolution: {integrity: sha512-+xNt4F2iA79EIXVZLvdv/dOk24zXSgIcR1N+9DbEwEUSy/LGNT2iJtUlPsHyeS2jHmZbQJSmvKuL6z88L448zg==, tarball: file:vendor/rodverse-module-sdk-0.1.0.tgz}
+    name: '@rodverse/module-sdk'
+    version: 0.1.0
+    dev: false

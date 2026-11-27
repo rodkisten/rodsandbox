@@ -29,7 +29,7 @@ describe('createTerminalAdapter', () => {
     expect(adapter.info.supportsExecution).toBe(false);
   });
 
-  it('returns a LocalTerminalAdapter when no Vercel env is present', async () => {
+  it('uses browser shell without probing host terminal endpoints', async () => {
     // Ensure env vars are not set.
     vi.stubEnv('VERCEL', '');
     vi.stubEnv('NEXT_RUNTIME', '');
@@ -38,7 +38,7 @@ describe('createTerminalAdapter', () => {
     // Local adapter is a stub pending node-pty; supportsExecution reflects
     // the actual implementation status (false until /api/terminal is wired).
     expect(typeof adapter.info.supportsExecution).toBe('boolean');
-    expect(adapter.info.label).toContain('Local');
+    expect(adapter.info.label).toContain('Browser');
   });
 
   it('connect() and disconnect() do not throw on VercelFallbackAdapter', async () => {
