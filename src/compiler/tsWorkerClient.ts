@@ -1,9 +1,9 @@
 import type { Diagnostic } from '@/types';
 import type { TsMessage } from '@/workers/messages';
-import type { TsCompletionItem, TsDefinitionLocation, TsQuickInfo } from '@/types/tsLanguage';
+import type { TsCompletionItem, TsDefinitionLocation, TsQuickInfo, TsSignatureHelp } from '@/types/tsLanguage';
 
 const WORKER_REQUEST_TIMEOUT_MS = 20_000;
-type TsRequestMessage = Extract<TsMessage, { type: 'TS_DIAGNOSTICS' | 'TS_COMPLETIONS' | 'TS_QUICK_INFO' | 'TS_DEFINITION' }>;
+type TsRequestMessage = Extract<TsMessage, { type: 'TS_DIAGNOSTICS' | 'TS_COMPLETIONS' | 'TS_QUICK_INFO' | 'TS_DEFINITION' | 'TS_SIGNATURE' }>;
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 export class TypeScriptWorkerClient {
@@ -75,6 +75,16 @@ export class TypeScriptWorkerClient {
         ? { matched: true, value: msg.items ?? [] as TsCompletionItem[] }
         : { matched: false }),
       [],
+    );
+  }
+
+  async getSignatureHelp(files: Array<{ path: string; content: string }>, path: string, position: number): Promise<TsSignatureHelp | null> {
+    return this.requestWithFallback<TsSignatureHelp | null>(
+      { type: 'TS_SIGNATURE', files, path, position },
+      (msg, requestId) => msg.type === 'TS_SIGNATURE_RESULT' && msg.requestId === requestId
+        ? { matched: true, value: msg.signature }
+        : { matched: false },
+      null,
     );
   }
 

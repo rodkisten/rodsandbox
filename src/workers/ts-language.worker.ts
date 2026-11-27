@@ -88,6 +88,16 @@ async function handleMessage(event: MessageEvent<TsMessage>) {
     return;
   }
 
+  if (msg.type === 'TS_SIGNATURE') {
+    try {
+      const service = await syncFiles(msg.files);
+      self.postMessage({ type: 'TS_SIGNATURE_RESULT', requestId: msg.requestId, signature: service.getSignatureHelp(msg.path, msg.position) });
+    } catch {
+      self.postMessage({ type: 'TS_SIGNATURE_RESULT', requestId: msg.requestId, signature: null });
+    }
+    return;
+  }
+
   if (msg.type === 'TS_QUICK_INFO') {
     try {
       const service = await syncFiles(msg.files);

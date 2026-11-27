@@ -18,3 +18,12 @@ export interface TsDefinitionLocation {
   line: number;
   column: number;
 }
+
+export interface TsSignatureHelp {
+  prefix: string;
+  suffix: string;
+  separator: string;
+  parameters: Array<{ display: string; documentation: string }>;
+  activeParameter: number;
+  documentation: string;
+}

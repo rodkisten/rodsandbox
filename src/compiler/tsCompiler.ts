@@ -634,6 +634,22 @@ export class BrowserTypeScriptCompiler {
     }
   }
 
+  getSignatureHelp(path: string, position: number): import('@/types/tsLanguage').TsSignatureHelp | null {
+    if (!this.files.has(path)) return null;
+    const help = this.languageService.getSignatureHelpItems(path, position, undefined);
+    const item = help?.items[help.selectedItemIndex];
+    if (!help || !item) return null;
+    const display = ts.displayPartsToString;
+    return {
+      prefix: display(item.prefixDisplayParts),
+      suffix: display(item.suffixDisplayParts),
+      separator: display(item.separatorDisplayParts),
+      parameters: item.parameters.map(parameter => ({ display: display(parameter.displayParts), documentation: display(parameter.documentation) })),
+      activeParameter: item.isVariadic ? Math.min(help.argumentIndex, item.parameters.length - 1) : help.argumentIndex,
+      documentation: display(item.documentation),
+    };
+  }
+
   getQuickInfo(path: string, position: number): { display: string; documentation: string; kind: string } | null {
     if (!this.files.has(path)) return null;
     try {
