@@ -4,7 +4,10 @@ import { PREVIEW_SANDBOX_ATTRS } from '@/constants';
 import { PreviewMessage } from '@/types';
 import { Button } from '@/components/ui/button';
 
+export type BuildStatus = { phase: 'idle' | 'building' | 'built' | 'failed'; durationMs?: number };
+
 interface PreviewPanelProps {
+  buildStatus?: BuildStatus;
   previewHtml: string | null;
   onMessage: (msg: PreviewMessage) => void;
   onDetachedChange?: (detached: boolean) => void;
@@ -28,7 +31,7 @@ function isPreviewMessage(data: unknown): data is PreviewMessage {
 const DETACHED_PREVIEW_PLACEHOLDER = '<html><body style="background:#111;color:#666;font-family:sans-serif;padding:2rem"><p>Run to see preview</p></body></html>';
 
 function PreviewPanel(
-  { previewHtml, onMessage, onDetachedChange, ref }: PreviewPanelProps,
+  { previewHtml, onMessage, onDetachedChange, ref, buildStatus }: PreviewPanelProps,
 ) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const detachedWindowRef = useRef<Window | null>(null);
@@ -132,10 +135,10 @@ function PreviewPanel(
         >
           Open in New Window
         </Button>
-        <div className="flex gap-1.5 ml-auto">
-          <span className="size-2.5 rounded-full bg-red-500" />
-          <span className="size-2.5 rounded-full bg-yellow-500" />
-          <span className="size-2.5 rounded-full bg-green-500" />
+        <div role="status" aria-live="polite" className="ml-auto flex shrink-0 items-center gap-1.5 text-xs">
+          <span className={`size-2 rounded-full ${buildStatus?.phase === 'building' ? 'animate-pulse bg-yellow-500' : buildStatus?.phase === 'failed' ? 'bg-red-500' : buildStatus?.phase === 'built' ? 'bg-green-500' : 'bg-muted-foreground'}`} />
+          <span>{buildStatus?.phase === 'building' ? 'Building' : buildStatus?.phase === 'failed' ? 'Build failed' : buildStatus?.phase === 'built' ? 'Built' : 'Idle'}</span>
+          {buildStatus?.durationMs !== undefined && <span className="tabular-nums text-muted-foreground">{buildStatus.durationMs} ms</span>}
         </div>
       </div>
       <iframe

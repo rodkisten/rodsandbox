@@ -9,7 +9,7 @@ import { useWorkspace } from '@/hooks/useWorkspace';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import Toolbar from './Toolbar';
 import FileTree from './FileTree';
-import PreviewPanel, { PreviewPanelHandle } from './PreviewPanel';
+import PreviewPanel, { PreviewPanelHandle, type BuildStatus } from './PreviewPanel';
 import LogsPanel from './LogsPanel';
 import DiagnosticsPanel from './DiagnosticsPanel';
 import DependencyPanel from './DependencyPanel';
@@ -108,6 +108,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   const [mobilePane, setMobilePane] = useState('editor');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+  const [buildStatus, setBuildStatus] = useState<BuildStatus>({ phase: 'idle' });
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [dependencies, setDependencies] = useState<string[]>([]);
   const [resolvedImports, setResolvedImports] = useState<Record<string, string>>({});
@@ -358,9 +359,16 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
 
   const handleRun = useCallback(() => {
     const revision = ++runRevision.current;
+    const started = performance.now();
+    setBuildStatus({ phase: 'building' });
     void compileWorkspace(revision).then((result) => {
       if (result.cancelled || revision !== runRevision.current) return;
-      if (!result.bundledCode && result.diagnosticsCount > 0) return;
+      const durationMs = Math.round(performance.now() - started);
+      if (!result.bundledCode && result.diagnosticsCount > 0) {
+        setBuildStatus({ phase: 'failed', durationMs });
+        return;
+      }
+      setBuildStatus({ phase: 'built', durationMs });
       consoleRunId.current = generateId();
       if (!preserveLogsRef.current) setLogs([]);
       setDiagnostics(prev => prev.filter(d => d.source !== 'runtime'));
@@ -376,6 +384,10 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       if (result.diagnosticsCount > 0) {
         updateSettings((prev) => ({ ...prev, bottomTab: 'diagnostics' }));
       }
+    }).catch(error => {
+      if (revision !== runRevision.current) return;
+      setBuildStatus({ phase: 'failed', durationMs: Math.round(performance.now() - started) });
+      setDiagnostics(prev => [...prev, createDiagnostic({ fileId: Object.values(workspace.files)[0]?.id ?? 'main.ts', severity: 'error', message: String(error), line: 1, column: 1, source: 'build' })]);
     });
   }, [compileWorkspace, workspace.files, updateSettings]);
 
@@ -1123,6 +1135,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
             <PreviewPanel
               ref={previewRef}
               previewHtml={previewHtml}
+              buildStatus={buildStatus}
               onMessage={handleMessage}
               onDetachedChange={(detached) => updateSettings((prev) => ({ ...prev, previewDetached: detached }))}
             />
@@ -1269,6 +1282,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                     <PreviewPanel
                       ref={previewRef}
                       previewHtml={previewHtml}
+              buildStatus={buildStatus}
                       onMessage={handleMessage}
                       onDetachedChange={(detached) => updateSettings((prev) => ({ ...prev, previewDetached: detached }))}
                     />
