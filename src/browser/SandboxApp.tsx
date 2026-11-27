@@ -7,15 +7,16 @@ import Playground from '@/components/layout/Playground';
  */
 export interface SandboxAppProps {
   workspaceId: string;
+  embedded?: boolean;
 }
 
 export function isSandboxWorkspaceId(value: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(value);
 }
 
-export default function SandboxApp({ workspaceId }: SandboxAppProps) {
+export default function SandboxApp({ workspaceId, embedded = false }: SandboxAppProps) {
   if (!isSandboxWorkspaceId(workspaceId)) {
     return <div role="alert">Invalid sandbox workspace.</div>;
   }
-  return <Playground key={workspaceId} workspaceId={workspaceId} />;
+  return <Playground key={workspaceId} workspaceId={workspaceId} embedded={embedded} />;
 }
