@@ -36,6 +36,7 @@ interface FileTreeProps {
   onCreateFile: (name: string, path: string, language: FileLanguage) => void;
   onDuplicateFile: (fileId: string) => void;
   onMoveFile: (fileId: string, newPath: string) => void;
+  onMoveFiles: (ids: string[], folder: string) => boolean;
   onCreateFolder: (folderPath: string) => void;
   onDeleteFolder: (folderPath: string) => void;
   onRenameFolder: (oldPath: string, newPath: string) => void;
@@ -261,6 +262,7 @@ export default function FileTree({
   onCreateFile,
   onDuplicateFile,
   onMoveFile,
+  onMoveFiles,
   onCreateFolder,
   onDeleteFolder,
   onRenameFolder,
@@ -300,6 +302,11 @@ export default function FileTree({
     const node = active.data.current?.node as TreeNode | undefined;
     const folder = over?.data.current?.path as string | undefined;
     if (!node || folder === undefined) return;
+    setExportError('');
+    if (node.type === 'file' && selectionMode && selected.has(node.id)) {
+      if (!onMoveFiles(selectedFiles.map(file => file.id), folder)) setExportError('Não foi possível mover a seleção: destino inválido ou nomes em conflito.');
+      return;
+    }
     const destination = folder ? folder + '/' + node.name : node.name;
     if (destination === node.path || destination.startsWith(node.path + '/')) return;
     if (node.type === 'folder') onRenameFolder(node.path, destination);

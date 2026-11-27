@@ -93,6 +93,20 @@ export function moveFile(workspace: Workspace, fileId: FileId, newPath: string):
   return renameFile(workspace, fileId, newName, normalizedPath);
 }
 
+export function moveFiles(workspace: Workspace, ids: readonly FileId[], folder: string): Workspace {
+  if (folder && !validPath(folder)) return workspace;
+  const selected = new Set(ids);
+  const moving = [...selected].map(id => workspace.files[id]);
+  if (!moving.length || moving.some(file => !file)) return workspace;
+  const remaining = Object.values(workspace.files).filter(file => !selected.has(file.id));
+  const destinations = moving.map(file => folder ? folder + '/' + file.name : file.name);
+  if (destinations.some((path, index) => !validPath(path) || remaining.some(file => conflicts(path, file.path)) || destinations.slice(0, index).some(other => conflicts(path, other)))) return workspace;
+  const now = Date.now();
+  const files = { ...workspace.files };
+  moving.forEach((file, index) => { if (file.path !== destinations[index]) files[file.id] = { ...file, path: destinations[index], dirty: true, updatedAt: now }; });
+  return { ...workspace, files, updatedAt: now };
+}
+
 export function deleteFile(workspace: Workspace, fileId: FileId): Workspace {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { [fileId]: _removed, ...rest } = workspace.files;
