@@ -1007,6 +1007,10 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         editorFormatterEnabled={settings.editorFormatterEnabled}
         onToggleEditorFormatter={() => updateSettings((prev) => ({ ...prev, editorFormatterEnabled: !prev.editorFormatterEnabled }))}
         editorFontSize={settings.editorFontSize}
+        editorHistoryDepth={settings.editorHistoryDepth}
+        editorHistoryGroupDelay={settings.editorHistoryGroupDelay}
+        onEditorHistoryDepthChange={value => updateSettings(prev => ({ ...prev, editorHistoryDepth: value }))}
+        onEditorHistoryGroupDelayChange={value => updateSettings(prev => ({ ...prev, editorHistoryGroupDelay: value }))}
         onEditorFontSizeChange={(editorFontSize) => updateSettings((prev) => ({ ...prev, editorFontSize }))}
         editorTabSize={settings.editorTabSize}
         onEditorTabSizeChange={(editorTabSize) => updateSettings((prev) => ({ ...prev, editorTabSize }))}
@@ -1057,6 +1061,8 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                   extraAutocompleteProviders={[tsLanguageCompletionSource, localCompletionSource, ...pluginAutocompleteProviders]}
                   theme={settings.editorTheme}
                   fontSize={settings.editorFontSize}
+                  historyDepth={settings.editorHistoryDepth}
+                  historyGroupDelay={settings.editorHistoryGroupDelay}
                   fontFamily={settings.editorFontFamily}
                   lineNumbers={settings.editorLineNumbers}
                   wordWrap={settings.editorWordWrap}
@@ -1193,6 +1199,8 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                         extraAutocompleteProviders={[tsLanguageCompletionSource, localCompletionSource, ...pluginAutocompleteProviders]}
                         theme={settings.editorTheme}
                         fontSize={settings.editorFontSize}
+                  historyDepth={settings.editorHistoryDepth}
+                  historyGroupDelay={settings.editorHistoryGroupDelay}
                         fontFamily={settings.editorFontFamily}
                         lineNumbers={settings.editorLineNumbers}
                         wordWrap={settings.editorWordWrap}

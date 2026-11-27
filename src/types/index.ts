@@ -128,6 +128,8 @@ export interface AppSettings {
   editorFormatterEnabled: boolean;
   editorMinimapEnabled: boolean;
   editorTabSize: number;
+  editorHistoryDepth?: number;
+  editorHistoryGroupDelay?: number;
   liveTypecheck: boolean;
   collapsedPanels: string[];
   enabledPlugins: string[];
