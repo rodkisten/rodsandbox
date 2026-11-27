@@ -32,6 +32,7 @@ interface FileTreeProps {
   onSelectFile: (fileId: string) => void;
   onRenameFile: (fileId: string, newName: string, newPath: string) => void;
   onDeleteFile: (fileId: string) => void;
+  onDeleteFiles: (ids: string[]) => void;
   onCreateFile: (name: string, path: string, language: FileLanguage) => void;
   onDuplicateFile: (fileId: string) => void;
   onMoveFile: (fileId: string, newPath: string) => void;
@@ -256,6 +257,7 @@ export default function FileTree({
   onSelectFile,
   onRenameFile,
   onDeleteFile,
+  onDeleteFiles,
   onCreateFile,
   onDuplicateFile,
   onMoveFile,
@@ -277,6 +279,11 @@ export default function FileTree({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const onToggleSelection = (id: string) => setSelected(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const selectedFiles = Object.values(workspace.files).filter(file => selected.has(file.id) && file.name !== '.keep');
+  const deleteSelection = () => {
+    if (!selectedFiles.length || !window.confirm('Excluir ' + selectedFiles.length + ' arquivos selecionados?')) return;
+    onDeleteFiles(selectedFiles.map(file => file.id));
+    setSelected(new Set());
+  };
   const exportSelection = async () => {
     if (!selectedFiles.length || exporting) return;
     setExporting(true);
@@ -425,6 +432,7 @@ export default function FileTree({
       {selectionMode && <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
         <Button variant="ghost" size="sm" onClick={() => setSelected(new Set(Object.values(workspace.files).filter(file => file.name !== '.keep').map(file => file.id)))}>Todos</Button>
         <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Limpar</Button>
+        <Button variant="ghost" size="sm" disabled={!selectedFiles.length} onClick={deleteSelection} className="text-destructive"><Trash2 className="size-4" /> Excluir</Button>
         <Button variant="ghost" size="sm" disabled={!selectedFiles.length || exporting} onClick={() => void exportSelection()}><Download className="size-4" />{exporting ? 'Exportando…' : 'ZIP'}</Button>
       </div>}
       {exportError && <p role="alert" className="px-2 py-1 text-xs text-destructive">{exportError}</p>}

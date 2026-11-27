@@ -72,6 +72,10 @@ export function useWorkspace(workspaceId?: string) {
     updateWorkspace(VirtualFs.deleteFile(workspace, fileId));
   }, [workspace, updateWorkspace]);
 
+  const deleteFiles = useCallback((ids: FileId[]) => {
+    updateWorkspace(VirtualFs.deleteFiles(workspace, ids));
+  }, [workspace, updateWorkspace]);
+
   const duplicateFile = useCallback((fileId: FileId) => {
     updateWorkspace(VirtualFs.duplicateFile(workspace, fileId));
   }, [workspace, updateWorkspace]);
@@ -113,6 +117,7 @@ export function useWorkspace(workspaceId?: string) {
     createFile,
     renameFile,
     deleteFile,
+    deleteFiles,
     duplicateFile,
     moveFile,
     createFolder,

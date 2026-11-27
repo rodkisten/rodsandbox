@@ -105,6 +105,13 @@ export function deleteFile(workspace: Workspace, fileId: FileId): Workspace {
   };
 }
 
+export function deleteFiles(workspace: Workspace, ids: readonly FileId[]): Workspace {
+  const selected = new Set(ids);
+  const files = Object.fromEntries(Object.entries(workspace.files).filter(([id]) => !selected.has(id)));
+  if (Object.keys(files).length === Object.keys(workspace.files).length) return workspace;
+  return { ...workspace, files, activeFileId: workspace.activeFileId && selected.has(workspace.activeFileId) ? null : workspace.activeFileId, updatedAt: Date.now() };
+}
+
 export function deleteFolder(workspace: Workspace, folderPath: string): Workspace {
   const normalized = folderPath.replace(/^\/+/, '').replace(/\/+$/, '');
   if (!normalized) return workspace;
