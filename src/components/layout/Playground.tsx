@@ -891,7 +891,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         const type = /method|function/.test(kind) ? 'function' : /class/.test(kind) ? 'class' : /interface|type/.test(kind) ? 'type' : /property|getter|setter/.test(kind) ? 'property' : /keyword/.test(kind) ? 'keyword' : 'variable';
         unique.set(item.name, { label: item.name, type, ...(item.detail || item.documentation ? { info: () => { const panel = document.createElement('div'); panel.className = 'p-2 text-xs whitespace-pre-wrap max-w-[280px]'; panel.textContent = [item.detail, item.documentation].filter(Boolean).join('\n\n'); return panel; } } : {}), boost: Math.max(-20, Math.min(20, 15 - (Number.parseInt(item.sortText ?? '15', 10) || 15))), ...(item.insertText && item.insertText === item.name ? { apply: item.insertText } : {}) });
       }
-      if (!unique.size && !member) return localCompletionSource(context);
+      if (!unique.size && !member && !items.length) return localCompletionSource(context);
       return {
         from: word.from,
         options: [...unique.values()],
