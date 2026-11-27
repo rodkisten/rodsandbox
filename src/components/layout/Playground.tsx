@@ -60,15 +60,23 @@ function createDiagnostic(partial: Omit<Diagnostic, 'id'>): Diagnostic {
   return { id: `diag-${generateId()}`, ...partial };
 }
 
-function useMobilePortrait() {
+function useMobilePortrait(embedded: boolean, root: React.RefObject<HTMLDivElement | null>) {
   const [isMobilePortrait, setIsMobilePortrait] = useState(false);
   useEffect(() => {
+    if (embedded && root.current) {
+      const element = root.current;
+      const apply = () => setIsMobilePortrait(element.clientWidth <= 900);
+      const observer = new ResizeObserver(apply);
+      observer.observe(element);
+      apply();
+      return () => observer.disconnect();
+    }
     const mediaQuery = window.matchMedia('(max-width: 900px) and (orientation: portrait)');
     const apply = () => setIsMobilePortrait(mediaQuery.matches);
     apply();
     mediaQuery.addEventListener('change', apply);
     return () => mediaQuery.removeEventListener('change', apply);
-  }, []);
+  }, [embedded, root]);
   return isMobilePortrait;
 }
 
@@ -76,7 +84,7 @@ function ResizeGrip() {
   return <Separator className="relative flex h-3 items-center justify-center bg-muted/40 transition-colors hover:bg-neutral-500/25 data-[resize-handle-active]:bg-neutral-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
 }
 
-export default function Playground({ workspaceId, userId }: { workspaceId?: string; userId?: string }) {
+export default function Playground({ workspaceId, userId, embedded = false }: { workspaceId?: string; userId?: string; embedded?: boolean }) {
   const {
     workspace,
     activeFile,
@@ -101,9 +109,9 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   useEffect(() => {
     if (loading) return;
     if (userId && workspace.ownerId && workspace.ownerId !== userId) {
-      window.location.replace('/workspaces');
+      if (!embedded) window.location.replace('/workspaces');
     }
-  }, [loading, workspace.ownerId, userId]);
+  }, [loading, workspace.ownerId, userId, embedded]);
 
   const [mobilePane, setMobilePane] = useState('editor');
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -148,7 +156,8 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   const workspaceBundleImportInputRef = useRef<HTMLInputElement | null>(null);
   const editorCursorRef = useRef<{ fileId: string; position: number } | null>(null);
 
-  const isMobilePortrait = useMobilePortrait();
+  const workbenchRoot = useRef<HTMLDivElement>(null);
+  const isMobilePortrait = useMobilePortrait(embedded, workbenchRoot);
 
   useEffect(() => {
     tsWorkerRef.current = new TypeScriptWorkerClient(setTypePaths, reportTypeAttempt);
@@ -571,6 +580,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }, [activeFile, diagnostics, settings]);
 
   const handleOpenEditorDetached = useCallback(() => {
+    if (embedded) return;
     if (detachedEditorWindowRef.current && !detachedEditorWindowRef.current.closed) {
       detachedEditorWindowRef.current.focus();
       syncDetachedEditor();
@@ -607,7 +617,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       detachedEditorTimeoutRef.current = null;
       syncDetachedEditor();
     }, 2000);
-  }, [syncDetachedEditor]);
+  }, [syncDetachedEditor, embedded]);
 
   useEffect(() => {
     if (!settings.autoRun) return;
@@ -629,6 +639,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (embedded && (!workbenchRoot.current || !event.composedPath().includes(workbenchRoot.current))) return;
       const modifier = event.metaKey || event.ctrlKey;
       if (modifier && event.key.toLowerCase() === 'k') {
         event.preventDefault();
@@ -641,7 +652,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleRun]);
+  }, [handleRun, embedded]);
 
   useEffect(() => {
     syncDetachedEditor();
@@ -949,8 +960,8 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }, [activeFile, workspace]);
 
   const handleDetachTerminal = useCallback(() => {
-    window.open('/detached-terminal', '_blank', 'popup=yes,width=900,height=600');
-  }, []);
+    if (!embedded) window.open('/detached-terminal', '_blank', 'popup=yes,width=900,height=600');
+  }, [embedded]);
 
   const handleToggleView = useCallback((panel: 'files' | 'preview' | 'terminal') => {
     if (isMobilePortrait) {
@@ -1010,11 +1021,14 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   };
 
   if (loading || settingsLoading) {
-    return <div className="flex h-screen items-center justify-center bg-background text-neutral-400">Loading workspace…</div>;
+    return <div ref={workbenchRoot} className={embedded ? 'flex h-full min-h-0 items-center justify-center' : 'flex h-screen items-center justify-center bg-background text-neutral-400'}>Loading workspace…</div>;
+  }
+  if (userId && workspace.ownerId && workspace.ownerId !== userId) {
+    return <div role="alert">Workspace access denied.</div>;
   }
 
   return (
-    <div data-theme={settings.theme} className="sandbox-workbench flex h-dvh flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] pt-[env(safe-area-inset-top)]">
+    <div ref={workbenchRoot} data-theme={settings.theme} data-sandbox-mode={embedded ? "embedded" : "standalone"} className={`sandbox-workbench flex min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] ${embedded ? "h-full" : "h-dvh pt-[env(safe-area-inset-top)]"}`}>
       <Toolbar
         onRun={handleRun}
         onFormat={handleFormat}
