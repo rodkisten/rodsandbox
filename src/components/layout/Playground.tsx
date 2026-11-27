@@ -887,7 +887,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
         if (unique.has(item.name)) continue;
         const kind = item.kind;
         const type = /method|function/.test(kind) ? 'function' : /class/.test(kind) ? 'class' : /interface|type/.test(kind) ? 'type' : /property|getter|setter/.test(kind) ? 'property' : /keyword/.test(kind) ? 'keyword' : 'variable';
-        unique.set(item.name, { label: item.name, type });
+        unique.set(item.name, { label: item.name, type, boost: Math.max(-20, Math.min(20, 15 - (Number.parseInt(item.sortText ?? '15', 10) || 15))), ...(item.insertText && item.insertText === item.name ? { apply: item.insertText } : {}) });
       }
       if (!unique.size && !member) return localCompletionSource(context);
       return {

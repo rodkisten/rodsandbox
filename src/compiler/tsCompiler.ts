@@ -614,15 +614,16 @@ export class BrowserTypeScriptCompiler {
     );
   }
 
-  getCompletions(path: string, position: number): Array<{ name: string; kind: string; detail?: string }> {
+  getCompletions(path: string, position: number): Array<{ name: string; kind: string; detail?: string; sortText?: string; insertText?: string }> {
     if (!this.files.has(path)) return [];
     try {
       const completions = this.languageService.getCompletionsAtPosition(path, position, {});
       if (!completions) return [];
-      return completions.entries.slice(0, 100).map((entry) => ({
+      return completions.entries.filter(entry => !entry.source && !entry.hasAction).sort((a, b) => a.sortText.localeCompare(b.sortText)).slice(0, 500).map((entry) => ({
         name: entry.name,
         kind: entry.kind,
-        detail: entry.kindModifiers,
+        sortText: entry.sortText,
+        insertText: entry.insertText,
       }));
     } catch {
       return [];

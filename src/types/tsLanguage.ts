@@ -2,6 +2,8 @@ export interface TsCompletionItem {
   name: string;
   kind: string;
   detail?: string;
+  sortText?: string;
+  insertText?: string;
 }
 
 export interface TsQuickInfo {
