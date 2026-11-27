@@ -1,5 +1,6 @@
 'use client';
 
+import { PanelNavigation } from '@/components/uai/panel-navigation';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Completion, CompletionContext, CompletionSource } from '@codemirror/autocomplete';
 import type { Extension } from '@codemirror/state';
@@ -36,6 +37,7 @@ import { PluginRegistry } from '@/plugins/registry';
 import { builtinPlugins } from '@/plugins/builtin';
 import { t } from '@/lib/i18n';
 import {
+  Code2, Monitor, Terminal,
   ChevronDown,
   ChevronUp,
   Files,
@@ -103,6 +105,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
     }
   }, [loading, workspace.ownerId, userId]);
 
+  const [mobilePane, setMobilePane] = useState('editor');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -920,14 +923,8 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
 
   const handleToggleView = useCallback((panel: 'files' | 'preview' | 'terminal') => {
     if (isMobilePortrait) {
-      const id = panel === 'files' ? 'm-files' : panel === 'preview' ? 'm-preview' : 'm-bottom';
-      const ref = panel === 'files' ? filesPanelRef : panel === 'preview' ? previewPanelRef : bottomPanelRef;
-      if (panel === 'terminal') {
-        updateSettings((prev) => ({ ...prev, bottomTab: 'terminal' as const }));
-        togglePanelCollapse(id, ref);
-      } else {
-        togglePanelCollapse(id, ref);
-      }
+      setMobilePane(panel === 'terminal' ? 'bottom' : panel);
+      if (panel === 'terminal') updateSettings(prev => ({ ...prev, bottomTab: 'terminal' }));
     } else {
       const id = panel === 'files' ? 'd-files' : panel === 'preview' ? 'd-preview' : 'd-bottom';
       const ref = panel === 'files' ? filesPanelRef : panel === 'preview' ? previewPanelRef : bottomPanelRef;
@@ -980,7 +977,7 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
   }
 
   return (
-    <div data-theme={settings.theme} className="flex h-screen flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] pt-[env(safe-area-inset-top)]">
+    <div data-theme={settings.theme} className="flex h-dvh flex-col overflow-hidden bg-[var(--app-bg)] text-[var(--app-fg)] pt-[env(safe-area-inset-top)]">
       <Toolbar
         onRun={handleRun}
         onFormat={handleFormat}
@@ -1023,36 +1020,14 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
       />
 
       {isMobilePortrait ? (
-        <Group
-          orientation="vertical"
-          className="flex-1 overflow-hidden"
-          defaultLayout={{
-            'm-files': settings.layoutSizes.mobileFiles,
-            'm-editor': settings.layoutSizes.mobileEditor,
-            'm-preview': settings.layoutSizes.mobilePreview,
-            'm-bottom': settings.layoutSizes.mobileBottom,
-          }}
-          onLayoutChanged={(layout) => {
-            updateSettings((prev) => ({
-              ...prev,
-              layoutMode: 'mobile',
-              layoutSizes: {
-                ...prev.layoutSizes,
-                mobileFiles: layout['m-files'] ?? prev.layoutSizes.mobileFiles,
-                mobileEditor: layout['m-editor'] ?? prev.layoutSizes.mobileEditor,
-                mobilePreview: layout['m-preview'] ?? prev.layoutSizes.mobilePreview,
-                mobileBottom: layout['m-bottom'] ?? prev.layoutSizes.mobileBottom,
-              },
-            }));
-          }}
-        >
-          <Panel id="m-files" defaultSize={settings.layoutSizes.mobileFiles} minSize={12} collapsible collapsedSize={6} panelRef={filesPanelRef}>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden"><section aria-hidden={mobilePane !== 'files'} className={mobilePane === 'files' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
             <div className="flex h-full flex-col border-b border-border">
               <PanelHeader title="Files" collapsed={isPanelCollapsed('m-files')} onToggle={() => togglePanelCollapse('m-files', filesPanelRef)} />
               <FileTree
                 workspace={workspace}
                 activeFileId={workspace.activeFileId}
-                onSelectFile={setActiveFile}
+                onSelectFile={(id) => { setActiveFile(id); setMobilePane('editor'); }}
                 onRenameFile={renameFile}
                 onDeleteFile={deleteFile}
                 onCreateFile={createFile}
@@ -1064,9 +1039,9 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                 onImportEntries={upsertFiles}
               />
             </div>
-          </Panel>
-          <ResizeGrip />
-          <Panel id="m-editor" defaultSize={settings.layoutSizes.mobileEditor} minSize={18} collapsible collapsedSize={6} panelRef={editorPanelRef}>
+          </section>
+          
+          <section aria-hidden={mobilePane !== 'editor'} className={mobilePane === 'editor' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
             <div className="flex h-full flex-col overflow-hidden bg-background">
               <PanelHeader title="Editor" collapsed={isPanelCollapsed('m-editor')} onToggle={() => togglePanelCollapse('m-editor', editorPanelRef)} />
               {activeFile ? (
@@ -1095,22 +1070,22 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                 <div className="flex h-full items-center justify-center text-muted-foreground">Select a file to edit</div>
               )}
             </div>
-          </Panel>
-          <ResizeGrip />
-          <Panel id="m-preview" defaultSize={settings.layoutSizes.mobilePreview} minSize={14} collapsible collapsedSize={6} panelRef={previewPanelRef}>
+          </section>
+          
+          <section aria-hidden={mobilePane !== 'preview'} className={mobilePane === 'preview' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
             <PreviewPanel
               ref={previewRef}
               previewHtml={previewHtml}
               onMessage={handleMessage}
               onDetachedChange={(detached) => updateSettings((prev) => ({ ...prev, previewDetached: detached }))}
             />
-          </Panel>
-          <ResizeGrip />
-          <Panel id="m-bottom" defaultSize={settings.layoutSizes.mobileBottom} minSize={12} collapsible collapsedSize={6} panelRef={bottomPanelRef}>
+          </section>
+          
+          <section aria-hidden={mobilePane !== 'bottom'} className={mobilePane === 'bottom' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
             <div className="flex h-full flex-col overflow-hidden border-t border-border">
               <div className="flex flex-shrink-0 items-center border-b border-border bg-muted/40 px-1 py-1">
                 <Tabs value={settings.bottomTab} onValueChange={(value) => updateSettings((prev) => ({ ...prev, bottomTab: value as typeof prev.bottomTab }))}>
-                  <TabsList className="bg-transparent p-0">
+                  <TabsList className="bg-transparent p-0 max-w-full overflow-x-auto">
                     <TabsTrigger value="console">{t('tabs.console')}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')} {errorCount > 0 ? <span className="ml-1 text-red-400">{errorCount}</span> : null} {warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
                     {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger> : null}
@@ -1118,14 +1093,21 @@ export default function Playground({ workspaceId, userId }: { workspaceId?: stri
                     {FEATURE_FLAGS.ENABLE_GIT ? <TabsTrigger value="git">{t('tabs.git')}</TabsTrigger> : null}
                   </TabsList>
                 </Tabs>
-                <Button type="button" size="icon" variant="ghost" onClick={() => togglePanelCollapse('m-bottom', bottomPanelRef)} className="ml-auto mr-1">
-                  {isPanelCollapsed('m-bottom') ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-                </Button>
+                
               </div>
               <div className="flex-1 overflow-hidden">{renderBottomPanelContent()}</div>
             </div>
-          </Panel>
-        </Group>
+          </section>
+        </div>
+          <div className="shrink-0 border-t border-border bg-background px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            <PanelNavigation value={mobilePane} onChange={setMobilePane} items={[
+              { id: 'files', label: 'Files', icon: <Files className="size-4" /> },
+              { id: 'editor', label: 'Editor', icon: <Code2 className="size-4" /> },
+              { id: 'preview', label: 'Preview', icon: <Monitor className="size-4" /> },
+              { id: 'bottom', label: 'Tools', icon: <Terminal className="size-4" /> },
+            ]} />
+          </div>
+        </div>
       ) : (
         <Group
           orientation="vertical"
