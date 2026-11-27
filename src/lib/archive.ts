@@ -52,12 +52,12 @@ export async function importFileList(files: FileList): Promise<ImportedFile[]> {
   return imported.filter((entry) => Boolean(entry.path));
 }
 
-export async function exportWorkspaceAsZip(workspace: Workspace): Promise<void> {
+export async function exportWorkspaceAsZip(workspace: Workspace, selectedIds?: ReadonlySet<string>): Promise<void> {
   const zip = new JSZip();
   for (const file of Object.values(workspace.files)) {
-    if (file.name === '.keep') continue;
+    if (file.name === '.keep' || (selectedIds && !selectedIds.has(file.id))) continue;
     zip.file(file.path, file.content);
   }
   const blob = await zip.generateAsync({ type: 'blob' });
-  downloadFile(`${workspace.name || 'workspace'}.zip`, blob, 'application/zip');
+  downloadFile(`${workspace.name || 'workspace'}${selectedIds ? '-selection' : ''}.zip`, blob, 'application/zip');
 }

@@ -97,6 +97,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
     createFile,
     renameFile,
     deleteFile,
+    deleteFiles,
     duplicateFile,
     moveFile,
     createFolder,
@@ -1089,6 +1090,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
                 onSelectFile={(id) => { setActiveFile(id); setMobilePane('editor'); }}
                 onRenameFile={renameFile}
                 onDeleteFile={deleteFile}
+                onDeleteFiles={deleteFiles}
                 onCreateFile={createFile}
                 onDuplicateFile={duplicateFile}
                 onMoveFile={moveFile}
@@ -1230,6 +1232,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
                         onSelectFile={setActiveFile}
                         onRenameFile={renameFile}
                         onDeleteFile={deleteFile}
+                onDeleteFiles={deleteFiles}
                         onCreateFile={createFile}
                         onDuplicateFile={duplicateFile}
                         onMoveFile={moveFile}
