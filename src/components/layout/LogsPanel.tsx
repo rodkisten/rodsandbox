@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { ConsoleValue } from './ConsoleValue';
 import { MAX_LOG_ENTRIES } from '@/constants';
 import { deserializeForDisplay } from '@/logs/serializer';
 import type { LogEntry, LogLevel, SerializedValue } from '@/types';
@@ -151,7 +152,10 @@ export default function LogsPanel({ logs, onClear, customFormatters = EMPTY_FORM
             >
               <span className="flex-shrink-0 select-none text-neutral-600">{formatTime(entry.timestamp)}</span>
               <span className="w-12 flex-shrink-0 select-none uppercase text-neutral-600">{entry.level}</span>
-              <span className="flex-1 whitespace-pre-wrap break-all">{formatArgs(entry.args, safeCustomFormatters)}</span>
+              <div className="min-w-0 flex-1 space-y-0.5">{entry.args.map((arg, index) => {
+                const formatter = safeCustomFormatters.find(item => item.predicate(arg));
+                return <div key={index}>{formatter ? <span className="whitespace-pre-wrap break-words">{formatter.format(arg)}</span> : <ConsoleValue value={arg}/>}</div>;
+              })}</div>
             </div>
             </React.Fragment>
           ))
