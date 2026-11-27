@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRootRoute, createRoute, createRouter, Outlet, Link } from '@tanstack/react-router';
 import LocalWorkspaces from './LocalWorkspaces';
-import Playground from '@/components/layout/Playground';
+import SandboxApp, { isSandboxWorkspaceId } from './SandboxApp';
 
 const rootRoute = createRootRoute({
   component: Outlet,
@@ -10,7 +10,7 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: () => <Playground workspaceId="default-workspace" />,
+  component: () => <SandboxApp workspaceId="default-workspace" />,
 });
 const workspaceRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -24,8 +24,8 @@ const workspacesRoute = createRoute({
 });
 function WorkspacePage() {
   const { workspaceId } = workspaceRoute.useParams();
-  if (!/^[a-zA-Z0-9_-]+$/.test(workspaceId)) return <Link to="/">Invalid workspace. Return home.</Link>;
-  return <Playground key={workspaceId} workspaceId={workspaceId} />;
+  if (!isSandboxWorkspaceId(workspaceId)) return <Link to="/">Invalid workspace. Return home.</Link>;
+  return <SandboxApp workspaceId={workspaceId} />;
 }
 export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, workspaceRoute, workspacesRoute]) });
 declare module '@tanstack/react-router' {
