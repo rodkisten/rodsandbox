@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import { readdir } from 'node:fs/promises';
+const origin = process.env.MODULE_ORIGIN;
+const sha = process.env.MODULE_SHA;
+assert.match(sha || '', /^[a-f0-9]{40}$/);
+assert.ok(origin && new URL(origin).origin === origin);
+async function get(path, type, method = 'GET') {
+  const response = await fetch(origin + path, { method, redirect: 'error', signal: AbortSignal.timeout(15000), cache: 'no-store' });
+  assert.equal(response.status, 200, `${path}: HTTP ${response.status}`);
+  assert.match(response.headers.get('content-type') || '', type, `${path}: MIME`);
+  assert.equal(response.headers.get('access-control-allow-origin'), '*', `${path}: CORS`);
+  return response;
+}
+const pointer = await get('/rod-module.json', /application\/json/);
+assert.match(pointer.headers.get('cache-control') || '', /no-store/);
+const business = await pointer.json();
+assert.equal(business.gitSha, sha);
+assert.equal(business.entry, `${origin}/modules/sandbox/${sha}/mf-manifest.json`);
+const prefix = `/modules/sandbox/${sha}/`;
+const federation = await (await get(prefix + 'mf-manifest.json', /application\/json/)).json();
+assert.equal(federation.metaData.publicPath, origin + prefix);
+assert.equal(federation.metaData.remoteEntry.type, 'module');
+assert.ok(federation.exposes.some(item => item.path === './App'));
+const entry = await get(prefix + 'remoteEntry.js', /javascript/, 'HEAD');
+assert.match(entry.headers.get('cache-control') || '', /immutable/);
+const files = await readdir(`dist${prefix}assets`);
+const assets = files.filter(file => /^(?:bundler\.worker-|ts-language\.worker-|formatter\.worker-|esbuild-).+\.(?:js|wasm)$/.test(file));
+assert.ok(assets.some(file => file.endsWith('.wasm')));
+for (const asset of assets) await get(prefix + 'assets/' + asset, asset.endsWith('.wasm') ? /application\/wasm/ : /javascript/, 'HEAD');
+console.log(`Verified deployed module SHA ${sha}, ESM entry, ${assets.length} worker/WASM assets, MIME, CORS and cache headers: ${origin}/rod-module.json`);

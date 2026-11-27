@@ -67,6 +67,7 @@ jobs:
           if [ -n "$PR_NUMBER" ]; then host="pr$PR_NUMBER.$host"; fi
           curl --fail --silent --show-error --retry 8 --retry-all-errors --retry-delay 5 "https://$host/api/health"
           curl --fail --silent --show-error --retry 5 --retry-all-errors "https://$host/" -o /tmp/sandbox-preview.html
+          MODULE_ORIGIN="https://$host" node scripts/verify-module.mjs
       - name: Update preview comment
         if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         env:
