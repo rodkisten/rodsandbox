@@ -5,6 +5,9 @@ services:
     user: '1000:1000'
     group_add:
       - ${DOCKER_GID:?Set the local Docker Unix socket group id}
+    networks:
+      control:
+        aliases: [rod-runtime-agent]
     init: true
     restart: unless-stopped
     read_only: true
@@ -26,6 +29,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./policy.json:/etc/rod-runtime/policy.json:ro
       - state:/var/lib/rodsandbox-runtime
+      - ./registry-config:/home/node/.docker:ro
     secrets:
       - runtime-token
     logging:
@@ -38,3 +42,8 @@ volumes:
 secrets:
   runtime-token:
     file: ./runtime-token
+
+networks:
+  control:
+    external: true
+    name: ${RUNTIME_CONTROL_NETWORK:?Set the existing trusted Tunnel Docker network}

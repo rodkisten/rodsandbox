@@ -2,7 +2,7 @@ import type { TypeAttempt } from '@/compiler/typeAcquisition';
 'use client';
 
 import { PanelNavigation } from '@/components/uai/panel-navigation';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import type { Completion, CompletionContext, CompletionSource } from '@codemirror/autocomplete';
 import type { Extension } from '@codemirror/state';
 import { Group, Panel, Separator, type PanelImperativeHandle } from 'react-resizable-panels';
@@ -84,6 +84,8 @@ function useMobilePortrait(embedded: boolean, root: React.RefObject<HTMLDivEleme
 function ResizeGrip() {
   return <Separator className="relative flex h-3 items-center justify-center bg-muted/40 transition-colors hover:bg-neutral-500/25 data-[resize-handle-active]:bg-neutral-500/40 after:h-0.5 after:w-12 after:rounded-full after:bg-neutral-700" />;
 }
+
+const RuntimePanel=lazy(()=>import('@/runtime/RuntimePanel'));
 
 export default function Playground({ workspaceId, userId, embedded = false }: { workspaceId?: string; userId?: string; embedded?: boolean }) {
   const { storageScope, theme: hostTheme } = useSandboxRuntime();
@@ -986,6 +988,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
   }, [isMobilePortrait, settings.collapsedPanels, togglePanelCollapse, updateSettings]);
 
   const renderBottomPanelContent = () => {
+    if(settings.bottomTab==='runtime')return <Suspense fallback={<p role="status" className="p-3 text-sm">Carregando runtime…</p>}><RuntimePanel workspaceId={workspaceId??"default"}/></Suspense>;
     if (settings.bottomTab === 'console') {
       return <LogsPanel logs={logs} onClear={() => setLogs([])} customFormatters={pluginLogFormatters} preserveLogs={settings.preserveLogs ?? false} onPreserveLogsChange={value => updateSettings(prev => ({ ...prev, preserveLogs: value }))} />;
     }
@@ -1153,7 +1156,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
                   <TabsList className="w-max min-w-full justify-start bg-transparent p-0">
                     <TabsTrigger value="console">{t('tabs.console')}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')} {errorCount > 0 ? <span className="ml-1 text-red-400">{errorCount}</span> : null} {warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
-                    <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
+                    <TabsTrigger value="runtime">Runtime</TabsTrigger><TabsTrigger value="dependencies">Dependencies</TabsTrigger>
                     {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM && <TabsTrigger value="plugins">Plugins</TabsTrigger>}
                     {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM ? <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger> : null}
                     {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}
@@ -1305,7 +1308,7 @@ export default function Playground({ workspaceId, userId, embedded = false }: { 
                   <TabsList className="w-max min-w-full justify-start bg-transparent p-0">
                     <TabsTrigger value="console">{t('tabs.console')}{logs.length > 0 ? <span className="ml-1.5 text-muted-foreground">{logs.length}</span> : null}</TabsTrigger>
                     <TabsTrigger value="diagnostics">{t('tabs.diagnostics')}{errorCount > 0 ? <span className="ml-1.5 text-red-400">{errorCount}</span> : null}{warnCount > 0 ? <span className="ml-1 text-yellow-400">{warnCount}</span> : null}</TabsTrigger>
-                    <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
+                    <TabsTrigger value="runtime">Runtime</TabsTrigger><TabsTrigger value="dependencies">Dependencies</TabsTrigger>
                     {FEATURE_FLAGS.ENABLE_PLUGIN_SYSTEM && <TabsTrigger value="plugins">Plugins</TabsTrigger>}
                     <TabsTrigger value="repl">{t('tabs.repl')}</TabsTrigger>
                     {FEATURE_FLAGS.ENABLE_TERMINAL ? <TabsTrigger value="terminal">{t('tabs.terminal')}</TabsTrigger> : null}

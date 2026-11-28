@@ -8,6 +8,9 @@ if [[ ! "$RUNTIME_AGENT_IMAGE" =~ ^ghcr\.io/rodkisten/rodsandbox/runtime-agent@s
 fi
 : "${DOCKER_GID:?Set the local Docker Unix socket group id}"
 [[ "$DOCKER_GID" =~ ^[0-9]+$ ]] || exit 1
+: "${RUNTIME_CONTROL_NETWORK:?Set the existing trusted Tunnel Docker network}"
+docker network inspect "$RUNTIME_CONTROL_NETWORK" >/dev/null
+test -d registry-config && test -r registry-config
 test -s policy.json && test -s runtime-token && test -S /var/run/docker.sock
 test "$(stat -c '%a' runtime-token)" = 400 || { echo 'runtime-token must be mode 0400 and owned by UID 1000' >&2; exit 1; }
 test "$(stat -c '%u' runtime-token)" = 1000 || { echo 'runtime-token must be owned by UID 1000' >&2; exit 1; }

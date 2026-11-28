@@ -1,0 +1,33 @@
+name: RodSandbox · Hosted runtime build
+run-name: RodSandbox build ${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Correlation UUID issued by orb
+        required: true
+        type: string
+      workspace_id:
+        required: true
+        type: string
+      target_id:
+        required: true
+        type: choice
+        options: [runtime-agent, probe]
+      source_sha:
+        description: Immutable commit in the approved default branch
+        required: true
+        type: string
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    uses: rodkisten/github/.github/workflows/runtime-image.yml@a22421f535303ac5203f74a1f45cf1d8f3f250d2
+    with:
+      source-sha: ${{ inputs.source_sha }}
+      request-id: ${{ inputs.request_id }}
+      workspace-id: ${{ inputs.workspace_id }}
+      target-id: ${{ inputs.target_id }}
+      dockerfile: ${{ inputs.target_id == 'runtime-agent' && 'packages/runtime-agent/Dockerfile' || 'runtime/examples/web/Dockerfile' }}
+      platforms: linux/amd64

@@ -18,7 +18,15 @@ const manifest = {
   entry: origin + path + "mf-manifest.json",
   standaloneUrl: origin,
   exposes: ["./App"],
-  capabilities: ["browser.filesystem", "browser.build", "browser.terminal"],
+  capabilities: [
+    "browser.filesystem",
+    "browser.build",
+    "browser.terminal",
+    "runtime.build",
+    "runtime.deploy",
+    "runtime.logs",
+    "runtime.rollback",
+  ],
 };
 writeFileSync(`dist${path}rod-module.json`, JSON.stringify(manifest, null, 2));
 writeFileSync("dist/rod-module.json", JSON.stringify(manifest, null, 2));

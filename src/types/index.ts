@@ -102,7 +102,7 @@ export interface LayoutSizes {
 }
 
 export type LayoutMode = 'desktop' | 'mobile';
-export type BottomTab = 'dependencies' | 'plugins' | 'console' | 'diagnostics' | 'repl' | 'terminal' | 'git';
+export type BottomTab = 'runtime' | 'dependencies' | 'plugins' | 'console' | 'diagnostics' | 'repl' | 'terminal' | 'git';
 export type ReplRuntimeTarget = 'iframe' | 'detached' | 'auto';
 export type EditorTheme = 'github-dark' | 'github-light' | 'dracula' | 'monokai' | 'nord' | 'solarized-dark' | 'solarized-light' | 'one-dark' | 'tokyo-night' | 'midnight';
 

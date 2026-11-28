@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { writeFile, rename } from "node:fs/promises";
+import { writeFile, rename, access } from "node:fs/promises";
 import { join } from "node:path";
 import { stringify } from "yaml";
 import {
@@ -165,8 +165,17 @@ export class ComposeDriver implements DockerDriver {
       join(this.directory(target), "compose.yaml"),
     ];
   }
-  async pull(_target: RuntimeTarget, release: BuildResult) {
-    await this.run(["pull", imageReference(release)], 180000);
+  async pull(target: RuntimeTarget, release: BuildResult) {
+    await this.run(
+      [
+        "pull",
+        "--quiet",
+        "--platform",
+        target.platform,
+        imageReference(release),
+      ],
+      180000,
+    );
   }
   async apply(target: RuntimeTarget, release: BuildResult) {
     const file = join(this.directory(target), "compose.yaml");
@@ -200,6 +209,7 @@ export class ComposeDriver implements DockerDriver {
   }
   async status(target: RuntimeTarget) {
     try {
+      await access(join(this.directory(target), "compose.yaml"));
       return parseContainerStatus(
         await this.run(
           [...this.args(target), "ps", "--all", "--format", "json"],

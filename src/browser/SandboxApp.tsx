@@ -4,12 +4,14 @@ import React, {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import {
   assertModuleContext,
   type RodModuleContext,
 } from "@rodverse/module-sdk";
+import { standaloneRuntimeClient, type RuntimeClient } from "@/runtime/client";
 import Playground from "@/components/layout/Playground";
 import { SandboxRuntime } from "./RuntimeContext";
 import { createPersistence } from "@/persistence/db";
@@ -36,7 +38,14 @@ export default function SandboxApp({
     content: HTMLElement;
     portals: HTMLElement;
   } | null>(null);
-  const [aborted, setAborted] = useState(context?.signal.aborted ?? false);
+  const aborted = useSyncExternalStore(
+    (notify) => {
+      context?.signal.addEventListener("abort", notify, { once: true });
+      return () => context?.signal.removeEventListener("abort", notify);
+    },
+    () => context?.signal.aborted ?? false,
+    () => false,
+  );
   if (context) assertModuleContext(context);
   const scope = embedded
     ? `manage:${context?.identity?.id ?? "anonymous"}:${workspaceId}`
@@ -59,12 +68,8 @@ export default function SandboxApp({
   }, [embedded]);
   useEffect(() => {
     if (!context) return;
-    setAborted(context.signal.aborted);
-    const abort = () => setAborted(true);
-    context.signal.addEventListener("abort", abort, { once: true });
     context.lifecycle.ready();
     return () => {
-      context.signal.removeEventListener("abort", abort);
       context.lifecycle.dispose();
     };
   }, [context]);
@@ -88,6 +93,15 @@ export default function SandboxApp({
   const runtime = useMemo(
     () => ({
       persistence,
+      remoteRuntime: embedded
+        ? context?.api["sandbox.runtime"]
+          ? (((path, init = {}) =>
+              context.api["sandbox.runtime"]!(
+                { path, method: init.method ?? "GET", body: init.body },
+                init.signal ?? context.signal,
+              )) as RuntimeClient)
+          : null
+        : standaloneRuntimeClient,
       storageScope: scope,
       embedded,
       theme: embedded ? context?.theme.mode : undefined,
@@ -101,6 +115,8 @@ export default function SandboxApp({
       persistence,
       scope,
       embedded,
+      context?.api,
+      context?.signal,
       context?.portalContainer,
       context?.theme.mode,
       mount,

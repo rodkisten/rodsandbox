@@ -1,3 +1,4 @@
+import {runtimeRoute,type RuntimeEnvironment} from "../runtime/server";
 import { Elysia } from 'elysia';
 
 const api = new Elysia({ prefix: '/api', aot: false })
@@ -29,8 +30,9 @@ const api = new Elysia({ prefix: '/api', aot: false })
   .all('*', ({ set }) => { set.status = 404; return { error: 'API route not found' }; });
 
 export default {
-  fetch(request: Request): Response | Promise<Response> {
+  fetch(request: Request,env:RuntimeEnvironment={}): Response | Promise<Response> {
     const path = new URL(request.url).pathname;
+    if(path.startsWith('/api/runtime/'))return runtimeRoute(request,env);
     if (path.startsWith('/ws/')) return new Response('Remote gateway not configured', { status: 503 });
     return api.handle(request);
   },
