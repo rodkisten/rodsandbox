@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { lock } from "proper-lockfile";
 import PQueue from "p-queue";
 import {
@@ -80,6 +81,7 @@ export class RuntimeManager {
 
   async lease() {
     return lock(this.store.root, {
+      lockfilePath: join(this.store.root, ".agent.lock"),
       realpath: false,
       stale: 120000,
       update: 10000,

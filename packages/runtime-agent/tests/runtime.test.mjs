@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, chmod, mkdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -301,4 +301,27 @@ test("Compose inventory supports JSON arrays and NDJSON and rejects multiple ser
   assert.equal(parseContainerStatus(JSON.stringify([row])).healthy, true);
   assert.equal(parseContainerStatus("").state, "missing");
   assert.throws(() => parseContainerStatus(JSON.stringify([row, row])));
+});
+
+test("process lease stays inside the writable state volume with a read-only parent", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "rod-readonly-parent-"));
+  const root = join(parent, "state");
+  await mkdir(root, { mode: 0o700 });
+  await chmod(parent, 0o500);
+  try {
+    const manager = new RuntimeManager(
+      { schemaVersion: 1, targets: [] },
+      new StateStore(root),
+      {},
+    );
+    const release = await manager.lease();
+    try {
+      assert.ok((await stat(join(root, ".agent.lock"))).isDirectory());
+    } finally {
+      await release();
+    }
+  } finally {
+    await chmod(parent, 0o700);
+    await rm(parent, { recursive: true, force: true });
+  }
 });
