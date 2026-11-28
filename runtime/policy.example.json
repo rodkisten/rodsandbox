@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "id": "probe",
+      "workspaceId": "rodverse",
+      "repository": "rodkisten/rodsandbox",
+      "imageRepository": "ghcr.io/rodkisten/rodsandbox/probe",
+      "port": 18080,
+      "containerPort": 3000,
+      "cpu": 0.25,
+      "memoryMb": 128,
+      "pids": 64,
+      "user": "10001:10001",
+      "healthCommand": [
+        "node",
+        "-e",
+        "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      ],
+      "healthTimeoutSeconds": 30,
+      "volume": "none",
+      "platform": "linux/amd64"
+    }
+  ]
+}

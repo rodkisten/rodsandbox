@@ -1,0 +1,49 @@
+name: rod-runtime-control
+services:
+  agent:
+    image: ${RUNTIME_AGENT_IMAGE:?Set the published ghcr.io image with @sha256 digest}
+    user: '1000:1000'
+    group_add:
+      - ${DOCKER_GID:?Set the local Docker Unix socket group id}
+    networks:
+      control:
+        aliases: [rod-runtime-agent]
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 0.25
+    mem_limit: 256m
+    pids_limit: 128
+    stop_grace_period: 5m
+    ports:
+      - '127.0.0.1:9183:9183'
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=67108864
+    environment:
+      RUNTIME_BIND: 0.0.0.0
+      RUNTIME_POLICY_FILE: /etc/rod-runtime/policy.json
+      RUNTIME_AGENT_TOKEN_FILE: /run/secrets/runtime-token
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./policy.json:/etc/rod-runtime/policy.json:ro
+      - state:/var/lib/rodsandbox-runtime
+      - ./registry-config:/home/node/.docker:ro
+    secrets:
+      - runtime-token
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
+volumes:
+  state:
+secrets:
+  runtime-token:
+    file: ./runtime-token
+
+networks:
+  control:
+    external: true
+    name: ${RUNTIME_CONTROL_NETWORK:?Set the existing trusted Tunnel Docker network}

@@ -1,0 +1,13 @@
+.git
+**/node_modules
+**/dist
+**/dist-module
+.next
+**/.env
+**/.env.*
+**/.dev.vars*
+**/.npmrc
+**/*.pem
+**/*.key
+runtime/*token*
+runtime/registry-config

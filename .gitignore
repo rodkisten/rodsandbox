@@ -47,3 +47,13 @@ next-env.d.ts
 /wrangler.generated.json
 /.wrangler/
 /module-archive/
+
+# Private runtime deployment config and state.
+runtime/policy.json
+runtime/runtime-token
+runtime/registry-config/
+runtime/.env
+**/dist/
+
+# All workspace dependency installs are generated.
+**/node_modules/

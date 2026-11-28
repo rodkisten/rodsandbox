@@ -11,6 +11,59 @@ concurrency:
   group: sandbox-cloudflare-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  runtime-agent:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rodkisten/github/setup-pnpm@main
+        with:
+          node-version: '24'
+      - name: Typecheck, build and verify private runtime agent
+        run: pnpm --filter @rodsandbox/runtime-agent typecheck && pnpm --filter @rodsandbox/runtime-agent build && pnpm --filter @rodsandbox/runtime-agent test
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: packages/runtime-agent/Dockerfile
+          push: false
+          load: true
+          tags: rodsandbox-runtime-agent:ci
+          cache-from: type=gha,scope=runtime-agent-ci
+          cache-to: type=gha,mode=max,scope=runtime-agent-ci
+      - name: Smoke Node API in the built image
+        env:
+          CONTAINER: runtime-agent-ci-${{ github.run_id }}
+          VOLUME: runtime-agent-state-ci-${{ github.run_id }}
+        run: |
+          printf '{"schemaVersion":1,"targets":[]}' > "$RUNNER_TEMP/runtime-policy.json"
+          cleanup() {
+            result=$?
+            if [ "$result" != 0 ]; then
+              docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' "$CONTAINER" || true
+              docker logs --tail 60 "$CONTAINER" || true
+            fi
+            docker rm --force "$CONTAINER" >/dev/null 2>&1 || true
+            docker volume rm "$VOLUME" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker run --detach --name "$CONTAINER" --read-only --tmpfs /tmp:rw,noexec,nosuid,size=67108864 \
+            --cap-drop ALL --security-opt no-new-privileges --memory 256m --cpus .25 --pids-limit 128 \
+            --publish 127.0.0.1:19183:9183 --mount "type=bind,source=$RUNNER_TEMP/runtime-policy.json,target=/etc/runtime/policy.json,readonly" \
+            --mount "type=volume,source=$VOLUME,target=/var/lib/rodsandbox-runtime" \
+            --env RUNTIME_AGENT_TOKEN=ci-fixture-only-not-a-production-secret --env RUNTIME_POLICY_FILE=/etc/runtime/policy.json \
+            rodsandbox-runtime-agent:ci
+          curl --fail --retry 12 --retry-all-errors --retry-delay 2 http://127.0.0.1:19183/v1/health
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:19183/v1/workspaces/rodverse/targets/probe)" = 401
+          echo 'Private agent image: health reachable, unauthorized target request rejected' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-agent-node-${{ github.sha }}
+          path: packages/runtime-agent/dist
+          retention-days: 14
   deploy:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
@@ -22,6 +75,10 @@ jobs:
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
       MODULE_SHA: ${{ github.sha }}
+      RUNTIME_BROKER_SERVICE: ${{ vars.RUNTIME_BROKER_SERVICE }}
+      RUNTIME_AGENT_URL: ${{ vars.RUNTIME_AGENT_URL }}
+      RUNTIME_ACCESS_TEAM_DOMAIN: ${{ vars.RUNTIME_ACCESS_TEAM_DOMAIN }}
+      RUNTIME_ACCESS_AUD: ${{ vars.RUNTIME_ACCESS_AUD }}
     steps:
       - uses: actions/checkout@v4
       - uses: rodkisten/github/setup-pnpm@main
@@ -59,7 +116,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           node scripts/cloudflare-config.mjs
-          pnpm dlx wrangler@4 deploy --config wrangler.generated.json
+          pnpm exec wrangler deploy --config wrangler.generated.json
       - name: Verify deployment
         if: (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name != 'pull_request' && github.ref == 'refs/heads/main')
         run: |
