@@ -38,7 +38,16 @@ jobs:
           VOLUME: runtime-agent-state-ci-${{ github.run_id }}
         run: |
           printf '{"schemaVersion":1,"targets":[]}' > "$RUNNER_TEMP/runtime-policy.json"
-          trap 'docker rm --force "$CONTAINER" >/dev/null 2>&1 || true; docker volume rm "$VOLUME" >/dev/null 2>&1 || true' EXIT
+          cleanup() {
+            result=$?
+            if [ "$result" != 0 ]; then
+              docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' "$CONTAINER" || true
+              docker logs --tail 60 "$CONTAINER" || true
+            fi
+            docker rm --force "$CONTAINER" >/dev/null 2>&1 || true
+            docker volume rm "$VOLUME" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
           docker run --detach --name "$CONTAINER" --read-only --tmpfs /tmp:rw,noexec,nosuid,size=67108864 \
             --cap-drop ALL --security-opt no-new-privileges --memory 256m --cpus .25 --pids-limit 128 \
             --publish 127.0.0.1:19183:9183 --mount "type=bind,source=$RUNNER_TEMP/runtime-policy.json,target=/etc/runtime/policy.json,readonly" \
