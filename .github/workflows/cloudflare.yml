@@ -32,6 +32,8 @@ jobs:
           push: false
           load: true
           tags: rodsandbox-runtime-agent:ci
+          cache-from: type=gha,scope=runtime-agent-ci
+          cache-to: type=gha,mode=max,scope=runtime-agent-ci
       - name: Smoke Node API in the built image
         env:
           CONTAINER: runtime-agent-ci-${{ github.run_id }}
