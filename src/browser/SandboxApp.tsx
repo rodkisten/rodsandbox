@@ -111,16 +111,7 @@ export default function SandboxApp({
           ? context.portalContainer
           : mount?.portals,
     }),
-    [
-      persistence,
-      scope,
-      embedded,
-      context?.api,
-      context?.signal,
-      context?.portalContainer,
-      context?.theme.mode,
-      mount,
-    ],
+    [persistence, scope, embedded, context, mount],
   );
   if (!isSandboxWorkspaceId(workspaceId))
     return <div role="alert">Invalid sandbox workspace.</div>;
